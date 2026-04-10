@@ -19758,6 +19758,14 @@ function _fmtSize(bytes) {
       <button onclick="adminGuardar()" class="btn primary full" style="flex:2;">💾 GUARDAR CONFIGURACIÓN</button>
       <button onclick="adminReset()" class="btn danger" style="flex:1;">🔄 Restaurar defaults</button>
     </div>
+    <div style="margin-top:10px;">
+      <button onclick="adminGenerarAppCliente()" class="btn success full" style="font-size:12px;padding:12px;">
+        📦 GENERAR Y DESCARGAR APP PARA CLIENTE
+      </button>
+      <div style="font-size:9px;color:var(--muted);text-align:center;margin-top:5px;">
+        Genera un HTML listo con el PIN y módulos configurados — envíaselo directamente al cliente
+      </div>
+    </div>
     <div id="adm_msg" style="margin-top:10px;font-size:10px;text-align:center;color:var(--green);min-height:16px;"></div>
   </div>
 </div>
@@ -19869,6 +19877,46 @@ function aplicarModulos(){
 window.addEventListener('load',()=>{
   setTimeout(()=>{ aplicarMarcaAgua(); aplicarModulos(); },500);
 });
+
+// ── Generar HTML para cliente ─────────────────────────────────────────────
+function adminGenerarAppCliente(){
+  adminGuardar();
+  const nombre  = CLIENT_CONFIG.watermark  || '';
+  const pin     = CLIENT_CONFIG.pinCliente || 'conta2025';
+  const modulos = CLIENT_CONFIG.modulos;
+  if(!nombre){ alert('Debes ingresar el nombre del cliente antes de generar la app.'); return; }
+  if(pin==='conta2025'){ if(!confirm('El PIN es la clave por defecto. Deseas continuar de todas formas?')) return; }
+  const htmlOriginal = document.documentElement.outerHTML;
+  const modulosJSON  = JSON.stringify(modulos);
+  const configBloque = '// CONFIG CLIENTE\nconst ADMIN_KEY = "ADMIN#MASTER2026";\n' +
+    'const CLIENT_CONFIG = {nombreCliente:"' + nombre + '",pinCliente:"' + pin + '",watermark:"' + nombre + '",modulos:' + modulosJSON + '};\n' +
+    '(function(){try{var s=localStorage.getItem("clientConfig");if(s){var p=JSON.parse(s);Object.assign(CLIENT_CONFIG,p);}}catch(e){}})();\n' +
+    'function adminSaveConfig(){try{localStorage.setItem("clientConfig",JSON.stringify(CLIENT_CONFIG));}catch(e){}}';
+  let htmlCliente = htmlOriginal;
+  const marcaInicio = '// CONFIG CLIENTE';
+  const marcaFin    = 'function adminSaveConfig(){try{localStorage.setItem("clientConfig",JSON.stringify(CLIENT_CONFIG));}catch(e){}}';
+  const idxI = htmlCliente.indexOf('// ╔══');
+  const idxF = htmlCliente.indexOf('function adminSaveConfig');
+  if(idxI !== -1 && idxF !== -1){
+    const finBloque = htmlCliente.indexOf('}', idxF + 50) + 1;
+    htmlCliente = htmlCliente.slice(0,idxI) + configBloque + htmlCliente.slice(finBloque);
+  }
+  htmlCliente = htmlCliente
+    .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();','// Drive desactivado')
+    .replace('setTimeout(gdriveInit,800);','// Drive desactivado')
+    .replace('id="gdriveBtnHdr"','id="gdriveBtnHdr" disabled style="opacity:.3;cursor:not-allowed;" title="Sin Drive"');
+  const nombreArchivo = nombre.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') || 'cliente';
+  const blob = new Blob([htmlCliente], {type:'text/html;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ContaMasterPro_' + nombreArchivo + '.html';
+  a.click();
+  URL.revokeObjectURL(a.href);
+  const msg = document.getElementById('adm_msg');
+  msg.style.color = 'var(--green)';
+  msg.textContent = 'App generada para ' + nombre + ' — PIN: ' + pin;
+  setTimeout(function(){ msg.textContent=''; }, 5000);
+}
 </script>
 </body>
 </html>
