@@ -443,10 +443,7 @@ textarea.fi{resize:vertical;min-height:50px;}
     </div>
     <button class="btn primary full" onclick="checkPin()" style="padding:12px;font-size:13px;">▶ INGRESAR</button>
     <div style="font-size:10px;color:var(--red);text-align:center;margin-top:8px;min-height:14px;" id="lerr"></div>
-    <div style="margin-top:10px;font-size:9px;color:var(--muted2);text-align:center;line-height:1.8;">
-      Clave por defecto: <b style="color:var(--acc)">conta2025</b><br>
-      <span style="color:var(--muted2);">Cámbiala en ⚙️ Configuración</span>
-    </div>
+
   </div>
 </div>
 
@@ -19881,6 +19878,12 @@ function adminGenerarAppCliente(){
     .replace(
       /id="adminPanelOverlay"([^>]*?)>/,
       'id="adminPanelOverlay" style="display:none!important">'
+    )
+    // ── FIX: Eliminar bypass de PIN — solo el PIN asignado debe funcionar ──
+    // Reemplaza la línea que acepta conta2025 y MASTER.sistema.pin
+    .replace(
+      'const ok=(val===clientPin)||(val===defaultPw)||(stored&&val===stored);',
+      'const ok=(val===clientPin);'
     )
     .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
     .replace('setTimeout(gdriveInit,800);', '// Drive off')
