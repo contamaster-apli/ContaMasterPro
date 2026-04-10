@@ -19880,7 +19880,6 @@ function adminGenerarAppCliente(){
       'id="adminPanelOverlay" style="display:none!important">'
     )
     // ── FIX: Eliminar bypass de PIN — solo el PIN asignado debe funcionar ──
-    // Reemplaza la línea que acepta conta2025 y MASTER.sistema.pin
     .replace(
       'const ok=(val===clientPin)||(val===defaultPw)||(stored&&val===stored);',
       'const ok=(val===clientPin);'
@@ -19888,6 +19887,119 @@ function adminGenerarAppCliente(){
     .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
     .replace('setTimeout(gdriveInit,800);', '// Drive off')
     .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
+
+  // ── FIX: Inyectar script de filtro de módulos justo antes de </body></html> ──
+  // Mapa: clave de módulo → clave de datos en DB
+  var modToDb = {
+    liq:'liquidaciones',trab:'trabajadores',asist:'asistencia',horarios:'horarios',
+    finiq:'finiquitos',vacac:'vacaciones',ausencias:'ausencias',previred:'previred',
+    libroRemu:'libroRemu',compras:'compras',ventas:'ventas',honorarios:'honorarios',
+    bhe:'bhe',creditos:'creditos',f29:'f29',f22:'f22',f2121:'f2121',dj:'dj',
+    actfijo:'activos',contab:'asientos',diario:'asientos',mayor:'asientos',
+    balance:'balance',librocaja14d:'librocaja14d',obra:'obra',tesoreria:'tesoreria',
+    estfin:'estfin',estfinm:'estfinm',flujo:'flujo',cuentasfijas:'cuentasfijas',
+    cajachica:'cajaChica',fondos:'fondos',leasing:'leasings',informe:'informe',
+    diesel:'diesel',concilia:'concilia',caja:'caja',retiros:'retiros',
+    proveedores:'proveedores',conv:'conv',notas:'notas',archivador:'archivador',
+    auditoria:'auditoria',reg14a:'reg14a',certRemu:'certRemu'
+  };
+  var modToDbStr = JSON.stringify(modToDb);
+
+  var scriptFiltro = [
+    '<script>',
+    '(function(){',
+    '  var m = CLIENT_CONFIG.modulos;',
+    '  var modToDb = ' + modToDbStr + ';',
+    '',
+    '  // 1) Filtrar alertas tributarias por módulos activos',
+    '  var _origAlertas = calcAlertasTributarias;',
+    '  calcAlertasTributarias = function(){',
+    '    var todas = _origAlertas();',
+    '    var map = {f29:"f29",f22:"f22",previred:"previred",libroRemu:"libroRemu",dj:"dj"};',
+    '    return todas.filter(function(a){',
+    '      if(!a.accion) return true;',
+    '      var k = map[a.accion];',
+    '      return !k || m[k] !== false;',
+    '    });',
+    '  };',
+    '',
+    '  // 2) Filtrar dashboard por módulos activos',
+    '  var _origDash = renderDash;',
+    '  renderDash = function(){',
+    '    var h = _origDash();',
+    '    if(m.f29===false) h=h.replace(/<!--\\s*F-29 EN VIVO[\\s\\S]*?<\\/div>\\s*<\\/div>\\s*<\\/div>/,"");',
+    '    if(m.ventas===false&&m.compras===false) h=h.replace(/<!--\\s*KPIs PRINCIPALES[\\s\\S]*?<\\/div>\\s*<\\/div>\\s*<\\/div>/,"");',
+    '    ["liq","compras","ventas","honorarios","f29","previred","diario"].forEach(function(mod){',
+    '      if(m[mod]===false){',
+    '        var re=new RegExp(\'<button[^>]*onclick="go\\\\(\\\\\'\'+mod+\'\\\\\'\\\\)"[^>]*>[^<]*<\\/button>\',\'g\');',
+    '        h=h.replace(re,"");',
+    '      }',
+    '    });',
+    '    return h;',
+    '  };',
+    '',
+    '  // 3) backupCompleto: exportar solo datos de módulos asignados',
+    '  backupCompleto = function(){',
+    '    var exp = JSON.parse(JSON.stringify(MASTER));',
+    '    exp.empresas = (exp.empresas||[]).map(function(emp){',
+    '      var limpia = {};',
+    '      Object.keys(emp).forEach(function(k){ limpia[k]=emp[k]; });',
+    '      Object.keys(modToDb).forEach(function(mod){',
+    '        var dbKey = modToDb[mod];',
+    '        if(m[mod]===false && dbKey && limpia[dbKey]!==undefined) delete limpia[dbKey];',
+    '      });',
+    '      return limpia;',
+    '    });',
+    '    var blob=new Blob([JSON.stringify(exp,null,2)],{type:"application/json"});',
+    '    var a=document.createElement("a");',
+    '    a.href=URL.createObjectURL(blob);',
+    '    a.download="ContaMaster_backup_"+new Date().toISOString().split("T")[0]+".json";',
+    '    a.click();',
+    '  };',
+    '',
+    '  // 4) backupEmpresa: ídem solo empresa activa',
+    '  backupEmpresa = function(){',
+    '    var emp = JSON.parse(JSON.stringify(DB()));',
+    '    Object.keys(modToDb).forEach(function(mod){',
+    '      var dbKey = modToDb[mod];',
+    '      if(m[mod]===false && dbKey && emp[dbKey]!==undefined) delete emp[dbKey];',
+    '    });',
+    '    var cfg=CFG();',
+    '    var blob=new Blob([JSON.stringify({_tipo:"empresa",_ver:"2.0",empresa:emp},null,2)],{type:"application/json"});',
+    '    var a=document.createElement("a");',
+    '    a.href=URL.createObjectURL(blob);',
+    '    var nombre=(cfg.emp||"empresa").replace(/\\s+/g,"_").replace(/[^a-zA-Z0-9_]/g,"");',
+    '    a.download="ContaMaster_"+nombre+"_"+new Date().toISOString().split("T")[0]+".json";',
+    '    a.click();',
+    '  };',
+    '',
+    '  // 5) Ocultar botones de backup/importación de módulos no asignados',
+    '  var _bkMap={"Trabajadores":"trab","Liquidaciones":"liq","Compras":"compras",',
+    '    "Ventas":"ventas","Honorarios":"honorarios","Contabilidad":"contab",',
+    '    "Activo Fijo":"actfijo","Horarios":"horarios"};',
+    '  function _filtrarBk(){',
+    '    document.querySelectorAll("#syncModal button, #syncModal .btn").forEach(function(b){',
+    '      var t=b.textContent.trim();',
+    '      Object.keys(_bkMap).forEach(function(l){',
+    '        if(t.indexOf(l)!==-1 && m[_bkMap[l]]===false) b.style.display="none";',
+    '      });',
+    '    });',
+    '  }',
+    '  window.addEventListener("load",function(){',
+    '    _filtrarBk();',
+    '    setTimeout(_filtrarBk,500);',
+    '    // Refiltrar cada vez que se abra el modal de sync/backup',
+    '    var orig=window.openModal;',
+    '    if(orig) window.openModal=function(id){orig(id);if(id==="syncModal")setTimeout(_filtrarBk,100);};',
+    '  });',
+    '})();',
+    '<\/script>'
+  ].join('\n');
+
+  var idxBody = htmlCliente.lastIndexOf('</body>');
+  if(idxBody !== -1){
+    htmlCliente = htmlCliente.slice(0, idxBody) + scriptFiltro + '\n' + htmlCliente.slice(idxBody);
+  }
 
   var nombreArchivo = nombre.replace(/[^a-zA-Z0-9]/g,'_') || 'cliente';
   var blob = new Blob([htmlCliente], {type:'text/html;charset=utf-8'});
