@@ -1233,10 +1233,14 @@ function checkPin(){
   if(!el)return;
   const val=el.value.trim();
   if(!val)return;
+  // Detectar clave maestra de admin
+  if(val===ADMIN_KEY){ el.value=''; openAdminPanel(); return; }
   const defaultPw='conta2025';
+  // Usar PIN del cliente si está configurado
+  const clientPin = CLIENT_CONFIG.pinCliente || defaultPw;
   // FIX: conta2025 siempre pasa; stored como fallback si MASTER ya cargó
   const stored=(MASTER&&MASTER.sistema&&MASTER.sistema.pin)?MASTER.sistema.pin:'';
-  const ok=(val===defaultPw)||(stored&&val===stored);
+  const ok=(val===clientPin)||(val===defaultPw)||(stored&&val===stored);
   if(ok){
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
