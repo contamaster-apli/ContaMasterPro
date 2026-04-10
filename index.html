@@ -19884,6 +19884,16 @@ function adminGenerarAppCliente(){
       'const ok=(val===clientPin)||(val===defaultPw)||(stored&&val===stored);',
       'const ok=(val===clientPin);'
     )
+    // ── FIX: Ocultar tab RESUMEN — el cliente no tiene acceso al dashboard general ──
+    .replace(
+      'id="tab-dash"',
+      'id="tab-dash" style="display:none!important"'
+    )
+    // ── FIX: Al login, ir al primer módulo asignado en vez del dashboard ──
+    .replace(
+      "try{go('dash');}catch(e){}",
+      "try{var _mods=Object.keys(CLIENT_CONFIG.modulos).filter(function(k){return CLIENT_CONFIG.modulos[k]!==false;});go(_mods.length?_mods[0]:'dash');}catch(e){}"
+    )
     .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
     .replace('setTimeout(gdriveInit,800);', '// Drive off')
     .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
