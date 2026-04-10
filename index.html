@@ -15,74 +15,30 @@
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  GOOGLE DRIVE SYNC — ContaMaster Pro                                    ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
-// ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  PANEL ADMIN — CONFIGURACIÓN POR CLIENTE                                ║
-// ╚══════════════════════════════════════════════════════════════════════════╝
-const ADMIN_KEY = 'ADMIN#MASTER2026';        // Tu clave secreta — no la compartas
+//@@CONFIG_INICIO@@
+const ADMIN_KEY = 'ADMIN#MASTER2026';
 const CLIENT_CONFIG = {
-  nombreCliente: '',                          // Se llena desde el panel admin
-  pinCliente:    'conta2025',                 // PIN del cliente
-  watermark:     '',                          // Nombre visible en la app
-  modulos: {                                  // Módulos habilitados para este cliente
-    cajachica:   true,
-    fondos:      true,
-    leasing:     true,
-    informe:     true,
-    diesel:      true,
-    concilia:    true,
-    caja:        true,
-    retiros:     true,
-    proveedores: true,
-    conv:        true,
-    notas:       true,
-    archivador:  true,
-    auditoria:   true,
-    reg14a:      true,
-    certRemu:    true,
-    liq:         true,
-    trab:        true,
-    asist:       true,
-    horarios:    true,
-    finiq:       true,
-    vacac:       true,
-    ausencias:   true,
-    previred:    true,
-    libroRemu:   true,
-    compras:     true,
-    ventas:      true,
-    honorarios:  true,
-    bhe:         true,
-    creditos:    true,
-    f29:         true,
-    f22:         true,
-    f2121:       true,
-    dj:          true,
-    actfijo:     true,
-    contab:      true,
-    diario:      true,
-    mayor:       true,
-    balance:     true,
-    librocaja14d:true,
-    obra:        true,
-    tesoreria:   true,
-    estfin:      true,
-    estfinm:     true,
-    flujo:       true,
+  nombreCliente: '',
+  pinCliente:    'conta2025',
+  watermark:     '',
+  modulos: {
+    cajachica:   true,fondos:      true,leasing:     true,informe:     true,
+    diesel:      true,concilia:    true,caja:        true,retiros:     true,
+    proveedores: true,conv:        true,notas:       true,archivador:  true,
+    auditoria:   true,reg14a:      true,certRemu:    true,liq:         true,
+    trab:        true,asist:       true,horarios:    true,finiq:       true,
+    vacac:       true,ausencias:   true,previred:    true,libroRemu:   true,
+    compras:     true,ventas:      true,honorarios:  true,bhe:         true,
+    creditos:    true,f29:         true,f22:         true,f2121:       true,
+    dj:          true,actfijo:     true,contab:      true,diario:      true,
+    mayor:       true,balance:     true,librocaja14d:true,obra:        true,
+    tesoreria:   true,estfin:      true,estfinm:     true,flujo:       true,
     cuentasfijas:true,
   }
 };
-
-// Cargar config guardada si existe
-(function(){
-  try{
-    const saved = localStorage.getItem('clientConfig');
-    if(saved){ const p=JSON.parse(saved); Object.assign(CLIENT_CONFIG,p); }
-  }catch(e){}
-})();
-
-function adminSaveConfig(){
-  try{ localStorage.setItem('clientConfig', JSON.stringify(CLIENT_CONFIG)); }catch(e){}
-}
+(function(){try{var s=localStorage.getItem('clientConfig');if(s){var p=JSON.parse(s);Object.assign(CLIENT_CONFIG,p);}}catch(e){}})();
+function adminSaveConfig(){try{localStorage.setItem('clientConfig',JSON.stringify(CLIENT_CONFIG));}catch(e){}}
+//@@CONFIG_FIN@@
 
 const GDRIVE_CLIENT_ID = '1004463196082-mqsdqttmcf6hahp0p79ucpg9p0c8d5vq.apps.googleusercontent.com';
 const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
@@ -19881,38 +19837,43 @@ window.addEventListener('load',()=>{
 // ── Generar HTML para cliente ─────────────────────────────────────────────
 function adminGenerarAppCliente(){
   adminGuardar();
-  const nombre  = CLIENT_CONFIG.watermark  || '';
-  const pin     = CLIENT_CONFIG.pinCliente || 'conta2025';
-  const modulos = CLIENT_CONFIG.modulos;
+  var nombre  = CLIENT_CONFIG.watermark  || '';
+  var pin     = CLIENT_CONFIG.pinCliente || 'conta2025';
+  var modulos = CLIENT_CONFIG.modulos;
   if(!nombre){ alert('Debes ingresar el nombre del cliente antes de generar la app.'); return; }
-  if(pin==='conta2025'){ if(!confirm('El PIN es la clave por defecto. Deseas continuar de todas formas?')) return; }
-  const htmlOriginal = document.documentElement.outerHTML;
-  const modulosJSON  = JSON.stringify(modulos);
-  const configBloque = '// CONFIG CLIENTE\nconst ADMIN_KEY = "ADMIN#MASTER2026";\n' +
-    'const CLIENT_CONFIG = {nombreCliente:"' + nombre + '",pinCliente:"' + pin + '",watermark:"' + nombre + '",modulos:' + modulosJSON + '};\n' +
-    '(function(){try{var s=localStorage.getItem("clientConfig");if(s){var p=JSON.parse(s);Object.assign(CLIENT_CONFIG,p);}}catch(e){}})();\n' +
-    'function adminSaveConfig(){try{localStorage.setItem("clientConfig",JSON.stringify(CLIENT_CONFIG));}catch(e){}}';
-  let htmlCliente = htmlOriginal;
-  const marcaInicio = '// CONFIG CLIENTE';
-  const marcaFin    = 'function adminSaveConfig(){try{localStorage.setItem("clientConfig",JSON.stringify(CLIENT_CONFIG));}catch(e){}}';
-  const idxI = htmlCliente.indexOf('// ╔══');
-  const idxF = htmlCliente.indexOf('function adminSaveConfig');
+  if(pin==='conta2025'){ if(!confirm('El PIN es la clave por defecto. Deseas continuar?')) return; }
+  var htmlCliente = document.documentElement.outerHTML;
+  var modulosStr  = JSON.stringify(modulos);
+  var configNueva =
+    '//@@CONFIG_INICIO@@\n' +
+    'const ADMIN_KEY = "BLOQUEADO";\n' +
+    'const CLIENT_CONFIG = {' +
+      'nombreCliente:"' + nombre.replace(/"/g,'\\"') + '",' +
+      'pinCliente:"'    + pin.replace(/"/g,'\\"')    + '",' +
+      'watermark:"'     + nombre.replace(/"/g,'\\"') + '",' +
+      'modulos:'        + modulosStr +
+    '};\n' +
+    '(function(){})();\n' +
+    'function adminSaveConfig(){}\n' +
+    '//@@CONFIG_FIN@@';
+  var idxI = htmlCliente.indexOf('//@@CONFIG_INICIO@@');
+  var idxF = htmlCliente.indexOf('//@@CONFIG_FIN@@');
   if(idxI !== -1 && idxF !== -1){
-    const finBloque = htmlCliente.indexOf('}', idxF + 50) + 1;
-    htmlCliente = htmlCliente.slice(0,idxI) + configBloque + htmlCliente.slice(finBloque);
+    htmlCliente = htmlCliente.slice(0, idxI) + configNueva + htmlCliente.slice(idxF + '//@@CONFIG_FIN@@'.length);
   }
   htmlCliente = htmlCliente
-    .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();','// Drive desactivado')
-    .replace('setTimeout(gdriveInit,800);','// Drive desactivado')
-    .replace('id="gdriveBtnHdr"','id="gdriveBtnHdr" disabled style="opacity:.3;cursor:not-allowed;" title="Sin Drive"');
-  const nombreArchivo = nombre.replace(/\s+/g,'_').replace(/[^a-zA-Z0-9_]/g,'') || 'cliente';
-  const blob = new Blob([htmlCliente], {type:'text/html;charset=utf-8'});
-  const a = document.createElement('a');
+    .replace("if(val===ADMIN_KEY){ el.value=''; openAdminPanel(); return; }", '// admin bloqueado')
+    .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
+    .replace('setTimeout(gdriveInit,800);', '// Drive off')
+    .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
+  var nombreArchivo = nombre.replace(/[^a-zA-Z0-9]/g,'_') || 'cliente';
+  var blob = new Blob([htmlCliente], {type:'text/html;charset=utf-8'});
+  var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
   a.download = 'ContaMasterPro_' + nombreArchivo + '.html';
   a.click();
   URL.revokeObjectURL(a.href);
-  const msg = document.getElementById('adm_msg');
+  var msg = document.getElementById('adm_msg');
   msg.style.color = 'var(--green)';
   msg.textContent = 'App generada para ' + nombre + ' — PIN: ' + pin;
   setTimeout(function(){ msg.textContent=''; }, 5000);
