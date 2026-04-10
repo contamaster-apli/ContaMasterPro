@@ -19842,7 +19842,19 @@ function adminGenerarAppCliente(){
   var modulos = CLIENT_CONFIG.modulos;
   if(!nombre){ alert('Debes ingresar el nombre del cliente antes de generar la app.'); return; }
   if(pin==='conta2025'){ if(!confirm('El PIN es la clave por defecto. Deseas continuar?')) return; }
+
+  // ── FIX: Cerrar el panel admin ANTES de serializar el DOM ─────────────────
+  // Así el outerHTML no captura el panel abierto (display:flex)
+  var overlay = document.getElementById('adminPanelOverlay');
+  var overlayPrevDisplay = overlay ? overlay.style.display : '';
+  if(overlay) overlay.style.display = 'none';
+
   var htmlCliente = document.documentElement.outerHTML;
+
+  // Restaurar el panel en la app maestra (no afecta al HTML generado)
+  if(overlay) overlay.style.display = overlayPrevDisplay;
+  // ──────────────────────────────────────────────────────────────────────────
+
   var modulosStr  = JSON.stringify(modulos);
   var configNueva =
     '//@@CONFIG_INICIO@@\n' +
@@ -19861,12 +19873,19 @@ function adminGenerarAppCliente(){
   if(idxI !== -1 && idxF !== -1){
     htmlCliente = htmlCliente.slice(0, idxI) + configNueva + htmlCliente.slice(idxF + '//@@CONFIG_FIN@@'.length);
   }
+
+  // ── FIX: Usar regex para eliminar cualquier style inline previo del overlay
+  // y forzar display:none sin importar cómo quedó serializado el atributo
   htmlCliente = htmlCliente
     .replace("if(val===ADMIN_KEY){ el.value=''; openAdminPanel(); return; }", '// admin bloqueado')
-    .split('id="adminPanelOverlay"').join('id="adminPanelOverlay" style="display:none!important"')
+    .replace(
+      /id="adminPanelOverlay"([^>]*?)>/,
+      'id="adminPanelOverlay" style="display:none!important">'
+    )
     .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
     .replace('setTimeout(gdriveInit,800);', '// Drive off')
     .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
+
   var nombreArchivo = nombre.replace(/[^a-zA-Z0-9]/g,'_') || 'cliente';
   var blob = new Blob([htmlCliente], {type:'text/html;charset=utf-8'});
   var a = document.createElement('a');
