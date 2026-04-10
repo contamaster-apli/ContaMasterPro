@@ -15,6 +15,75 @@
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  GOOGLE DRIVE SYNC — ContaMaster Pro                                    ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  PANEL ADMIN — CONFIGURACIÓN POR CLIENTE                                ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+const ADMIN_KEY = 'ADMIN#MASTER2026';        // Tu clave secreta — no la compartas
+const CLIENT_CONFIG = {
+  nombreCliente: '',                          // Se llena desde el panel admin
+  pinCliente:    'conta2025',                 // PIN del cliente
+  watermark:     '',                          // Nombre visible en la app
+  modulos: {                                  // Módulos habilitados para este cliente
+    cajachica:   true,
+    fondos:      true,
+    leasing:     true,
+    informe:     true,
+    diesel:      true,
+    concilia:    true,
+    caja:        true,
+    retiros:     true,
+    proveedores: true,
+    conv:        true,
+    notas:       true,
+    archivador:  true,
+    auditoria:   true,
+    reg14a:      true,
+    certRemu:    true,
+    liq:         true,
+    trab:        true,
+    asist:       true,
+    horarios:    true,
+    finiq:       true,
+    vacac:       true,
+    ausencias:   true,
+    previred:    true,
+    libroRemu:   true,
+    compras:     true,
+    ventas:      true,
+    honorarios:  true,
+    bhe:         true,
+    creditos:    true,
+    f29:         true,
+    f22:         true,
+    f2121:       true,
+    dj:          true,
+    actfijo:     true,
+    contab:      true,
+    diario:      true,
+    mayor:       true,
+    balance:     true,
+    librocaja14d:true,
+    obra:        true,
+    tesoreria:   true,
+    estfin:      true,
+    estfinm:     true,
+    flujo:       true,
+    cuentasfijas:true,
+  }
+};
+
+// Cargar config guardada si existe
+(function(){
+  try{
+    const saved = localStorage.getItem('clientConfig');
+    if(saved){ const p=JSON.parse(saved); Object.assign(CLIENT_CONFIG,p); }
+  }catch(e){}
+})();
+
+function adminSaveConfig(){
+  try{ localStorage.setItem('clientConfig', JSON.stringify(CLIENT_CONFIG)); }catch(e){}
+}
+
 const GDRIVE_CLIENT_ID = '1004463196082-mqsdqttmcf6hahp0p79ucpg9p0c8d5vq.apps.googleusercontent.com';
 const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
 const GDRIVE_FILE_NAME = 'ContaMasterPro_data.json';
@@ -19102,9 +19171,16 @@ function _genCertRemuHTML(t, c, año, autoPrint = true) {
 
 function archDB() {
   const d = DB();
-  if (!d.archivador) d.archivador = {archivos:[]};
+  if (!d.archivador) d.archivador = {archivos:[], carpetasCustom:[]};
   if (!d.archivador.archivos) d.archivador.archivos = [];
-  // compatibilidad: si existe estructura antigua con carpetas la ignoramos sin borrarla
+  if (!d.archivador.carpetasCustom) d.archivador.carpetasCustom = [];
+  // Sincronizar carpetas personalizadas desde JSON hacia ARCH_CATEGORIAS
+  const customGuardadas = d.archivador.carpetasCustom;
+  customGuardadas.forEach(cat => {
+    if (!ARCH_CATEGORIAS.find(c=>c.id===cat.id)) {
+      ARCH_CATEGORIAS.push(cat);
+    }
+  });
   return d.archivador;
 }
 
@@ -19250,6 +19326,7 @@ function _rArchMesDetalle(mesClave) {
             <input type="file" multiple accept="*/*" style="display:none" onchange="_archSubirArchivos(this,'${cat.id}','${mesClave}')">
           </label>
           <span style="font-size:16px;color:var(--muted);">›</span>
+          ${cat.custom ? `<button onclick="event.stopPropagation();_archEliminarCarpeta('${cat.id}')" style="background:var(--red2);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:3px 6px;font-size:10px;cursor:pointer;" title="Eliminar carpeta">🗑</button>` : ''}
         </div>
       </div>`;
     }).join('');
@@ -19269,13 +19346,19 @@ function _rArchMesDetalle(mesClave) {
       </div>
     </div>
     <div class="card-body">
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
         <div>
-          <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--green);border-bottom:2px solid var(--green);padding-bottom:5px;margin-bottom:10px;text-transform:uppercase;">📥 Ingresos</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--green);padding-bottom:5px;margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--green);text-transform:uppercase;">📥 Ingresos</div>
+            <button onclick="_archNuevaCarpeta('ingreso','')" style="background:var(--green2);border:1px solid var(--green);color:var(--green);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;cursor:pointer;">+ Nueva carpeta</button>
+          </div>
           ${renderColumna(catIng,'Ingresos','var(--green)','var(--green2)')}
         </div>
         <div>
-          <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--red);border-bottom:2px solid var(--red);padding-bottom:5px;margin-bottom:10px;text-transform:uppercase;">📤 Egresos</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--red);padding-bottom:5px;margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--red);text-transform:uppercase;">📤 Egresos</div>
+            <button onclick="_archNuevaCarpeta('egreso','')" style="background:var(--red2);border:1px solid var(--red);color:var(--red);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;cursor:pointer;">+ Nueva carpeta</button>
+          </div>
           ${renderColumna(catEgr,'Egresos','var(--red)','var(--red2)')}
         </div>
       </div>
@@ -19469,6 +19552,44 @@ function _rArchBuscar() {
 
 // ── FUNCIONES DE SOPORTE ─────────────────────────────────────────────────────
 
+// ── CREAR / ELIMINAR CARPETAS PERSONALIZADAS ─────────────────────────────────
+function _archNuevaCarpeta(tipo, mesClave) {
+  const nombre = prompt('Nombre de la nueva carpeta:');
+  if (!nombre || !nombre.trim()) return;
+  const icono = prompt('Ícono (emoji) para la carpeta:', tipo==='ingreso'?'📁':'🗂️') || (tipo==='ingreso'?'📁':'🗂️');
+  const id = 'custom_' + Date.now();
+  const color = tipo==='ingreso' ? 'var(--cyan)' : 'var(--orange)';
+  const nuevaCat = { id, nombre: nombre.trim(), icono: icono.trim(), color, tipo, custom: true };
+  ARCH_CATEGORIAS.push(nuevaCat);
+  // Guardar también en el JSON de datos
+  const arch = archDB();
+  arch.carpetasCustom.push(nuevaCat);
+  save();
+  toast('📁 Carpeta «' + nombre.trim() + '» creada', 'ok');
+  go('archivador');
+}
+
+function _archEliminarCarpeta(id) {
+  const cat = ARCH_CATEGORIAS.find(c=>c.id===id);
+  if (!cat) return;
+  const arch = archDB();
+  const docsEnCarpeta = arch.archivos.filter(a=>a.categoriaId===id).length;
+  const msg = docsEnCarpeta > 0
+    ? `¿Eliminar la carpeta «${cat.nombre}»? Contiene ${docsEnCarpeta} archivo(s) que también se eliminarán.`
+    : `¿Eliminar la carpeta «${cat.nombre}»?`;
+  if (!confirm(msg)) return;
+  // Eliminar archivos de esa carpeta
+  arch.archivos = arch.archivos.filter(a=>a.categoriaId!==id);
+  // Eliminar de carpetasCustom en el JSON
+  arch.carpetasCustom = (arch.carpetasCustom||[]).filter(c=>c.id!==id);
+  // Eliminar categoría del array en memoria
+  const idx = ARCH_CATEGORIAS.findIndex(c=>c.id===id);
+  if (idx!==-1) ARCH_CATEGORIAS.splice(idx,1);
+  save();
+  toast('🗑 Carpeta eliminada','ok');
+  go('archivador');
+}
+
 function _archSubirArchivos(input, categoriaId, mesClave) {
   const files = Array.from(input.files);
   if (!files.length) return;
@@ -19585,5 +19706,165 @@ function _fmtSize(bytes) {
 
 
 
+
+<!-- ═══════════════════ MARCA DE AGUA CLIENTE ═══════════════════ -->
+<div id="clientWatermark" style="display:none;position:fixed;bottom:8px;right:12px;z-index:7000;
+  font-size:9px;font-weight:700;letter-spacing:1.5px;color:rgba(200,168,75,0.35);
+  pointer-events:none;user-select:none;"></div>
+
+<!-- ═══════════════════ PANEL ADMIN ═══════════════════ -->
+<div id="adminPanelOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:9500;align-items:center;justify-content:center;">
+  <div style="background:var(--s1);border:2px solid var(--acc);border-radius:18px;padding:24px;width:90%;max-width:480px;max-height:90vh;overflow-y:auto;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;">
+      <div style="font-size:22px;">🛡️</div>
+      <div>
+        <div style="font-size:14px;font-weight:800;color:var(--acc);letter-spacing:2px;">PANEL ADMINISTRADOR</div>
+        <div style="font-size:9px;color:var(--muted);letter-spacing:1px;">Solo visible para ti — el cliente nunca ve esta pantalla</div>
+      </div>
+      <button onclick="closeAdminPanel()" style="margin-left:auto;background:var(--red2);border:1px solid var(--red);color:var(--red);border-radius:8px;padding:5px 10px;cursor:pointer;font-weight:700;">✕ Cerrar</button>
+    </div>
+
+    <!-- Datos del cliente -->
+    <div style="background:var(--s2);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--acc);letter-spacing:1px;margin-bottom:10px;">👤 DATOS DEL CLIENTE</div>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:3px;">NOMBRE CLIENTE (aparece como marca de agua)</div>
+          <input id="adm_nombre" class="fi" placeholder="Ej: FERRETERÍA LÓPEZ" value="">
+        </div>
+        <div>
+          <div style="font-size:9px;color:var(--muted);margin-bottom:3px;">PIN DE ACCESO DEL CLIENTE</div>
+          <input id="adm_pin" class="fi" placeholder="Ej: FL2026#CONTA" value="">
+        </div>
+      </div>
+    </div>
+
+    <!-- Módulos -->
+    <div style="background:var(--s2);border:1px solid var(--border2);border-radius:12px;padding:14px;margin-bottom:12px;">
+      <div style="font-size:10px;font-weight:700;color:var(--acc);letter-spacing:1px;margin-bottom:10px;">📦 MÓDULOS HABILITADOS</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:10px;" id="adm_modulos"></div>
+      <div style="display:flex;gap:6px;margin-top:10px;">
+        <button onclick="adminToggleAll(true)" class="btn success sm">✅ Activar todos</button>
+        <button onclick="adminToggleAll(false)" class="btn danger sm">❌ Desactivar todos</button>
+      </div>
+    </div>
+
+    <!-- Botones -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="adminGuardar()" class="btn primary full" style="flex:2;">💾 GUARDAR CONFIGURACIÓN</button>
+      <button onclick="adminReset()" class="btn danger" style="flex:1;">🔄 Restaurar defaults</button>
+    </div>
+    <div id="adm_msg" style="margin-top:10px;font-size:10px;text-align:center;color:var(--green);min-height:16px;"></div>
+  </div>
+</div>
+
+<script>
+// ── Panel Admin ───────────────────────────────────────────────────────────
+const MOD_LABELS = {
+  liq:'Liquidaciones',trab:'Trabajadores',asist:'Asistencia',horarios:'Horarios',
+  finiq:'Finiquitos',vacac:'Vacaciones',ausencias:'Ausencias',previred:'Previred',
+  libroRemu:'Libro Remuneraciones',compras:'Compras',ventas:'Ventas',
+  honorarios:'Honorarios',bhe:'BHE',creditos:'Créditos',f29:'F29',f22:'F22',
+  f2121:'F2121',dj:'DJ',actfijo:'Activo Fijo',contab:'Contabilidad',
+  diario:'Diario',mayor:'Mayor',balance:'Balance',librocaja14d:'Libro Caja',
+  obra:'Obra',tesoreria:'Tesorería',estfin:'Estado Financiero',
+  estfinm:'Est. Fin. Mensual',flujo:'Flujo de Caja',cuentasfijas:'Cuentas Fijas',
+  cajachica:'Caja Chica',fondos:'Fondos x Rendir',leasing:'Leasing',
+  informe:'Informe Mensual',diesel:'Diesel',concilia:'Conciliación',
+  caja:'Caja/Bancos',retiros:'Retiros/Multas',proveedores:'Proveedores',
+  conv:'Conversores',notas:'Notas',archivador:'Archivador',
+  auditoria:'Auditoría',reg14a:'Reg. 14A',certRemu:'Cert. Remuneraciones'
+};
+
+function openAdminPanel(){
+  const o = document.getElementById('adminPanelOverlay');
+  o.style.display='flex';
+  // Cargar valores actuales
+  document.getElementById('adm_nombre').value = CLIENT_CONFIG.watermark || '';
+  document.getElementById('adm_pin').value = CLIENT_CONFIG.pinCliente || 'conta2025';
+  // Renderizar módulos
+  const cont = document.getElementById('adm_modulos');
+  cont.innerHTML = Object.keys(MOD_LABELS).map(k=>
+    `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;padding:4px 6px;border-radius:6px;border:1px solid var(--border2);background:var(--s3);">
+      <input type="checkbox" id="mod_${k}" ${CLIENT_CONFIG.modulos[k]!==false?'checked':''} style="cursor:pointer;">
+      <span>${MOD_LABELS[k]}</span>
+    </label>`
+  ).join('');
+}
+
+function closeAdminPanel(){
+  document.getElementById('adminPanelOverlay').style.display='none';
+}
+
+function adminToggleAll(val){
+  Object.keys(MOD_LABELS).forEach(k=>{
+    const el=document.getElementById('mod_'+k);
+    if(el) el.checked=val;
+  });
+}
+
+function adminGuardar(){
+  CLIENT_CONFIG.watermark    = document.getElementById('adm_nombre').value.trim();
+  CLIENT_CONFIG.nombreCliente= CLIENT_CONFIG.watermark;
+  CLIENT_CONFIG.pinCliente   = document.getElementById('adm_pin').value.trim() || 'conta2025';
+  Object.keys(MOD_LABELS).forEach(k=>{
+    const el=document.getElementById('mod_'+k);
+    if(el) CLIENT_CONFIG.modulos[k]=el.checked;
+  });
+  adminSaveConfig();
+  aplicarMarcaAgua();
+  aplicarModulos();
+  const msg=document.getElementById('adm_msg');
+  msg.textContent='✅ Configuración guardada correctamente';
+  setTimeout(()=>msg.textContent='',3000);
+}
+
+function adminReset(){
+  if(!confirm('¿Restaurar configuración por defecto?')) return;
+  localStorage.removeItem('clientConfig');
+  location.reload();
+}
+
+function aplicarMarcaAgua(){
+  const el=document.getElementById('clientWatermark');
+  if(!el) return;
+  const nombre = CLIENT_CONFIG.watermark || '';
+  if(nombre){
+    el.textContent='© '+nombre+' — LICENCIA PERSONAL';
+    el.style.display='block';
+  } else {
+    el.style.display='none';
+  }
+}
+
+function aplicarModulos(){
+  // Ocultar/mostrar tabs según módulos habilitados
+  const tabMap = {
+    liq:'tab-liq',trab:'tab-trab',asist:'tab-asist',horarios:'tab-horarios',
+    finiq:'tab-finiq',vacac:'tab-vacac',ausencias:'tab-ausencias',
+    previred:'tab-previred',libroRemu:'tab-libroRemu',compras:'tab-compras',
+    ventas:'tab-ventas',honorarios:'tab-honorarios',bhe:'tab-bhe',
+    creditos:'tab-creditos',f29:'tab-f29',f22:'tab-f22',f2121:'tab-f2121',
+    dj:'tab-dj',actfijo:'tab-actfijo',contab:'tab-contab',diario:'tab-diario',
+    mayor:'tab-mayor',balance:'tab-balance',librocaja14d:'tab-librocaja14d',
+    obra:'tab-obra',tesoreria:'tab-tesoreria',estfin:'tab-estfin',
+    estfinm:'tab-estfinm',flujo:'tab-flujo',cuentasfijas:'tab-cuentasfijas',
+    cajachica:'tab-cajachica',fondos:'tab-fondos',leasing:'tab-leasing',
+    informe:'tab-informe',diesel:'tab-diesel',concilia:'tab-concilia',
+    caja:'tab-caja',retiros:'tab-retiros',proveedores:'tab-proveedores',
+    conv:'tab-conv',notas:'tab-notas',archivador:'tab-archivador',
+    auditoria:'tab-auditoria',reg14a:'tab-reg14a',certRemu:'tab-certRemu'
+  };
+  Object.keys(tabMap).forEach(k=>{
+    const el=document.getElementById(tabMap[k]);
+    if(el) el.style.display=CLIENT_CONFIG.modulos[k]===false?'none':'';
+  });
+}
+
+// Aplicar al cargar
+window.addEventListener('load',()=>{
+  setTimeout(()=>{ aplicarMarcaAgua(); aplicarModulos(); },500);
+});
+</script>
 </body>
 </html>
