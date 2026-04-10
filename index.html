@@ -19863,6 +19863,7 @@ function adminGenerarAppCliente(){
   }
   htmlCliente = htmlCliente
     .replace("if(val===ADMIN_KEY){ el.value=''; openAdminPanel(); return; }", '// admin bloqueado')
+    .split('id="adminPanelOverlay"').join('id="adminPanelOverlay" style="display:none!important"')
     .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
     .replace('setTimeout(gdriveInit,800);', '// Drive off')
     .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
