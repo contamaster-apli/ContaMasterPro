@@ -496,6 +496,7 @@ textarea.fi{resize:vertical;min-height:50px;}
     <button class="ntab" id="tab-librocaja14d" onclick="go('librocaja14d')" style="border-color:var(--orange);color:var(--orange);">📒 CAJA 14D</button>
     <button class="ntab" id="tab-obra" onclick="go('obra')" style="border-color:var(--teal);color:var(--teal);">🏗 OBRA/PROYECTOS</button>
     <button class="ntab" id="tab-tesoreria" onclick="go('tesoreria')" style="border-color:var(--cyan);color:var(--cyan);">🏦 TESORERÍA</button>
+    <button class="ntab" id="tab-comprobantes" onclick="go('comprobantes')" style="border-color:var(--green);color:var(--green);">🧾 COMPROBANTES</button>
     <button class="ntab" id="tab-estfin" onclick="go('estfin')" style="border-color:var(--teal);color:var(--teal);">📋 EST. FINANCIERO</button>
     <button class="ntab" id="tab-estfinm" onclick="go('estfinm')" style="border-color:var(--teal);color:var(--teal);">📆 EST. FIN. MENSUAL</button>
     <button class="ntab" id="tab-flujo" onclick="go('flujo')" style="border-color:var(--cyan);color:var(--cyan);">💧 FLUJO DE CAJA</button>
@@ -844,7 +845,7 @@ textarea.fi{resize:vertical;min-height:50px;}
 // ╔══════════════════════════════════════════════════════════════╗
 // ║                    ESTADO GLOBAL                             ║
 // ╚══════════════════════════════════════════════════════════════╝
-const TABS=['dash','liq','trab','asist','horarios','finiq','vacac','ausencias','previred','libroRemu','compras','ventas','honorarios','bhe','creditos','f29','f22','f2121','dj','actfijo','contab','diario','mayor','balance','librocaja14d','obra','tesoreria','estfin','estfinm','flujo','cuentasfijas','cajachica','fondos','leasing','informe','diesel','concilia','caja','retiros','proveedores','conv','notas','archivador','auditoria','reg14a','certRemu'];
+const TABS=['dash','liq','trab','asist','horarios','finiq','vacac','ausencias','previred','libroRemu','compras','ventas','honorarios','bhe','creditos','f29','f22','f2121','dj','actfijo','contab','diario','mayor','balance','librocaja14d','obra','tesoreria','estfin','estfinm','flujo','cuentasfijas','cajachica','fondos','leasing','informe','diesel','concilia','caja','retiros','proveedores','conv','notas','archivador','auditoria','reg14a','certRemu','comprobantes'];
 const AFP_TASAS={Capital:0.1144,Cuprum:0.1144,Habitat:0.1127,Modelo:0.1058,PlanVital:0.1116,ProVida:0.1145,Uno:0.1046};
 // SIS 1.49% cargo emp. | AFC Indefinido: trab 0.6% emp 2.4% | Plazo: solo emp 3%
 const SIS_TASA=0.0149,AFC_TRAB_INDEF=0.006,AFC_EMP_INDEF=0.024,AFC_EMP_PLAZO=0.03;
@@ -983,6 +984,7 @@ function empVacia(){
     jornadas:[],           // Tipos de jornada configurables
     vacaciones:[],         // Solicitudes de vacaciones
     estadoFin:{conceptos:[],semanas:[],meses:[],categorias:{}}, // Estado Financiero semanal/mensual
+    comprobantes:{conceptosIng:[],conceptosEgr:[],registros:[]}, // Comprobantes ingreso/egreso
     flujoCaja:{conceptos:[],semanas:[]},// Flujo de caja proyectado
     cuentasFijas:[],       // Cuentas bancarias fijas / compromisos
     cajaChica:{fondoAsignado:0,saldo:0,movimientos:[]}, // Caja chica con rendición
@@ -1127,6 +1129,7 @@ async function load(){
           if(!emp.auditLog)emp.auditLog=[];
           if(!emp.reg14a)emp.reg14a={rai:[],ddan:[],rex:[],sac:[]};
           if(!emp.recordatorios)emp.recordatorios=[];
+          if(!emp.comprobantes)emp.comprobantes={conceptosIng:[],conceptosEgr:[],registros:[]};
           if(!emp.finiquitos)emp.finiquitos=[];
         });
       }
@@ -1472,6 +1475,7 @@ function render(t){
     case 'librocaja14d': mc.innerHTML=renderLibroCaja14D();break;
     case 'obra': mc.innerHTML=renderObra();setTimeout(()=>initObraEvents(),60);break;
     case 'tesoreria': mc.innerHTML=renderTesoreria();setTimeout(()=>showTesoTab('pagar',document.querySelector('#mc .tab-btn')),60);break;
+    case 'comprobantes': mc.innerHTML=renderComprobantes();break;
     case 'estfin': mc.innerHTML=renderEstFin();break;
     case 'estfinm': mc.innerHTML=renderEstFinMensual();break;
     case 'flujo': mc.innerHTML=renderFlujoCaja();break;
@@ -19724,7 +19728,513 @@ function _fmtSize(bytes) {
 </div>
 
 <script>
-// ── Panel Admin ───────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════
+// MÓDULO COMPROBANTES — Ingreso de Caja / Comprobante de Egreso
+// Conectado automáticamente con Estado Financiero Semanal
+// ══════════════════════════════════════════════════════════════════════════
+
+function _cmpDB(){
+  if(!DB().comprobantes) DB().comprobantes={conceptosIng:[],conceptosEgr:[],registros:[],folioInicialIng:1,folioInicialEgr:1};
+  if(!DB().comprobantes.conceptosIng) DB().comprobantes.conceptosIng=[];
+  if(!DB().comprobantes.conceptosEgr) DB().comprobantes.conceptosEgr=[];
+  if(!DB().comprobantes.registros)    DB().comprobantes.registros=[];
+  if(!DB().comprobantes.folioInicialIng) DB().comprobantes.folioInicialIng=1;
+  if(!DB().comprobantes.folioInicialEgr) DB().comprobantes.folioInicialEgr=1;
+  return DB().comprobantes;
+}
+
+function renderComprobantes(){
+  const d=_cmpDB();
+  const sub=window._cmpSub||'lista';
+  const subtabs=[
+    {id:'lista',   lbl:'📋 Registros'},
+    {id:'nuevo_ing', lbl:'➕ Ingreso de Caja'},
+    {id:'nuevo_egr', lbl:'➕ Comprobante Egreso'},
+    {id:'config',  lbl:'⚙️ Configurar Conceptos'},
+  ];
+  const nav=`<div class="sec-nav">${subtabs.map(t=>`
+    <button class="sec-nav-btn${sub===t.id?' active':''}" onclick="window._cmpSub='${t.id}';go('comprobantes')">${t.lbl}</button>
+  `).join('')}</div>`;
+
+  let body='';
+  if(sub==='lista')        body=_cmpLista(d);
+  else if(sub==='nuevo_ing') body=_cmpFormulario('ing',d);
+  else if(sub==='nuevo_egr') body=_cmpFormulario('egr',d);
+  else if(sub==='config')  body=_cmpConfig(d);
+  return nav+body;
+}
+
+// ── LISTA de registros ────────────────────────────────────────────────────
+function _cmpLista(d){
+  const regs=d.registros.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.folio-a.folio);
+  if(!regs.length) return `<div class="card"><div class="card-body"><div class="empty">
+    <div class="ei">🧾</div>
+    <div class="et">Sin comprobantes registrados</div>
+    <div class="es">Usa "➕ Ingreso de Caja" o "➕ Comprobante Egreso" para agregar</div>
+  </div></div></div>`;
+
+  const ing=regs.filter(r=>r.tipo==='ing').reduce((s,r)=>s+r.total,0);
+  const egr=regs.filter(r=>r.tipo==='egr').reduce((s,r)=>s+r.total,0);
+
+  return `
+  <div class="metrics">
+    <div class="metric"><div class="ml">TOTAL INGRESOS</div><div class="mv green">${fmt(ing)}</div><div class="ms">${regs.filter(r=>r.tipo==='ing').length} comprobantes</div></div>
+    <div class="metric"><div class="ml">TOTAL EGRESOS</div><div class="mv red">${fmt(egr)}</div><div class="ms">${regs.filter(r=>r.tipo==='egr').length} comprobantes</div></div>
+    <div class="metric"><div class="ml">RESULTADO</div><div class="mv ${ing-egr>=0?'teal':'red'}">${fmt(ing-egr)}</div><div class="ms">Ing - Egr</div></div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:var(--green2)">🧾</div>
+      <div style="flex:1"><div class="ct">Comprobantes registrados</div><div class="cs">${regs.length} registros</div></div>
+    </div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="background:var(--s3)">
+          <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">TIPO</th>
+          <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">FOLIO</th>
+          <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">FECHA</th>
+          <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">SEÑOR / CONCEPTO</th>
+          <th style="padding:8px;text-align:right;color:var(--muted);font-size:9px;">TOTAL</th>
+          <th style="padding:8px;text-align:center;color:var(--muted);font-size:9px;">SEMANA EF</th>
+          <th style="width:60px;"></th>
+        </tr></thead>
+        <tbody>
+        ${regs.map((r,i)=>`
+          <tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="cmpVerDetalle(${regs.length-1-i})">
+            <td style="padding:7px 8px;">
+              <span class="badge ${r.tipo==='ing'?'ok':'err'}" style="font-size:9px;">${r.tipo==='ing'?'⬆ INGRESO':'⬇ EGRESO'}</span>
+            </td>
+            <td style="padding:7px 8px;font-family:monospace;font-weight:700;">N° ${r.folio}</td>
+            <td style="padding:7px 8px;color:var(--muted);">${r.fecha}</td>
+            <td style="padding:7px 8px;">${r.senor||r.concepto||'—'}</td>
+            <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.tipo==='ing'?'var(--green)':'var(--red)'};">${fmt(r.total)}</td>
+            <td style="padding:7px 8px;text-align:center;font-size:9px;color:var(--muted);">${r.semanaEF||'—'}</td>
+            <td style="padding:4px;">
+              <button class="abt del" onclick="event.stopPropagation();cmpEliminar(${d.registros.indexOf(r)})" title="Eliminar">🗑</button>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ── FORMULARIO nuevo comprobante ──────────────────────────────────────────
+function _cmpFormulario(tipo, d){
+  const esTipo = tipo==='ing';
+  const conceptos = esTipo ? d.conceptosIng : d.conceptosEgr;
+  const color = esTipo ? 'var(--green)' : 'var(--red)';
+  const titulo = esTipo ? '📥 Ingreso de Caja' : '📤 Comprobante de Egreso';
+
+  if(!conceptos.length) return `<div class="card"><div class="card-body">
+    <div class="info-box" style="color:var(--orange);">
+      ⚠️ No hay conceptos configurados para ${esTipo?'ingresos':'egresos'}.
+      Ve a <b>⚙️ Configurar Conceptos</b> y agrega los conceptos que usa tu empresa.
+    </div>
+  </div></div>`;
+
+  // Folio correlativo desde el folio inicial configurado
+  const regsT=d.registros.filter(r=>r.tipo===tipo);
+  const folioIni = tipo==='ing' ? (d.folioInicialIng||1) : (d.folioInicialEgr||1);
+  const maxFolio = regsT.length ? Math.max(...regsT.map(r=>+r.folio||0)) : folioIni-1;
+  const sigFolio = Math.max(maxFolio+1, folioIni);
+  const hoy=new Date().toISOString().split('T')[0];
+
+  const filasConceptos=conceptos.map(c=>`
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:8px;font-size:11px;font-weight:600;">${c.nombre}</td>
+      <td style="padding:6px;">
+        <input class="fi" type="number" id="cmp_c_${c.id}" placeholder="0"
+          style="text-align:right;font-family:monospace;font-size:12px;width:140px;"
+          oninput="cmpRecalcular()">
+      </td>
+    </tr>`).join('');
+
+  return `<div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:${esTipo?'var(--green2)':'var(--red2)'};">${esTipo?'📥':'📤'}</div>
+      <div style="flex:1"><div class="ct">${titulo}</div><div class="cs">Completar y guardar — se sincroniza automáticamente con Estado Financiero Semanal</div></div>
+    </div>
+    <div class="card-body">
+
+      <!-- Cabecera del comprobante -->
+      <div class="fgrid" style="margin-bottom:16px;">
+        <div class="frow h2">
+          <div>
+            <div class="fl">N° FOLIO</div>
+            <input class="fi" type="number" id="cmp_folio" value="${sigFolio}" style="font-family:monospace;font-weight:700;font-size:14px;">
+          </div>
+          <div>
+            <div class="fl">FECHA</div>
+            <input class="fi" type="date" id="cmp_fecha" value="${hoy}">
+          </div>
+        </div>
+        ${esTipo?`
+        <div>
+          <div class="fl">MÁQUINA N°</div>
+          <input class="fi" id="cmp_maquina" placeholder="Ej: 15">
+        </div>
+        <div>
+          <div class="fl">SEÑOR</div>
+          <input class="fi" id="cmp_senor" placeholder="Nombre del chofer o persona">
+        </div>`:`
+        <div>
+          <div class="fl">PÁGUESE AL SEÑOR</div>
+          <input class="fi" id="cmp_senor" placeholder="Nombre del beneficiario">
+        </div>
+        <div class="frow h2">
+          <div>
+            <div class="fl">BANCO</div>
+            <input class="fi" id="cmp_banco" placeholder="Nombre del banco">
+          </div>
+          <div>
+            <div class="fl">MEDIO DE PAGO</div>
+            <select class="fi" id="cmp_medio">
+              <option>EFECTIVO</option><option>CHEQUE</option><option>TRANSFERENCIA</option><option>DEPÓSITO</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <div class="fl">POR CONCEPTO DE</div>
+          <input class="fi" id="cmp_concepto_gen" placeholder="Descripción general del egreso">
+        </div>`}
+      </div>
+
+      <!-- Tabla de conceptos -->
+      <div style="font-size:10px;font-weight:700;color:${color};letter-spacing:.5px;margin-bottom:8px;">
+        ${esTipo?'DETALLE INGRESOS':'DETALLE EGRESOS'}
+      </div>
+      <div style="overflow-x:auto;margin-bottom:16px;">
+        <table style="width:100%;border-collapse:collapse;">
+          <thead><tr style="background:var(--s3);">
+            <th style="padding:8px;text-align:left;font-size:9px;color:var(--muted);">CONCEPTO</th>
+            <th style="padding:8px;text-align:right;font-size:9px;color:var(--muted);width:160px;">MONTO ($)</th>
+          </tr></thead>
+          <tbody>${filasConceptos}</tbody>
+          <tfoot>
+            <tr style="background:var(--s3);border-top:2px solid var(--border2);">
+              <td style="padding:10px 8px;font-weight:800;font-size:12px;">TOTAL $</td>
+              <td style="padding:10px 8px;text-align:right;font-weight:800;font-size:14px;font-family:monospace;color:${color};" id="cmp_total_display">$0</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+
+      <!-- Son (letras) -->
+      <div style="margin-bottom:16px;">
+        <div class="fl">SON (en letras)</div>
+        <input class="fi" id="cmp_son" placeholder="Se completará automáticamente..." readonly style="color:var(--muted);font-size:10px;">
+      </div>
+
+      <!-- Conexión con Estado Financiero -->
+      <div style="background:var(--blue2);border:1px solid var(--blue);border-radius:8px;padding:10px 14px;font-size:10px;color:var(--blue);margin-bottom:16px;">
+        🔗 <b>Conexión automática con Estado Financiero Semanal:</b>
+        Selecciona a qué concepto del EF corresponde este comprobante para sincronizar automáticamente.
+        <div style="margin-top:8px;">
+          <div class="fl" style="color:var(--blue);">CONCEPTO EN ESTADO FINANCIERO</div>
+          <select class="fi" id="cmp_ef_concepto" style="border-color:var(--blue);">
+            <option value="">— No conectar al EF —</option>
+            ${(DB().estadoFin.conceptos||[])
+              .filter(c=> esTipo
+                ? (c.tipo==='ing_fijo'||c.tipo==='otro_ing')
+                : (c.tipo==='egr_fijo'||c.tipo==='otro_egr'))
+              .map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+
+      <!-- Botón guardar -->
+      <button class="btn success full" style="font-size:13px;padding:14px;" onclick="cmpGuardar('${tipo}')">
+        💾 GUARDAR COMPROBANTE${esTipo?'  DE INGRESO':'  DE EGRESO'}
+      </button>
+    </div>
+  </div>`;
+}
+
+// ── CONFIGURACIÓN de conceptos ────────────────────────────────────────────
+function _cmpConfig(d){
+  const renderLista=(arr,tipo)=>arr.length
+    ? arr.map((c,i)=>`
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
+          <div style="flex:1;font-size:11px;">${c.nombre}</div>
+          <button class="abt edit" onclick="cmpRenombrarConcepto('${tipo}',${c.id})" title="Renombrar">✏️</button>
+          <button class="abt del"  onclick="cmpEliminarConcepto('${tipo}',${c.id})" title="Eliminar">🗑</button>
+        </div>`).join('')
+    : `<div style="font-size:10px;color:var(--muted);padding:8px 0;">Sin conceptos. Agrega uno con el botón +</div>`;
+
+  return `
+  <div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:var(--acc2);">🔢</div>
+      <div style="flex:1"><div class="ct">Folio Inicial</div>
+        <div class="cs">Define desde qué número parten los folios correlativos</div></div>
+    </div>
+    <div class="card-body">
+      <div class="frow h2">
+        <div>
+          <div class="fl">FOLIO INICIAL — INGRESOS DE CAJA</div>
+          <input class="fi" type="number" id="cmp_fi_ing" value="${d.folioInicialIng||1}"
+            style="font-family:monospace;font-weight:700;"
+            oninput="_cmpDB().folioInicialIng=Math.max(1,parseInt(this.value)||1);saveDB();toast('✅ Folio inicial ingreso guardado')">
+        </div>
+        <div>
+          <div class="fl">FOLIO INICIAL — COMPROBANTES EGRESO</div>
+          <input class="fi" type="number" id="cmp_fi_egr" value="${d.folioInicialEgr||1}"
+            style="font-family:monospace;font-weight:700;"
+            oninput="_cmpDB().folioInicialEgr=Math.max(1,parseInt(this.value)||1);saveDB();toast('✅ Folio inicial egreso guardado')">
+        </div>
+      </div>
+      <div class="info-box" style="margin-top:8px;">
+        📌 El folio sugerido en cada nuevo comprobante será automáticamente el siguiente al último registrado,
+        nunca inferior al folio inicial aquí configurado.
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:var(--green2);">⬆️</div>
+      <div style="flex:1"><div class="ct">Conceptos de Ingreso de Caja</div>
+        <div class="cs">Ej: Planillas, Boletos, Minutos Andén, Viajes Especiales, Varios</div></div>
+      <button class="btn success sm" onclick="cmpAgregarConcepto('ing')">+ Agregar</button>
+    </div>
+    <div class="card-body">${renderLista(d.conceptosIng,'ing')}</div>
+  </div>
+  <div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:var(--red2);">⬇️</div>
+      <div style="flex:1"><div class="ct">Conceptos de Comprobante de Egreso</div>
+        <div class="cs">Ej: Remuneraciones, Combustible, Mantención, Varios</div></div>
+      <button class="btn danger sm" onclick="cmpAgregarConcepto('egr')">+ Agregar</button>
+    </div>
+    <div class="card-body">${renderLista(d.conceptosEgr,'egr')}</div>
+  </div>
+  <div class="card">
+    <div class="card-body">
+      <div class="info-box">
+        💡 <b>Tip:</b> Los conceptos aquí configurados aparecen en el formulario de cada comprobante.
+        En el formulario podrás además conectar cada comprobante con un concepto del
+        <b>Estado Financiero Semanal</b> para que el valor se registre automáticamente allá.
+      </div>
+    </div>
+  </div>`;
+}
+
+// ── FUNCIONES de gestión ──────────────────────────────────────────────────
+function cmpAgregarConcepto(tipo){
+  $('addTitle').textContent = tipo==='ing' ? '➕ Nuevo concepto de Ingreso' : '➕ Nuevo concepto de Egreso';
+  $('addSub').textContent = '';
+  $('addBody').innerHTML = `<div class="fgrid">
+    <div><div class="fl">NOMBRE DEL CONCEPTO</div>
+    <input class="fi" id="cmp_nc_nombre" placeholder="Ej: Planillas, Boletos, Combustible..." autofocus></div>
+  </div>`;
+  $('addOk').textContent = '💾 Agregar';
+  $('addOk').onclick = function(){
+    const nombre = ($('cmp_nc_nombre')?.value||'').trim();
+    if(!nombre){ toast('Ingresa un nombre','err'); return; }
+    const d = _cmpDB();
+    const arr = tipo==='ing' ? d.conceptosIng : d.conceptosEgr;
+    const id = arr.length ? Math.max(...arr.map(c=>c.id))+1 : 1;
+    arr.push({id, nombre});
+    saveDB(); closeModal('addModal');
+    window._cmpSub = 'config';
+    go('comprobantes'); toast('✅ Concepto agregado');
+  };
+  openModal('addModal');
+  setTimeout(()=>{ const el=$('cmp_nc_nombre'); if(el)el.focus(); }, 200);
+}
+
+function cmpRenombrarConcepto(tipo,id){
+  const d = _cmpDB();
+  const arr = tipo==='ing' ? d.conceptosIng : d.conceptosEgr;
+  const c = arr.find(x=>x.id===id);
+  if(!c) return;
+  $('addTitle').textContent = '✏️ Renombrar concepto';
+  $('addSub').textContent = '';
+  $('addBody').innerHTML = `<div class="fgrid">
+    <div><div class="fl">NUEVO NOMBRE</div>
+    <input class="fi" id="cmp_rn_nombre" value="${c.nombre}"></div>
+  </div>`;
+  $('addOk').textContent = '💾 Guardar';
+  $('addOk').onclick = function(){
+    const nuevo = ($('cmp_rn_nombre')?.value||'').trim();
+    if(!nuevo){ toast('Ingresa un nombre','err'); return; }
+    c.nombre = nuevo;
+    saveDB(); closeModal('addModal');
+    window._cmpSub = 'config';
+    go('comprobantes'); toast('✅ Concepto renombrado');
+  };
+  openModal('addModal');
+  setTimeout(()=>{ const el=$('cmp_rn_nombre'); if(el){ el.focus(); el.select(); } }, 200);
+}
+
+function cmpEliminarConcepto(tipo,id){
+  if(!confirm('¿Eliminar este concepto?'))return;
+  const d=_cmpDB();
+  if(tipo==='ing') d.conceptosIng=d.conceptosIng.filter(c=>c.id!==id);
+  else             d.conceptosEgr=d.conceptosEgr.filter(c=>c.id!==id);
+  saveDB();go('comprobantes');toast('✅ Concepto eliminado');
+}
+
+function cmpRecalcular(){
+  const d=_cmpDB();
+  const sub=window._cmpSub||'';
+  const tipo=sub==='nuevo_ing'?'ing':'egr';
+  const conceptos=tipo==='ing'?d.conceptosIng:d.conceptosEgr;
+  let total=0;
+  conceptos.forEach(c=>{
+    const el=document.getElementById('cmp_c_'+c.id);
+    if(el) total+=fv(el.value||0);
+  });
+  const disp=document.getElementById('cmp_total_display');
+  if(disp) disp.textContent=fmt(total);
+  // Actualizar letras
+  const son=document.getElementById('cmp_son');
+  if(son) son.value=total>0?_cmpNumLetras(total)+' PESOS':'';
+}
+
+function cmpGuardar(tipo){
+  const d=_cmpDB();
+  const conceptos=tipo==='ing'?d.conceptosIng:d.conceptosEgr;
+  const folio=fv(document.getElementById('cmp_folio')?.value||0);
+  const fecha=document.getElementById('cmp_fecha')?.value||'';
+  const senor=(document.getElementById('cmp_senor')?.value||'').trim();
+  if(!folio||!fecha){toast('Ingresa folio y fecha','err');return;}
+
+  // Recopilar valores por concepto
+  const detalles=[];
+  let total=0;
+  conceptos.forEach(c=>{
+    const el=document.getElementById('cmp_c_'+c.id);
+    const val=fv(el?.value||0);
+    if(val>0){ detalles.push({concepto:c.nombre,valor:val}); total+=val; }
+  });
+  if(!total){toast('Ingresa al menos un valor','err');return;}
+
+  // Campos extra según tipo
+  const extra={};
+  if(tipo==='ing'){
+    extra.maquina=(document.getElementById('cmp_maquina')?.value||'').trim();
+  } else {
+    extra.banco=(document.getElementById('cmp_banco')?.value||'').trim();
+    extra.medio=(document.getElementById('cmp_medio')?.value||'');
+    extra.concepto_gen=(document.getElementById('cmp_concepto_gen')?.value||'').trim();
+  }
+
+  // Registro
+  const reg={
+    tipo, folio, fecha,
+    senor: senor||extra.concepto_gen||'',
+    detalles, total,
+    semanaEF: getWeekKey(new Date(fecha+'T12:00:00')),
+    ...extra,
+    ts: Date.now()
+  };
+  d.registros.push(reg);
+
+  // ── Conexión automática con Estado Financiero Semanal ──
+  const efId=fv(document.getElementById('cmp_ef_concepto')?.value||0);
+  if(efId){
+    const wk=reg.semanaEF;
+    if(!DB().estadoFin) DB().estadoFin={conceptos:[],semanas:[]};
+    if(!DB().estadoFin.semanas) DB().estadoFin.semanas=[];
+    let sem=DB().estadoFin.semanas.find(s=>s.semana===wk);
+    if(!sem){
+      sem={semana:wk,saldoInicial:0,valores:{},movimientos:{}};
+      DB().estadoFin.semanas.push(sem);
+    }
+    if(!sem.movimientos) sem.movimientos={};
+    if(!sem.movimientos[efId]) sem.movimientos[efId]=[];
+    // Agregar cada detalle como movimiento individual en el EF
+    detalles.forEach(det=>{
+      sem.movimientos[efId].push({
+        detalle: (tipo==='ing'?'[ING N°'+folio+'] ':'[EGR N°'+folio+'] ')+(senor?senor+' — ':'')+det.concepto,
+        fechaCobro: fecha,
+        folio: String(folio),
+        medioPago: extra.medio||'EFECTIVO',
+        fechaDep: '',
+        valor: det.valor
+      });
+    });
+    // Recalcular total del concepto EF
+    sem.valores[efId]=sem.movimientos[efId].reduce((a,m)=>a+fv(m.valor),0);
+    toast('✅ Comprobante guardado y sincronizado con Estado Financiero','ok');
+  } else {
+    toast('✅ Comprobante guardado','ok');
+  }
+
+  saveDB();
+  window._cmpSub='lista';
+  go('comprobantes');
+}
+
+function cmpEliminar(idx){
+  if(!confirm('¿Eliminar este comprobante?\n\nNota: si estaba conectado al EF, ese movimiento no se elimina automáticamente.'))return;
+  _cmpDB().registros.splice(idx,1);
+  saveDB();go('comprobantes');toast('✅ Comprobante eliminado');
+}
+
+function cmpVerDetalle(idx){
+  const reg=_cmpDB().registros[idx];
+  if(!reg)return;
+  const color=reg.tipo==='ing'?'var(--green)':'var(--red)';
+  $('addTitle').textContent=(reg.tipo==='ing'?'📥 Ingreso de Caja':'📤 Comprobante de Egreso')+' — N° '+reg.folio;
+  $('addSub').textContent=reg.fecha+(reg.senor?' · '+reg.senor:'');
+  $('addBody').innerHTML=`
+    <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:11px;">
+        <thead><tr style="background:var(--s3);">
+          <th style="padding:8px;text-align:left;font-size:9px;color:var(--muted);">CONCEPTO</th>
+          <th style="padding:8px;text-align:right;font-size:9px;color:var(--muted);">MONTO</th>
+        </tr></thead>
+        <tbody>
+          ${reg.detalles.map(d=>`
+          <tr style="border-bottom:1px solid var(--border);">
+            <td style="padding:7px 8px;">${d.concepto}</td>
+            <td style="padding:7px 8px;text-align:right;font-family:monospace;font-weight:700;color:${color};">${fmt(d.valor)}</td>
+          </tr>`).join('')}
+        </tbody>
+        <tfoot><tr style="background:var(--s3);border-top:2px solid var(--border2);">
+          <td style="padding:8px;font-weight:800;">TOTAL</td>
+          <td style="padding:8px;text-align:right;font-weight:800;font-family:monospace;font-size:14px;color:${color};">${fmt(reg.total)}</td>
+        </tr></tfoot>
+      </table>
+    </div>
+    ${reg.maquina?`<div style="margin-top:10px;font-size:10px;color:var(--muted);">Máquina N°: <b>${reg.maquina}</b></div>`:''}
+    ${reg.banco?`<div style="margin-top:6px;font-size:10px;color:var(--muted);">Banco: <b>${reg.banco}</b> · Medio: <b>${reg.medio}</b></div>`:''}
+    ${reg.semanaEF?`<div style="margin-top:6px;font-size:10px;color:var(--blue);">🔗 Semana EF: <b>${reg.semanaEF}</b></div>`:''}
+  `;
+  $('addOk').style.display='none';
+  openModal('addModal');
+  setTimeout(()=>{$('addOk').style.display='';},100);
+}
+
+// ── Número a letras (para campo "Son") ────────────────────────────────────
+function _cmpNumLetras(n){
+  const u=['','UN','DOS','TRES','CUATRO','CINCO','SEIS','SIETE','OCHO','NUEVE',
+           'DIEZ','ONCE','DOCE','TRECE','CATORCE','QUINCE','DIECISÉIS','DIECISIETE','DIECIOCHO','DIECINUEVE'];
+  const d=['','','VEINTE','TREINTA','CUARENTA','CINCUENTA','SESENTA','SETENTA','OCHENTA','NOVENTA'];
+  const c=['','CIENTO','DOSCIENTOS','TRESCIENTOS','CUATROCIENTOS','QUINIENTOS','SEISCIENTOS','SETECIENTOS','OCHOCIENTOS','NOVECIENTOS'];
+  if(n===0)return'CERO';
+  if(n===100)return'CIEN';
+  if(n>=1000000){
+    const m=Math.floor(n/1000000);
+    const r=n%1000000;
+    return(m===1?'UN MILLÓN':`${_cmpNumLetras(m)} MILLONES`)+(r>0?' '+_cmpNumLetras(r):'');
+  }
+  if(n>=1000){
+    const m=Math.floor(n/1000);
+    const r=n%1000;
+    return(m===1?'MIL':`${_cmpNumLetras(m)} MIL`)+(r>0?' '+_cmpNumLetras(r):'');
+  }
+  if(n>=100) return c[Math.floor(n/100)]+(n%100>0?' '+_cmpNumLetras(n%100):'');
+  if(n>=20){
+    const dv=Math.floor(n/10);
+    const uv=n%10;
+    return d[dv]+(uv>0?' Y '+u[uv]:'');
+  }
+  return u[n]||'';
+}
+
 const MOD_LABELS = {
   liq:'Liquidaciones',trab:'Trabajadores',asist:'Asistencia',horarios:'Horarios',
   finiq:'Finiquitos',vacac:'Vacaciones',ausencias:'Ausencias',previred:'Previred',
@@ -19818,7 +20328,8 @@ function aplicarModulos(){
     informe:'tab-informe',diesel:'tab-diesel',concilia:'tab-concilia',
     caja:'tab-caja',retiros:'tab-retiros',proveedores:'tab-proveedores',
     conv:'tab-conv',notas:'tab-notas',archivador:'tab-archivador',
-    auditoria:'tab-auditoria',reg14a:'tab-reg14a',certRemu:'tab-certRemu'
+    auditoria:'tab-auditoria',reg14a:'tab-reg14a',certRemu:'tab-certRemu',
+    comprobantes:'tab-comprobantes'
   };
   Object.keys(tabMap).forEach(k=>{
     const el=document.getElementById(tabMap[k]);
