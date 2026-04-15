@@ -14930,7 +14930,7 @@ function rEstFin(){
   const conceptos=DB().estadoFin.conceptos;
   // ── BUG FIX: usa estadoFin, no flujoCaja ──
   let semData=DB().estadoFin.semanas.find(s=>s.semana===wk);
-  if(!semData){semData={semana:wk,saldoInicial:0,valores:{},vence:{},fechaReg:{},fechaSal:{},medioPago:{}};DB().estadoFin.semanas.push(semData);}
+  if(!semData){semData={semana:wk,saldoInicial:0,valores:{},vence:{},fechaReg:{},fechaSal:{},medioPago:{}};} // NO push — se crea solo al guardar un dato
   const val=(id)=>fv(semData.valores[id]||0);
   const saldoIni=fv(semData.saldoInicial||0);
   const ingFijo=conceptos.filter(c=>c.tipo==='ing_fijo').reduce((s,c)=>s+val(c.id),0);
@@ -15164,7 +15164,14 @@ function efDelConcepto_ef(id){
   saveDB();go('estfin');toast('✅ Concepto eliminado');
 }
 function efVerHistorial(){
-  const sem=(DB().estadoFin.semanas||[]).slice().sort((a,b)=>b.semana.localeCompare(a.semana)).slice(0,20);
+  // Solo mostrar semanas que tengan al menos un valor real o saldo inicial
+  const todas=(DB().estadoFin.semanas||[]);
+  const sem=todas.filter(s=>{
+    if(fv(s.saldoInicial||0)>0) return true;
+    if(s.valores && Object.values(s.valores).some(v=>fv(v)>0)) return true;
+    if(s.movimientos && Object.values(s.movimientos).some(arr=>arr&&arr.length>0)) return true;
+    return false;
+  }).slice().sort((a,b)=>b.semana.localeCompare(a.semana)).slice(0,20);
   $('addTitle').textContent='Historial de semanas — Estado Financiero';
   $('addSub').textContent='';
   $('addBody').innerHTML=sem.length?`<div class="fgrid">${sem.map(s=>`
