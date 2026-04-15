@@ -18777,16 +18777,21 @@ function exportReg14aCSV(sub){
 
 // Categorías fijas de documentos dentro de cada mes
 const ARCH_CATEGORIAS = [
-  {id:'facturas_ing',   nombre:'Facturas de Venta',      icono:'🧾', color:'var(--teal)',   tipo:'ingreso'},
-  {id:'boletas_ing',    nombre:'Boletas de Venta',        icono:'🎫', color:'var(--green)',  tipo:'ingreso'},
-  {id:'transferencias', nombre:'Transferencias Recibidas',icono:'💸', color:'var(--blue)',   tipo:'ingreso'},
-  {id:'otros_ing',      nombre:'Otros Ingresos',          icono:'📈', color:'var(--cyan)',   tipo:'ingreso'},
-  {id:'facturas_egr',   nombre:'Facturas de Compra',      icono:'🛒', color:'var(--orange)', tipo:'egreso'},
-  {id:'remuneraciones', nombre:'Remuneraciones',          icono:'👷', color:'var(--purple)', tipo:'egreso'},
-  {id:'honorarios_egr', nombre:'Honorarios Pagados',      icono:'📋', color:'var(--pink)',   tipo:'egreso'},
-  {id:'cheques_egr',    nombre:'Cheques Emitidos',        icono:'🏦', color:'var(--yellow)', tipo:'egreso'},
-  {id:'contratos',      nombre:'Contratos',               icono:'📜', color:'var(--red)',    tipo:'egreso'},
-  {id:'escaneados',     nombre:'Escaneados / Otros',      icono:'🖨️', color:'var(--muted)',  tipo:'egreso'},
+  {id:'facturas_ing',   nombre:'Facturas de Venta',        icono:'🧾', color:'var(--teal)',   tipo:'ingreso'},
+  {id:'boletas_ing',    nombre:'Boletas de Venta',          icono:'🎫', color:'var(--green)',  tipo:'ingreso'},
+  {id:'transferencias', nombre:'Transferencias Recibidas',  icono:'💸', color:'var(--blue)',   tipo:'ingreso'},
+  {id:'otros_ing',      nombre:'Otros Ingresos',            icono:'📈', color:'var(--cyan)',   tipo:'ingreso'},
+  {id:'facturas_egr',   nombre:'Facturas de Compra',        icono:'🛒', color:'var(--orange)', tipo:'egreso'},
+  {id:'remuneraciones', nombre:'Remuneraciones',            icono:'👷', color:'var(--purple)', tipo:'egreso'},
+  {id:'honorarios_egr', nombre:'Honorarios Pagados',        icono:'📋', color:'var(--pink)',   tipo:'egreso'},
+  {id:'cheques_egr',    nombre:'Cheques Emitidos',          icono:'🏦', color:'var(--yellow)', tipo:'egreso'},
+  {id:'contratos_egr',  nombre:'Contratos',                 icono:'📜', color:'var(--red)',    tipo:'egreso'},
+  {id:'escaneados',     nombre:'Escaneados / Otros',        icono:'🖨️', color:'var(--muted)',  tipo:'egreso'},
+  {id:'contratos_doc',  nombre:'Contratos y Acuerdos',      icono:'📝', color:'var(--acc)',    tipo:'doc'},
+  {id:'legal_doc',      nombre:'Documentos Legales/SII',    icono:'⚖️', color:'var(--blue)',   tipo:'doc'},
+  {id:'certificados',   nombre:'Certificados y Patentes',   icono:'🏅', color:'var(--teal)',   tipo:'doc'},
+  {id:'personal_doc',   nombre:'Documentos Personal',       icono:'👤', color:'var(--purple)', tipo:'doc'},
+  {id:'otros_doc',      nombre:'Otros Documentos',          icono:'📁', color:'var(--muted)',  tipo:'doc'},
 ];
 
 const ARCH_MESES = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -19266,6 +19271,7 @@ function _rArchMesDetalle(mesClave) {
 
   const catIng = ARCH_CATEGORIAS.filter(c=>c.tipo==='ingreso');
   const catEgr = ARCH_CATEGORIAS.filter(c=>c.tipo==='egreso');
+  const catDoc = ARCH_CATEGORIAS.filter(c=>c.tipo==='doc');
 
   function renderColumna(cats, tipoLabel, colorHeader, bgHeader) {
     return cats.map(cat => {
@@ -19296,6 +19302,7 @@ function _rArchMesDetalle(mesClave) {
   const totalMes = archivos.filter(a=>(a.mesCarpeta||a.fecha.slice(0,7))===mesClave).length;
   const totalIng = archivos.filter(a=>(a.mesCarpeta||a.fecha.slice(0,7))===mesClave&&ARCH_CATEGORIAS.find(c=>c.id===a.categoriaId&&c.tipo==='ingreso')).length;
   const totalEgr = archivos.filter(a=>(a.mesCarpeta||a.fecha.slice(0,7))===mesClave&&ARCH_CATEGORIAS.find(c=>c.id===a.categoriaId&&c.tipo==='egreso')).length;
+  const totalDoc = archivos.filter(a=>(a.mesCarpeta||a.fecha.slice(0,7))===mesClave&&ARCH_CATEGORIAS.find(c=>c.id===a.categoriaId&&c.tipo==='doc')).length;
 
   return `<div class="card">
     <div class="card-hdr">
@@ -19303,11 +19310,11 @@ function _rArchMesDetalle(mesClave) {
       <div style="font-size:22px;margin:0 6px;">📖</div>
       <div style="flex:1">
         <div class="ct">${ARCH_MESES[mes]} ${anio}</div>
-        <div class="cs">${totalMes} docs · <span style="color:var(--green)">↑ ${totalIng} ingresos</span> · <span style="color:var(--red)">↓ ${totalEgr} egresos</span></div>
+        <div class="cs">${totalMes} docs · <span style="color:var(--green)">↑ ${totalIng} ingresos</span> · <span style="color:var(--red)">↓ ${totalEgr} egresos</span> · <span style="color:var(--acc)">📄 ${totalDoc} documentos</span></div>
       </div>
     </div>
     <div class="card-body">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px;">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;">
         <div>
           <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--green);padding-bottom:5px;margin-bottom:10px;">
             <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--green);text-transform:uppercase;">📥 Ingresos</div>
@@ -19322,6 +19329,13 @@ function _rArchMesDetalle(mesClave) {
           </div>
           ${renderColumna(catEgr,'Egresos','var(--red)','var(--red2)')}
         </div>
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:2px solid var(--acc);padding-bottom:5px;margin-bottom:10px;">
+            <div style="font-size:10px;font-weight:800;letter-spacing:.08em;color:var(--acc);text-transform:uppercase;">📄 Documentos</div>
+            <button onclick="_archNuevaCarpeta('doc','')" style="background:var(--acc2);border:1px solid var(--acc);color:var(--acc);border-radius:6px;padding:3px 8px;font-size:9px;font-weight:700;cursor:pointer;">+ Nueva carpeta</button>
+          </div>
+          ${renderColumna(catDoc,'Documentos','var(--acc)','var(--acc2)')}
+        </div>
       </div>
     </div>
   </div>`;
@@ -19335,9 +19349,29 @@ function _rArchCategoriaDetalle(mesClave, catId) {
   if (!cat) { window._archCatSel=null; return _rArchMesDetalle(mesClave); }
   const [anio, mes] = mesClave.split('-').map(Number);
   const archivos = arch.archivos.filter(a=>(a.mesCarpeta||a.fecha.slice(0,7))===mesClave && a.categoriaId===catId)
-    .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    .sort((a,b)=>a.fecha.localeCompare(b.fecha));
 
-  const filas = archivos.map(a => `
+  // ── Agrupar por semana del mes ──────────────────────────────────────────
+  function getSemanaDelMes(fechaISO){
+    const d = new Date(fechaISO+'T12:00:00');
+    // Semana del mes: 1=días 1-7, 2=8-14, 3=15-21, 4=22-28, 5=29+
+    return Math.ceil(d.getDate()/7);
+  }
+  function getLabelSemana(nSem, anio, mes){
+    const ini = (nSem-1)*7+1;
+    const fin = Math.min(nSem*7, new Date(anio,mes,0).getDate());
+    return `Semana ${nSem} — ${ini} al ${fin} de ${ARCH_MESES[mes]} ${anio}`;
+  }
+
+  // Agrupar archivos por número de semana
+  const grupos = {};
+  archivos.forEach(a=>{
+    const ns = getSemanaDelMes(a.fecha);
+    if(!grupos[ns]) grupos[ns]=[];
+    grupos[ns].push(a);
+  });
+
+  const renderFila = a => `
     <div style="border:1px solid var(--border2);border-radius:10px;padding:10px 12px;margin-bottom:6px;background:var(--s2);display:flex;align-items:center;gap:10px;">
       <div style="font-size:24px;flex-shrink:0;">${_archIconoTipo(a.tipo)}</div>
       <div style="flex:1;min-width:0;">
@@ -19352,7 +19386,24 @@ function _rArchCategoriaDetalle(mesClave, catId) {
         <button class="abt edit" onclick="_archEditNota('${a.id}')" title="Nota">📝</button>
         <button class="abt del" onclick="_archEliminar('${a.id}')" title="Eliminar">🗑</button>
       </div>
-    </div>`).join('');
+    </div>`;
+
+  const semsOrdenadas = Object.keys(grupos).map(Number).sort((a,b)=>a-b);
+
+  const contenido = semsOrdenadas.length === 0
+    ? ''
+    : semsOrdenadas.map(ns=>{
+        const docs = grupos[ns];
+        const label = getLabelSemana(ns, anio, mes);
+        return `
+        <div style="margin-bottom:18px;">
+          <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--s3);border-radius:8px;border-left:3px solid ${cat.color};margin-bottom:8px;">
+            <span style="font-size:11px;font-weight:800;color:${cat.color};">📅 ${label}</span>
+            <span style="font-size:10px;color:var(--muted);margin-left:auto;">${docs.length} doc${docs.length!==1?'s':''}</span>
+          </div>
+          ${docs.map(renderFila).join('')}
+        </div>`;
+      }).join('');
 
   return `<div class="card">
     <div class="card-hdr">
@@ -19360,14 +19411,14 @@ function _rArchCategoriaDetalle(mesClave, catId) {
       <div style="font-size:22px;margin:0 5px;">${cat.icono}</div>
       <div style="flex:1">
         <div class="ct" style="color:${cat.color}">${cat.nombre}</div>
-        <div class="cs">${ARCH_MESES[mes]} ${anio} · ${archivos.length} doc${archivos.length!==1?'s':''}</div>
+        <div class="cs">${ARCH_MESES[mes]} ${anio} · ${archivos.length} doc${archivos.length!==1?'s':''} · ${semsOrdenadas.length} semana${semsOrdenadas.length!==1?'s':''}</div>
       </div>
       <label class="btn primary sm" style="cursor:pointer;">⬆️ Subir
         <input type="file" multiple accept="*/*" style="display:none" onchange="_archSubirArchivos(this,'${catId}','${mesClave}')">
       </label>
     </div>
     <div class="card-body">
-      ${filas || `<div class="empty"><div class="ei">${cat.icono}</div><div class="et">Sin documentos en esta categoría.<br>Usa "Subir" para agregar archivos.</div></div>`}
+      ${contenido || `<div class="empty"><div class="ei">${cat.icono}</div><div class="et">Sin documentos en esta categoría.<br>Usa "Subir" para agregar archivos.</div></div>`}
     </div>
   </div>
   <div id="archPreviewModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9999;align-items:center;justify-content:center;">
@@ -19515,19 +19566,34 @@ function _rArchBuscar() {
 
 // ── CREAR / ELIMINAR CARPETAS PERSONALIZADAS ─────────────────────────────────
 function _archNuevaCarpeta(tipo, mesClave) {
-  const nombre = prompt('Nombre de la nueva carpeta:');
-  if (!nombre || !nombre.trim()) return;
-  const icono = prompt('Ícono (emoji) para la carpeta:', tipo==='ingreso'?'📁':'🗂️') || (tipo==='ingreso'?'📁':'🗂️');
-  const id = 'custom_' + Date.now();
-  const color = tipo==='ingreso' ? 'var(--cyan)' : 'var(--orange)';
-  const nuevaCat = { id, nombre: nombre.trim(), icono: icono.trim(), color, tipo, custom: true };
-  ARCH_CATEGORIAS.push(nuevaCat);
-  // Guardar también en el JSON de datos
-  const arch = archDB();
-  arch.carpetasCustom.push(nuevaCat);
-  save();
-  toast('📁 Carpeta «' + nombre.trim() + '» creada', 'ok');
-  go('archivador');
+  const colorMap = {ingreso:'var(--cyan)', egreso:'var(--orange)', doc:'var(--acc)'};
+  const iconoMap  = {ingreso:'📁', egreso:'🗂️', doc:'📄'};
+  $('addTitle').textContent = '📁 Nueva carpeta — ' + (tipo==='ingreso'?'Ingresos':tipo==='egreso'?'Egresos':'Documentos');
+  $('addSub').textContent = '';
+  $('addBody').innerHTML = `<div class="fgrid">
+    <div><div class="fl">NOMBRE DE LA CARPETA</div>
+      <input class="fi" id="arch_nc_nombre" placeholder="Ej: Facturas SII, Contratos 2026..."></div>
+    <div><div class="fl">ÍCONO (emoji)</div>
+      <input class="fi" id="arch_nc_icono" placeholder="📁" value="${iconoMap[tipo]||'📁'}" style="font-size:18px;width:80px;"></div>
+  </div>`;
+  $('addOk').textContent = '💾 Crear carpeta';
+  $('addOk').onclick = function(){
+    const nombre = ($('arch_nc_nombre')?.value||'').trim();
+    const icono  = ($('arch_nc_icono')?.value||iconoMap[tipo]||'📁').trim();
+    if(!nombre){ toast('Ingresa un nombre','err'); return; }
+    const id = 'custom_' + Date.now();
+    const color = colorMap[tipo] || 'var(--muted)';
+    const nuevaCat = { id, nombre, icono, color, tipo, custom: true };
+    ARCH_CATEGORIAS.push(nuevaCat);
+    const arch = archDB();
+    arch.carpetasCustom.push(nuevaCat);
+    save();
+    closeModal('addModal');
+    toast('📁 Carpeta «' + nombre + '» creada', 'ok');
+    go('archivador');
+  };
+  openModal('addModal');
+  setTimeout(()=>{ const el=$('arch_nc_nombre'); if(el)el.focus(); }, 200);
 }
 
 function _archEliminarCarpeta(id) {
@@ -19582,25 +19648,77 @@ function _archSubirArchivos(input, categoriaId, mesClave) {
 
 function _archDescargar(id) {
   const a = archDB().archivos.find(x=>x.id===id); if(!a)return;
-  const link=document.createElement('a'); link.href=a.data; link.download=a.nombre; link.click();
+  try {
+    // Convertir Data URL a Blob para descarga confiable en todos los navegadores
+    const arr = a.data.split(','); const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]); let n = bstr.length;
+    const u8 = new Uint8Array(n); while(n--) u8[n]=bstr.charCodeAt(n);
+    const blob = new Blob([u8], {type: mime});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url; link.download = a.nombre; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url), 2000);
+  } catch(e) {
+    // Fallback directo
+    const link = document.createElement('a');
+    link.href = a.data; link.download = a.nombre; link.click();
+  }
+}
+
+function _archGetBlobURL(dataUrl, tipo) {
+  try {
+    const arr = dataUrl.split(','); const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]); let n = bstr.length;
+    const u8 = new Uint8Array(n); while(n--) u8[n]=bstr.charCodeAt(n);
+    return URL.createObjectURL(new Blob([u8], {type: mime}));
+  } catch(e) { return dataUrl; }
 }
 
 function _archPreview(id) {
   const a = archDB().archivos.find(x=>x.id===id); if(!a)return;
   const modal=document.getElementById('archPreviewModal');
   const content=document.getElementById('archPreviewContent');
-  if(a.tipo&&a.tipo.startsWith('image')) content.innerHTML=`<img src="${a.data}" style="max-width:100%;border-radius:8px;" alt="${esc(a.nombre)}"><div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted);">${esc(a.nombre)}</div>`;
-  else if(a.tipo==='application/pdf') content.innerHTML=`<iframe src="${a.data}" style="width:70vw;height:70vh;border:none;border-radius:8px;"></iframe>`;
+  if(a.tipo&&a.tipo.startsWith('image')){
+    content.innerHTML=`<img src="${a.data}" style="max-width:100%;border-radius:8px;" alt="${esc(a.nombre)}">
+      <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted);">${esc(a.nombre)}</div>`;
+  } else if(a.tipo==='application/pdf'){
+    const burl = _archGetBlobURL(a.data, a.tipo);
+    content.innerHTML=`<iframe src="${burl}" style="width:75vw;height:75vh;border:none;border-radius:8px;"></iframe>
+      <div style="text-align:center;margin-top:6px;font-size:10px;color:var(--muted);">${esc(a.nombre)}
+        <button onclick="_archDescargar('${a.id}')" style="margin-left:10px;background:var(--acc2);border:1px solid var(--acc);color:var(--acc);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:10px;">⬇️ Descargar</button>
+      </div>`;
+  } else {
+    content.innerHTML=`<div style="padding:30px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:12px;">${_archIconoTipo(a.tipo)}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:16px;">${esc(a.nombre)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;">Este tipo de archivo no se puede previsualizar directamente.</div>
+      <button class="btn success" onclick="_archDescargar('${a.id}')">⬇️ Descargar archivo</button>
+    </div>`;
+  }
   modal.style.display='flex';
 }
 
 function _archPreviewDir(id) {
-  // Preview desde buscador (usa modal B)
   const a = archDB().archivos.find(x=>x.id===id); if(!a)return;
   const modal=document.getElementById('archPreviewModalB');
   const content=document.getElementById('archPreviewContentB');
-  if(a.tipo&&a.tipo.startsWith('image')) content.innerHTML=`<img src="${a.data}" style="max-width:100%;border-radius:8px;" alt="${esc(a.nombre)}"><div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted);">${esc(a.nombre)}</div>`;
-  else if(a.tipo==='application/pdf') content.innerHTML=`<iframe src="${a.data}" style="width:70vw;height:70vh;border:none;border-radius:8px;"></iframe>`;
+  if(a.tipo&&a.tipo.startsWith('image')){
+    content.innerHTML=`<img src="${a.data}" style="max-width:100%;border-radius:8px;" alt="${esc(a.nombre)}">
+      <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted);">${esc(a.nombre)}</div>`;
+  } else if(a.tipo==='application/pdf'){
+    const burl = _archGetBlobURL(a.data, a.tipo);
+    content.innerHTML=`<iframe src="${burl}" style="width:75vw;height:75vh;border:none;border-radius:8px;"></iframe>
+      <div style="text-align:center;margin-top:6px;font-size:10px;color:var(--muted);">${esc(a.nombre)}
+        <button onclick="_archDescargar('${a.id}')" style="margin-left:10px;background:var(--acc2);border:1px solid var(--acc);color:var(--acc);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:10px;">⬇️ Descargar</button>
+      </div>`;
+  } else {
+    content.innerHTML=`<div style="padding:30px;text-align:center;">
+      <div style="font-size:48px;margin-bottom:12px;">${_archIconoTipo(a.tipo)}</div>
+      <div style="font-size:13px;font-weight:700;margin-bottom:16px;">${esc(a.nombre)}</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:20px;">Este tipo de archivo no se puede previsualizar directamente.</div>
+      <button class="btn success" onclick="_archDescargar('${a.id}')">⬇️ Descargar archivo</button>
+    </div>`;
+  }
   modal.style.display='flex';
 }
 
@@ -19766,28 +19884,81 @@ function renderComprobantes(){
 
 // ── LISTA de registros ────────────────────────────────────────────────────
 function _cmpLista(d){
-  const regs=d.registros.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.folio-a.folio);
-  if(!regs.length) return `<div class="card"><div class="card-body"><div class="empty">
+  const todos=d.registros.slice().sort((a,b)=>b.fecha.localeCompare(a.fecha)||b.folio-a.folio);
+  if(!todos.length) return `<div class="card"><div class="card-body"><div class="empty">
     <div class="ei">🧾</div>
     <div class="et">Sin comprobantes registrados</div>
     <div class="es">Usa "➕ Ingreso de Caja" o "➕ Comprobante Egreso" para agregar</div>
   </div></div></div>`;
 
-  const ing=regs.filter(r=>r.tipo==='ing').reduce((s,r)=>s+r.total,0);
-  const egr=regs.filter(r=>r.tipo==='egr').reduce((s,r)=>s+r.total,0);
+  // ── Leer filtros activos ──────────────────────────────────────────────────
+  const fTipo = window._cmpFTipo || '';
+  const fMes  = window._cmpFMes  || '';
+  const fText = (window._cmpFText||'').toLowerCase().trim();
+
+  // ── Aplicar filtros ───────────────────────────────────────────────────────
+  const regs = todos.filter(r=>{
+    if(fTipo && r.tipo !== fTipo) return false;
+    if(fMes  && !r.fecha.startsWith(fMes)) return false;
+    if(fText){
+      const haystack=(r.folio+' '+(r.senor||'')+ ' '+(r.concepto_gen||'')+' '+r.fecha).toLowerCase();
+      if(!haystack.includes(fText)) return false;
+    }
+    return true;
+  });
+
+  // ── Totales (sobre todos, no filtrados) ───────────────────────────────────
+  const ing=todos.filter(r=>r.tipo==='ing').reduce((s,r)=>s+r.total,0);
+  const egr=todos.filter(r=>r.tipo==='egr').reduce((s,r)=>s+r.total,0);
+
+  // ── Meses disponibles para el selector ───────────────────────────────────
+  const mesesSet=[...new Set(todos.map(r=>r.fecha.slice(0,7)))].sort().reverse();
 
   return `
   <div class="metrics">
-    <div class="metric"><div class="ml">TOTAL INGRESOS</div><div class="mv green">${fmt(ing)}</div><div class="ms">${regs.filter(r=>r.tipo==='ing').length} comprobantes</div></div>
-    <div class="metric"><div class="ml">TOTAL EGRESOS</div><div class="mv red">${fmt(egr)}</div><div class="ms">${regs.filter(r=>r.tipo==='egr').length} comprobantes</div></div>
+    <div class="metric"><div class="ml">TOTAL INGRESOS</div><div class="mv green">${fmt(ing)}</div><div class="ms">${todos.filter(r=>r.tipo==='ing').length} comprobantes</div></div>
+    <div class="metric"><div class="ml">TOTAL EGRESOS</div><div class="mv red">${fmt(egr)}</div><div class="ms">${todos.filter(r=>r.tipo==='egr').length} comprobantes</div></div>
     <div class="metric"><div class="ml">RESULTADO</div><div class="mv ${ing-egr>=0?'teal':'red'}">${fmt(ing-egr)}</div><div class="ms">Ing - Egr</div></div>
   </div>
+
+  <!-- FILTROS -->
+  <div class="card">
+    <div class="card-body" style="padding:10px 14px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+        <span style="font-size:10px;font-weight:700;color:var(--muted);">🔍 FILTRAR:</span>
+        <select class="fi" style="width:140px;font-size:11px;padding:5px 8px;"
+          onchange="window._cmpFTipo=this.value;go('comprobantes')">
+          <option value="" ${!fTipo?'selected':''}>Todos los tipos</option>
+          <option value="ing" ${fTipo==='ing'?'selected':''}>⬆ Solo Ingresos</option>
+          <option value="egr" ${fTipo==='egr'?'selected':''}>⬇ Solo Egresos</option>
+        </select>
+        <select class="fi" style="width:150px;font-size:11px;padding:5px 8px;"
+          onchange="window._cmpFMes=this.value;go('comprobantes')">
+          <option value="" ${!fMes?'selected':''}>Todos los meses</option>
+          ${mesesSet.map(m=>{
+            const [y,mo]=m.split('-').map(Number);
+            const MESES=['','Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+            return `<option value="${m}" ${fMes===m?'selected':''}>${MESES[mo]} ${y}</option>`;
+          }).join('')}
+        </select>
+        <input class="fi" type="text" placeholder="Buscar folio o nombre..." style="flex:1;min-width:140px;font-size:11px;padding:5px 8px;"
+          value="${window._cmpFText||''}"
+          oninput="window._cmpFText=this.value;go('comprobantes')">
+        ${(fTipo||fMes||fText)?`<button class="btn danger sm" onclick="window._cmpFTipo='';window._cmpFMes='';window._cmpFText='';go('comprobantes')">✕ Limpiar</button>`:''}
+      </div>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-hdr">
       <div class="ci" style="background:var(--green2)">🧾</div>
-      <div style="flex:1"><div class="ct">Comprobantes registrados</div><div class="cs">${regs.length} registros</div></div>
+      <div style="flex:1">
+        <div class="ct">Comprobantes</div>
+        <div class="cs">${regs.length} de ${todos.length} registros${fTipo||fMes||fText?' (filtrado)':''}</div>
+      </div>
     </div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
+    ${regs.length ? `
       <table style="width:100%;border-collapse:collapse;font-size:11px;">
         <thead><tr style="background:var(--s3)">
           <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">TIPO</th>
@@ -19796,25 +19967,39 @@ function _cmpLista(d){
           <th style="padding:8px;text-align:left;color:var(--muted);font-size:9px;">SEÑOR / CONCEPTO</th>
           <th style="padding:8px;text-align:right;color:var(--muted);font-size:9px;">TOTAL</th>
           <th style="padding:8px;text-align:center;color:var(--muted);font-size:9px;">SEMANA EF</th>
-          <th style="width:60px;"></th>
+          <th style="width:70px;"></th>
         </tr></thead>
         <tbody>
-        ${regs.map((r,i)=>`
-          <tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="cmpVerDetalle(${regs.length-1-i})">
+        ${regs.map(r=>{
+          const idxOrig=d.registros.indexOf(r);
+          const idxVista=todos.indexOf(r);
+          return `
+          <tr style="border-bottom:1px solid var(--border);cursor:pointer;" onclick="cmpVerDetalle(${idxOrig})">
             <td style="padding:7px 8px;">
-              <span class="badge ${r.tipo==='ing'?'ok':'err'}" style="font-size:9px;">${r.tipo==='ing'?'⬆ INGRESO':'⬇ EGRESO'}</span>
+              <span class="badge ${r.tipo==='ing'?'ok':'err'}" style="font-size:9px;">${r.tipo==='ing'?'⬆ ING':'⬇ EGR'}</span>
             </td>
             <td style="padding:7px 8px;font-family:monospace;font-weight:700;">N° ${r.folio}</td>
             <td style="padding:7px 8px;color:var(--muted);">${r.fecha}</td>
-            <td style="padding:7px 8px;">${r.senor||r.concepto||'—'}</td>
+            <td style="padding:7px 8px;">${esc(r.senor||r.concepto_gen||'—')}</td>
             <td style="padding:7px 8px;text-align:right;font-weight:700;color:${r.tipo==='ing'?'var(--green)':'var(--red)'};">${fmt(r.total)}</td>
             <td style="padding:7px 8px;text-align:center;font-size:9px;color:var(--muted);">${r.semanaEF||'—'}</td>
             <td style="padding:4px;">
-              <button class="abt del" onclick="event.stopPropagation();cmpEliminar(${d.registros.indexOf(r)})" title="Eliminar">🗑</button>
+              <div style="display:flex;gap:3px;">
+                ${r.archivadorId?`<span title="Tiene documento adjunto" style="font-size:13px;cursor:pointer;" onclick="event.stopPropagation();cmpVerAdjunto('${r.archivadorId}')">📎</span>`:''}
+                <button class="abt" onclick="event.stopPropagation();cmpVerDetalle(${idxOrig})" title="Ver" style="color:var(--blue);">👁</button>
+                <button class="abt" onclick="event.stopPropagation();cmpAdjuntar(${idxOrig})" title="${r.archivadorId?'Cambiar adjunto':'Adjuntar archivo'}" style="color:var(--acc);">📎</button>
+                <button class="abt del" onclick="event.stopPropagation();cmpEliminar(${idxOrig})" title="Eliminar">🗑</button>
+              </div>
             </td>
-          </tr>`).join('')}
+          </tr>`;
+        }).join('')}
         </tbody>
-      </table>
+      </table>` :
+      `<div class="empty" style="padding:30px;">
+        <div class="ei">🔍</div>
+        <div class="et">Sin resultados para los filtros aplicados</div>
+        <div class="es"><button class="btn secondary sm" onclick="window._cmpFTipo='';window._cmpFMes='';window._cmpFText='';go('comprobantes')">Limpiar filtros</button></div>
+      </div>`}
     </div>
   </div>`;
 }
@@ -19940,6 +20125,28 @@ function _cmpFormulario(tipo, d){
                 : (c.tipo==='egr_fijo'||c.tipo==='otro_egr'))
               .map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('')}
           </select>
+        </div>
+      </div>
+
+      <!-- Conexión con Archivador -->
+      <div style="background:var(--s3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-size:10px;margin-bottom:16px;">
+        📎 <b>Adjuntar documento del Archivador</b> (opcional) — vincula el comprobante físico escaneado
+        <div style="margin-top:8px;">
+          <div class="fl" style="color:var(--muted);">ARCHIVO DEL ARCHIVADOR</div>
+          <select class="fi" id="cmp_arch_id" style="font-size:11px;">
+            <option value="">— Sin adjunto —</option>
+            ${(()=>{
+              const arch=DB().archivador||{archivos:[]};
+              const mesReg=(document.getElementById('cmp_fecha')?.value||new Date().toISOString().split('T')[0]).slice(0,7);
+              const opciones=arch.archivos
+                .filter(a=>a.mesCarpeta===mesReg||a.fecha.startsWith(mesReg))
+                .sort((a,b)=>b.fecha.localeCompare(a.fecha))
+                .map(a=>`<option value="${a.id}">${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`)
+                .join('');
+              return opciones||'<option disabled>Sin archivos en este mes</option>';
+            })()}
+          </select>
+          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Solo se muestran archivos del mismo mes del comprobante. Si no encuentras el archivo, súbelo primero al Archivador.</div>
         </div>
       </div>
 
@@ -20126,6 +20333,7 @@ function cmpGuardar(tipo){
     senor: senor||extra.concepto_gen||'',
     detalles, total,
     semanaEF: getWeekKey(new Date(fecha+'T12:00:00')),
+    archivadorId: document.getElementById('cmp_arch_id')?.value||'', // ← enlace al archivador
     ...extra,
     ts: Date.now()
   };
@@ -20176,36 +20384,237 @@ function cmpEliminar(idx){
 function cmpVerDetalle(idx){
   const reg=_cmpDB().registros[idx];
   if(!reg)return;
-  const color=reg.tipo==='ing'?'var(--green)':'var(--red)';
-  $('addTitle').textContent=(reg.tipo==='ing'?'📥 Ingreso de Caja':'📤 Comprobante de Egreso')+' — N° '+reg.folio;
-  $('addSub').textContent=reg.fecha+(reg.senor?' · '+reg.senor:'');
-  $('addBody').innerHTML=`
-    <div style="overflow-x:auto;">
-      <table style="width:100%;border-collapse:collapse;font-size:11px;">
-        <thead><tr style="background:var(--s3);">
-          <th style="padding:8px;text-align:left;font-size:9px;color:var(--muted);">CONCEPTO</th>
-          <th style="padding:8px;text-align:right;font-size:9px;color:var(--muted);">MONTO</th>
+  const color=reg.tipo==='ing'?'#16a34a':'#dc2626';
+  const titulo=reg.tipo==='ing'?'INGRESO DE CAJA':'COMPROBANTE DE EGRESO';
+  const cfg=CFG();
+  const empresa=cfg.emp||'';
+  const rut=cfg.rut||'';
+
+  // HTML del comprobante visual tipo documento
+  const htmlDoc=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>${titulo} N° ${reg.folio}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Arial,sans-serif;background:#f5f5f5;display:flex;justify-content:center;padding:30px;}
+    .comp{background:#fff;width:700px;border:2px solid #1e40af;border-radius:4px;padding:0;box-shadow:0 4px 20px rgba(0,0,0,.15);}
+    .header{background:#1e40af;color:#fff;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;}
+    .header-left{font-size:13px;line-height:1.6;}
+    .header-right{text-align:right;}
+    .header-right .tipo{font-size:18px;font-weight:800;letter-spacing:1px;}
+    .header-right .folio{font-size:14px;margin-top:4px;}
+    .body{padding:20px 24px;}
+    .fila{display:flex;gap:16px;margin-bottom:12px;}
+    .campo{flex:1;}
+    .campo label{font-size:9px;font-weight:700;color:#6b7280;letter-spacing:.5px;text-transform:uppercase;}
+    .campo .valor{font-size:12px;font-weight:600;border-bottom:1px solid #d1d5db;padding:3px 0;min-height:22px;}
+    table{width:100%;border-collapse:collapse;margin:16px 0;}
+    thead tr{background:#1e40af;color:#fff;}
+    th{padding:8px 12px;text-align:left;font-size:10px;letter-spacing:.5px;}
+    th:last-child{text-align:right;}
+    tbody tr{border-bottom:1px solid #e5e7eb;}
+    td{padding:8px 12px;font-size:12px;}
+    td:last-child{text-align:right;font-weight:700;color:${color};}
+    tfoot tr{background:#f3f4f6;border-top:2px solid #1e40af;}
+    tfoot td{padding:10px 12px;font-weight:800;font-size:14px;}
+    tfoot td:last-child{color:${color};font-size:16px;}
+    .son{background:#f9fafb;border:1px solid #e5e7eb;border-radius:4px;padding:10px 14px;margin:8px 0 16px;font-size:11px;}
+    .son span{font-weight:700;color:#1e40af;}
+    .footer{border-top:2px solid #1e40af;padding:16px 24px;display:flex;justify-content:space-between;align-items:flex-end;}
+    .firma{text-align:center;min-width:140px;}
+    .firma-linea{border-top:1px solid #374151;margin-bottom:4px;margin-top:40px;}
+    .firma-lbl{font-size:9px;color:#6b7280;}
+    .ef-tag{background:#eff6ff;border:1px solid #bfdbfe;border-radius:4px;padding:6px 12px;font-size:10px;color:#1e40af;margin-top:8px;}
+    .btn-bar{display:flex;gap:10px;justify-content:center;padding:16px;background:#f9fafb;border-top:1px solid #e5e7eb;}
+    .btn{padding:10px 24px;border-radius:6px;border:none;cursor:pointer;font-size:13px;font-weight:700;}
+    .btn-print{background:#1e40af;color:#fff;}
+    .btn-close{background:#e5e7eb;color:#374151;}
+    @media print{.btn-bar{display:none;}body{background:#fff;padding:0;}
+      .comp{box-shadow:none;border:2px solid #1e40af;width:100%;}}
+  </style>
+  </head><body>
+  <div class="comp">
+    <div class="header">
+      <div class="header-left">
+        <div style="font-weight:800;font-size:15px;">${empresa}</div>
+        ${rut?`<div>RUT: ${rut}</div>`:''}
+        <div style="margin-top:4px;font-size:11px;opacity:.85;">${reg.fecha}</div>
+      </div>
+      <div class="header-right">
+        <div class="tipo">${titulo}</div>
+        <div class="folio">N° ${String(reg.folio).padStart(6,'0')}</div>
+      </div>
+    </div>
+    <div class="body">
+      ${reg.tipo==='ing'?`
+      <div class="fila">
+        <div class="campo"><label>Máquina N°</label><div class="valor">${reg.maquina||''}</div></div>
+        <div class="campo"><label>Señor</label><div class="valor">${reg.senor||''}</div></div>
+        <div class="campo"><label>Fecha</label><div class="valor">${reg.fecha}</div></div>
+      </div>`:`
+      <div class="fila">
+        <div class="campo" style="flex:2"><label>Páguese al Señor</label><div class="valor">${reg.senor||''}</div></div>
+        <div class="campo"><label>Fecha</label><div class="valor">${reg.fecha}</div></div>
+      </div>
+      <div class="fila">
+        <div class="campo" style="flex:2"><label>Por Concepto de</label><div class="valor">${reg.concepto_gen||''}</div></div>
+        <div class="campo"><label>Banco</label><div class="valor">${reg.banco||''}</div></div>
+        <div class="campo"><label>Medio de Pago</label><div class="valor">${reg.medio||''}</div></div>
+      </div>`}
+      <table>
+        <thead><tr>
+          <th>CONCEPTO</th>
+          <th style="text-align:right;">MONTO ($)</th>
         </tr></thead>
         <tbody>
-          ${reg.detalles.map(d=>`
-          <tr style="border-bottom:1px solid var(--border);">
-            <td style="padding:7px 8px;">${d.concepto}</td>
-            <td style="padding:7px 8px;text-align:right;font-family:monospace;font-weight:700;color:${color};">${fmt(d.valor)}</td>
-          </tr>`).join('')}
+          ${reg.detalles.map(d=>`<tr><td>${d.concepto}</td><td>${d.valor.toLocaleString('es-CL')}</td></tr>`).join('')}
         </tbody>
-        <tfoot><tr style="background:var(--s3);border-top:2px solid var(--border2);">
-          <td style="padding:8px;font-weight:800;">TOTAL</td>
-          <td style="padding:8px;text-align:right;font-weight:800;font-family:monospace;font-size:14px;color:${color};">${fmt(reg.total)}</td>
+        <tfoot><tr>
+          <td>TOTAL $</td>
+          <td>${reg.total.toLocaleString('es-CL')}</td>
         </tr></tfoot>
       </table>
+      <div class="son">SON: <span>${_cmpNumLetras(reg.total)} PESOS</span></div>
+      ${reg.semanaEF?`<div class="ef-tag">🔗 Vinculado al Estado Financiero Semanal — ${reg.semanaEF}</div>`:''}
+      ${reg.archivadorId?`<div class="ef-tag" style="background:#fefce8;border-color:#fef08a;color:#854d0e;margin-top:6px;">📎 Documento adjunto vinculado desde Archivador</div>`:''}
     </div>
-    ${reg.maquina?`<div style="margin-top:10px;font-size:10px;color:var(--muted);">Máquina N°: <b>${reg.maquina}</b></div>`:''}
-    ${reg.banco?`<div style="margin-top:6px;font-size:10px;color:var(--muted);">Banco: <b>${reg.banco}</b> · Medio: <b>${reg.medio}</b></div>`:''}
-    ${reg.semanaEF?`<div style="margin-top:6px;font-size:10px;color:var(--blue);">🔗 Semana EF: <b>${reg.semanaEF}</b></div>`:''}
-  `;
+    <div class="footer">
+      <div class="firma"><div class="firma-linea"></div><div class="firma-lbl">FIRMA INTERESADO</div></div>
+      <div class="firma"><div class="firma-linea"></div><div class="firma-lbl">1° FIRMA</div></div>
+      <div class="firma"><div class="firma-linea"></div><div class="firma-lbl">2° FIRMA</div></div>
+      <div class="firma"><div class="firma-linea"></div><div class="firma-lbl">CONTABILIDAD</div></div>
+    </div>
+    <div class="btn-bar">
+      <button class="btn btn-print" onclick="window.print()">🖨️ Imprimir / PDF</button>
+      <button class="btn btn-close" onclick="window.close()">✕ Cerrar</button>
+    </div>
+  </div>
+  </body></html>`;
+
+  // Abrir en ventana nueva
+  const win=window.open('','_blank','width=780,height=700,scrollbars=yes');
+  if(win){ win.document.write(htmlDoc); win.document.close(); }
+  else {
+    const blob=new Blob([htmlDoc],{type:'text/html;charset=utf-8'});
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);
+    a.download=(reg.tipo==='ing'?'Ingreso_Caja':'Comprobante_Egreso')+'_N'+reg.folio+'_'+reg.fecha+'.html';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('📥 Comprobante descargado (popups bloqueados)','ok');
+  }
+
+  // Si tiene adjunto, ofrecer verlo también
+  if(reg.archivadorId){
+    setTimeout(()=>{
+      if(confirm('📎 Este comprobante tiene un documento adjunto en el Archivador.\n\n¿Quieres visualizarlo ahora?')){
+        cmpVerAdjunto(reg.archivadorId);
+      }
+    }, 300);
+  }
+}
+
+// ── Ver adjunto del archivador desde comprobante ───────────────────────────
+function cmpVerAdjunto(archId){
+  const arch=DB().archivador||{archivos:[]};
+  const a=arch.archivos.find(x=>x.id===archId);
+  if(!a){ toast('⚠️ El archivo adjunto ya no existe en el Archivador','err'); return; }
+  // Reusar el modal de preview del archivador
+  const modal=document.getElementById('archPreviewModal');
+  const content=document.getElementById('archPreviewContent');
+  if(modal&&content){
+    if(a.tipo&&a.tipo.startsWith('image')){
+      content.innerHTML=`<img src="${a.data}" style="max-width:100%;border-radius:8px;" alt="${esc(a.nombre)}">
+        <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--muted);">${esc(a.nombre)}</div>`;
+    } else if(a.tipo==='application/pdf'){
+      const burl=_archGetBlobURL(a.data,a.tipo);
+      content.innerHTML=`<iframe src="${burl}" style="width:75vw;height:75vh;border:none;border-radius:8px;"></iframe>
+        <div style="text-align:center;margin-top:6px;font-size:10px;color:var(--muted);">${esc(a.nombre)}
+          <button onclick="_archDescargar('${a.id}')" style="margin-left:10px;background:var(--acc2);border:1px solid var(--acc);color:var(--acc);border-radius:6px;padding:3px 10px;cursor:pointer;font-size:10px;">⬇️ Descargar</button>
+        </div>`;
+    } else {
+      content.innerHTML=`<div style="padding:30px;text-align:center;">
+        <div style="font-size:48px;margin-bottom:12px;">${_archIconoTipo(a.tipo)}</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:16px;">${esc(a.nombre)}</div>
+        <button class="btn success" onclick="_archDescargar('${a.id}')">⬇️ Descargar archivo</button>
+      </div>`;
+    }
+    modal.style.display='flex';
+  } else {
+    // Fallback si el modal no está en el DOM (navegando fuera del archivador)
+    _archPreview(archId);
+  }
+}
+
+// ── Adjuntar/cambiar archivo del archivador a un comprobante ──────────────
+function cmpAdjuntar(idx){
+  const d=_cmpDB();
+  const reg=d.registros[idx];
+  if(!reg)return;
+  const arch=DB().archivador||{archivos:[]};
+  const mesReg=reg.fecha.slice(0,7);
+
+  // Archivos del mismo mes + los 2 meses anteriores
+  const fecha=new Date(reg.fecha+'T12:00:00');
+  const meses=[mesReg];
+  for(let i=1;i<=2;i++){
+    const d2=new Date(fecha); d2.setMonth(d2.getMonth()-i);
+    meses.push(d2.toISOString().slice(0,7));
+  }
+  const archivos=arch.archivos
+    .filter(a=>meses.some(m=>a.mesCarpeta===m||a.fecha.startsWith(m)))
+    .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+
+  $('addTitle').textContent='📎 Adjuntar documento del Archivador';
+  $('addSub').textContent=`Comprobante N° ${reg.folio} · ${reg.fecha}`;
+  $('addBody').innerHTML=`
+    <div style="font-size:10px;color:var(--muted);margin-bottom:10px;">
+      Se muestran archivos del mes del comprobante y los 2 meses anteriores.
+    </div>
+    ${reg.archivadorId?`
+    <div style="background:var(--acc2);border:1px solid var(--acc);border-radius:8px;padding:8px 12px;font-size:10px;color:var(--acc);margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+      <span>📎 Adjunto actual: <b>${esc(arch.archivos.find(a=>a.id===reg.archivadorId)?.nombre||'(eliminado)')}</b></span>
+      <button class="btn danger sm" onclick="cmpDesenlazar(${idx})">✕ Desenlazar</button>
+    </div>`:''}
+    <div style="max-height:50vh;overflow-y:auto;">
+    ${archivos.length?archivos.map(a=>`
+      <div onclick="cmpEnlazar(${idx},'${a.id}')"
+        style="border:1px solid ${reg.archivadorId===a.id?'var(--acc)':'var(--border2)'};
+               background:${reg.archivadorId===a.id?'var(--acc2)':'var(--s2)'};
+               border-radius:8px;padding:9px 12px;margin-bottom:6px;cursor:pointer;
+               display:flex;align-items:center;gap:10px;"
+        onmouseover="this.style.borderColor='var(--acc)';this.style.background='var(--s3)'"
+        onmouseout="this.style.borderColor='${reg.archivadorId===a.id?'var(--acc)':'var(--border2)'}';this.style.background='${reg.archivadorId===a.id?'var(--acc2)':'var(--s2)'}'">
+        <div style="font-size:22px;">${_archIconoTipo(a.tipo)}</div>
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.nombre)}</div>
+          <div style="font-size:9px;color:var(--muted);">📅 ${_fmtFechaArch(a.fecha)} · ${_fmtSize(a.size)}</div>
+        </div>
+        ${reg.archivadorId===a.id?'<span style="color:var(--acc);font-weight:700;font-size:11px;">✓ Actual</span>':''}
+      </div>`).join(''):
+      '<div class="empty"><div class="et">Sin archivos en ese período.<br>Sube el documento al Archivador primero.</div></div>'}
+    </div>`;
   $('addOk').style.display='none';
   openModal('addModal');
-  setTimeout(()=>{$('addOk').style.display='';},100);
+}
+
+function cmpEnlazar(idx, archId){
+  const d=_cmpDB();
+  if(!d.registros[idx])return;
+  d.registros[idx].archivadorId=archId;
+  saveDB();
+  closeModal('addModal');
+  go('comprobantes');
+  toast('📎 Documento adjunto vinculado','ok');
+}
+
+function cmpDesenlazar(idx){
+  const d=_cmpDB();
+  if(!d.registros[idx])return;
+  d.registros[idx].archivadorId='';
+  saveDB();
+  closeModal('addModal');
+  go('comprobantes');
+  toast('✅ Adjunto desvinculado','ok');
 }
 
 // ── Número a letras (para campo "Son") ────────────────────────────────────
