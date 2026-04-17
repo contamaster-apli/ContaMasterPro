@@ -17340,15 +17340,239 @@ function showBalTab(tab,btn){
   const totalPasivo=(db.liquidaciones||[]).reduce((a,x)=>a+(+x.liquido||0),0);
   const utilidad=d.utBruta||0;
   const el=document.getElementById('balContent');if(!el)return;
+
   if(tab==='general'){
-    el.innerHTML=`<div class="metrics" style="margin-top:10px;">
-      <div class="metric"><div class="ml">ACTIVO TOTAL</div><div class="mv acc">${fmt(totalActivoContable)}</div></div>
-      <div class="metric"><div class="ml">PASIVO TOTAL</div><div class="mv red">${fmt(totalPasivo)}</div></div>
-      <div class="metric"><div class="ml">PATRIMONIO NETO</div><div class="mv ${(totalActivoContable-totalPasivo)>=0?'green':'red'}">${fmt(totalActivoContable-totalPasivo)}</div></div>
-      <div class="metric"><div class="ml">CAJA DISPONIBLE</div><div class="mv blue">${fmt(cajaDisp)}</div></div>
-      <div class="metric"><div class="ml">ACTIVOS FIJOS</div><div class="mv orange">${fmt(totalAct)}</div></div>
-      <div class="metric"><div class="ml">IVA CRÉDITO</div><div class="mv teal">${fmt(d.ivaCredito||0)}</div></div>
+    // ── BALANCE GENERAL PROFESIONAL DESDE LIBRO MAYOR ────────────────────
+    const asientos=db.asientos||[];
+    const plan=db.planCuentas||[];
+    const año=db.periodoActual||new Date().getFullYear();
+
+    // Filtrar asientos del período
+    const asts=asientos.filter(a=>(a.fecha||'').startsWith(String(año))||(a.periodo||'').startsWith(String(año)));
+
+    // Calcular saldo por cuenta desde el Mayor
+    // Para cuentas de Activo: saldo = Débitos - Créditos (saldo deudor)
+    // Para cuentas de Pasivo/Patrimonio: saldo = Créditos - Débitos (saldo acreedor)
+    // Para cuentas de Resultado: Ingresos = Créditos - Débitos / Gastos = Débitos - Créditos
+    const saldos={};
+    asientos.forEach(a=>{
+      const debe=+a.debe||0;
+      const haber=+a.haber||0;
+      if(a.ctaDebe){
+        if(!saldos[a.ctaDebe]) saldos[a.ctaDebe]={debe:0,haber:0};
+        saldos[a.ctaDebe].debe+=debe;
+      }
+      if(a.ctaHaber){
+        if(!saldos[a.ctaHaber]) saldos[a.ctaHaber]={debe:0,haber:0};
+        saldos[a.ctaHaber].haber+=haber;
+      }
+    });
+
+    // Clasificar cuentas por código
+    function getTipo(cod,nombre){
+      if(!cod) return null;
+      const prim=cod.charAt(0);
+      if(prim==='1') return 'activo';
+      if(prim==='2') return 'pasivo';
+      if(prim==='3') return 'patrimonio';
+      if(prim==='4') return 'ingreso';
+      if(prim==='5') return 'gasto';
+      // Si no tiene código, buscar en plan
+      const pc=plan.find(p=>p.nombre===nombre);
+      if(pc) return getTipo(pc.cod,nombre);
+      // Clasificar por nombre como fallback
+      const n=(nombre||'').toLowerCase();
+      if(n.includes('caja')||n.includes('banco')||n.includes('cliente')||n.includes('iva crédito')||n.includes('ppm')||n.includes('anticipo')||n.includes('exist')) return 'activo_circ';
+      if(n.includes('activo fijo')||n.includes('mueble')||n.includes('vehículo')||n.includes('maquinaria')||n.includes('bien raíz')||n.includes('equipo computac')||n.includes('depreciación acum')) return 'activo_fijo';
+      if(n.includes('proveedor')||n.includes('iva débito')||n.includes('honorario por pagar')||n.includes('remuneración por pagar')||n.includes('afp por pagar')||n.includes('salud por pagar')||n.includes('impuesto único')||n.includes('mutual')||n.includes('sis por pagar')||n.includes('retención')) return 'pasivo_circ';
+      if(n.includes('capital')||n.includes('resultado')||n.includes('utilidad')||n.includes('pérdida')||n.includes('retiro')) return 'patrimonio';
+      if(n.includes('venta')||n.includes('servicio')||n.includes('ingreso')) return 'ingreso';
+      return 'gasto';
+    }
+
+    function getClase(cod,nombre){
+      if(!cod){
+        const pc=plan.find(p=>p.nombre===nombre);
+        if(pc) return getClase(pc.cod,nombre);
+      }
+      const prim=cod?cod.charAt(0):'';
+      const seg=cod?cod.charAt(2):'';
+      if(prim==='1'&&seg==='1') return 'Activo Circulante';
+      if(prim==='1'&&seg==='2') return 'Activo Fijo';
+      if(prim==='1') return 'Otros Activos';
+      if(prim==='2'&&seg==='1') return 'Pasivo Circulante';
+      if(prim==='2'&&seg==='2') return 'Pasivo No Corriente';
+      if(prim==='2') return 'Pasivo Corriente';
+      if(prim==='3') return 'Patrimonio';
+      if(prim==='4') return 'Ingresos';
+      if(prim==='5') return 'Gastos';
+      return getTipo(cod,nombre)||'Otros';
+    }
+
+    // Construir tabla de saldos con clasificación
+    const cuentasSaldo=Object.keys(saldos).map(nombre=>{
+      const s=saldos[nombre];
+      const pc=plan.find(p=>p.nombre===nombre);
+      const cod=pc?pc.cod:'';
+      const tipo=getTipo(cod,nombre);
+      const clase=pc?pc.clas:getClase(cod,nombre);
+      // Saldo normal según tipo
+      let saldo=0;
+      if(tipo==='activo'||tipo==='activo_circ'||tipo==='activo_fijo'||tipo==='gasto'){
+        saldo=s.debe-s.haber; // Saldo deudor
+      } else {
+        saldo=s.haber-s.debe; // Saldo acreedor
+      }
+      return {nombre,cod,tipo,clase,debe:s.debe,haber:s.haber,saldo};
+    }).filter(c=>c.saldo!==0);
+
+    // Agrupar por sección del balance
+    const grupos={
+      'Activo Circulante':   cuentasSaldo.filter(c=>c.clase==='Activo Corriente'||c.clase==='Activo Circulante'),
+      'Activo Fijo':         cuentasSaldo.filter(c=>c.clase==='Activo No Corriente'||c.clase==='Activo Fijo'),
+      'Otros Activos':       cuentasSaldo.filter(c=>c.clase==='Otros Activos'),
+      'Pasivo Circulante':   cuentasSaldo.filter(c=>c.clase==='Pasivo Corriente'||c.clase==='Pasivo Circulante'),
+      'Pasivo No Corriente': cuentasSaldo.filter(c=>c.clase==='Pasivo No Corriente'),
+      'Patrimonio':          cuentasSaldo.filter(c=>c.clase==='Patrimonio'),
+    };
+
+    // Resultado del ejercicio desde cuentas de resultado
+    const totalIngresos=cuentasSaldo.filter(c=>c.clase==='Ingresos').reduce((s,c)=>s+c.saldo,0);
+    const totalGastos=cuentasSaldo.filter(c=>c.clase==='Costos'||c.clase==='Gastos').reduce((s,c)=>s+c.saldo,0);
+    const resultadoEjercicio=totalIngresos-totalGastos;
+
+    // Totales
+    const totActCirc=grupos['Activo Circulante'].reduce((s,c)=>s+c.saldo,0);
+    const totActFijo=grupos['Activo Fijo'].reduce((s,c)=>s+c.saldo,0);
+    const totOtrosAct=grupos['Otros Activos'].reduce((s,c)=>s+c.saldo,0);
+    const totActivo=totActCirc+totActFijo+totOtrosAct;
+    const totPasCirc=grupos['Pasivo Circulante'].reduce((s,c)=>s+c.saldo,0);
+    const totPasNoCirr=grupos['Pasivo No Corriente'].reduce((s,c)=>s+c.saldo,0);
+    const totPasivo=totPasCirc+totPasNoCirr;
+    const totPatrimonio=grupos['Patrimonio'].reduce((s,c)=>s+c.saldo,0)+resultadoEjercicio;
+    const totPasivoPatrimonio=totPasivo+totPatrimonio;
+    const diferencia=totActivo-totPasivoPatrimonio;
+
+    const cfg=CFG();
+
+    // ── Helpers de render ──────────────────────────────────────────────────
+    const filaHeader=(txt,color)=>`
+      <tr>
+        <td colspan="3" style="padding:8px 10px;font-size:10px;font-weight:800;
+          letter-spacing:.8px;color:${color};background:var(--s3);
+          border-top:2px solid ${color};border-bottom:1px solid var(--border2);">
+          ${txt}
+        </td>
+      </tr>`;
+
+    const filaCuenta=(c)=>`
+      <tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:6px 10px 6px 22px;font-size:11px;color:var(--muted);">${c.cod||''}</td>
+        <td style="padding:6px 10px;font-size:11px;">${c.nombre}</td>
+        <td style="padding:6px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;
+          text-align:right;font-weight:600;">${fmt(c.saldo)}</td>
+      </tr>`;
+
+    const filaTotal=(label,val,color,doble)=>`
+      <tr style="border-top:${doble?'3px':'2px'} solid ${color};background:var(--s2);">
+        <td colspan="2" style="padding:8px 10px;font-size:11px;font-weight:800;color:${color};">${label}</td>
+        <td style="padding:8px 10px;font-size:12px;font-weight:800;font-family:'JetBrains Mono',monospace;
+          text-align:right;color:${color};">${fmt(val)}</td>
+      </tr><tr><td colspan="3" style="padding:2px;"></td></tr>`;
+
+    const renderGrupo=(label,cuentas,total,colorH,colorT)=>cuentas.length?`
+      ${filaHeader(label,colorH)}
+      ${cuentas.sort((a,b)=>(a.cod||'').localeCompare(b.cod||'')).map(filaCuenta).join('')}
+      ${filaTotal('TOTAL '+label.toUpperCase(),total,colorT,false)}`:'';
+
+    const sinAsientos=Object.keys(saldos).length===0;
+
+    el.innerHTML=`
+    <div style="margin-top:12px;">
+
+      <!-- Encabezado -->
+      <div style="text-align:center;padding:12px;background:var(--s2);border-radius:8px;
+        border:1px solid var(--border2);margin-bottom:14px;">
+        <div style="font-size:13px;font-weight:800;color:var(--acc);">${cfg.emp||'Sin empresa configurada'}</div>
+        ${cfg.rut?`<div style="font-size:10px;color:var(--muted);">RUT: ${cfg.rut}</div>`:''}
+        <div style="font-size:11px;font-weight:700;margin-top:4px;">BALANCE GENERAL</div>
+        <div style="font-size:10px;color:var(--muted);">
+          Período: 01/01/${año} al 31/12/${año}
+          ${diferencia!==0&&!sinAsientos?`<span style="color:var(--orange);margin-left:8px;">⚠️ Diferencia: ${fmt(diferencia)}</span>`:''}
+        </div>
+      </div>
+
+      ${sinAsientos?`<div class="info-box" style="text-align:center;">
+        ℹ️ <b>Sin asientos contables registrados.</b><br>
+        Ingresa asientos en el módulo 📒 <b>DIARIO</b> con cuentas del Plan de Cuentas
+        para generar el Balance General automáticamente.
+      </div>`:`
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+
+        <!-- COLUMNA ACTIVO -->
+        <div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead><tr style="background:var(--blue2);">
+              <th style="padding:8px 10px;text-align:left;font-size:9px;color:var(--blue);width:70px;">COD.</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;color:var(--blue);">ACTIVO</th>
+              <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--blue);">MONTO ($)</th>
+            </tr></thead>
+            <tbody>
+              ${renderGrupo('Activo Circulante',grupos['Activo Circulante'],totActCirc,'var(--teal)','var(--teal)')}
+              ${renderGrupo('Activo Fijo',grupos['Activo Fijo'],totActFijo,'var(--blue)','var(--blue)')}
+              ${renderGrupo('Otros Activos',grupos['Otros Activos'],totOtrosAct,'var(--cyan)','var(--cyan)')}
+              ${filaTotal('TOTAL ACTIVO',totActivo,'var(--acc)',true)}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- COLUMNA PASIVO Y PATRIMONIO -->
+        <div>
+          <table style="width:100%;border-collapse:collapse;font-size:11px;">
+            <thead><tr style="background:var(--red2);">
+              <th style="padding:8px 10px;text-align:left;font-size:9px;color:var(--red);width:70px;">COD.</th>
+              <th style="padding:8px 10px;text-align:left;font-size:9px;color:var(--red);">PASIVO Y PATRIMONIO</th>
+              <th style="padding:8px 10px;text-align:right;font-size:9px;color:var(--red);">MONTO ($)</th>
+            </tr></thead>
+            <tbody>
+              ${renderGrupo('Pasivo Circulante',grupos['Pasivo Circulante'],totPasCirc,'var(--red)','var(--red)')}
+              ${renderGrupo('Pasivo No Corriente',grupos['Pasivo No Corriente'],totPasNoCirr,'var(--orange)','var(--orange)')}
+              ${filaTotal('TOTAL PASIVO',totPasivo,'var(--red)',false)}
+
+              ${filaHeader('Patrimonio','var(--green)')}
+              ${grupos['Patrimonio'].sort((a,b)=>(a.cod||'').localeCompare(b.cod||'')).map(filaCuenta).join('')}
+              ${resultadoEjercicio!==0?`<tr style="border-bottom:1px solid var(--border);">
+                <td style="padding:6px 10px 6px 22px;font-size:11px;color:var(--muted);">—</td>
+                <td style="padding:6px 10px;font-size:11px;">Resultado del Ejercicio</td>
+                <td style="padding:6px 10px;font-size:11px;font-family:'JetBrains Mono',monospace;
+                  text-align:right;font-weight:600;color:${resultadoEjercicio>=0?'var(--green)':'var(--red)'};">${fmt(resultadoEjercicio)}</td>
+              </tr>`:''}
+              ${filaTotal('TOTAL PATRIMONIO',totPatrimonio,'var(--green)',false)}
+              ${filaTotal('TOTAL PASIVO Y PATRIMONIO',totPasivoPatrimonio,'var(--acc)',true)}
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- Cuadre y nota -->
+      <div style="margin-top:12px;padding:10px 14px;border-radius:8px;
+        background:${Math.abs(diferencia)<1?'var(--green2)':'var(--red2)'};
+        border:1px solid ${Math.abs(diferencia)<1?'var(--green)':'var(--red)'};
+        font-size:10px;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;color:${Math.abs(diferencia)<1?'var(--green)':'var(--red)'};">
+          ${Math.abs(diferencia)<1?'✅ Balance cuadrado — Activo = Pasivo + Patrimonio':'⚠️ Balance descuadrado — Diferencia: '+fmt(diferencia)}
+        </span>
+        <span style="color:var(--muted);">Cifras en pesos chilenos · ${asts.length} asientos del período</span>
+      </div>
+      <div style="margin-top:6px;font-size:9px;color:var(--muted);text-align:center;">
+        Datos obtenidos del Libro Diario ${año} · Balance preparado automáticamente · ${cfg.emp||''}
+      </div>
+
+      `}
     </div>`;
+
   } else if(tab==='estado'){
     // Estado de Resultados formal — 5 niveles
     const ventas=d.netoV||0;
