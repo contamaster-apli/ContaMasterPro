@@ -5331,7 +5331,35 @@ function showContabTab(tab,btn){
   if(tab==='asientos'){
     const asientos=db.asientos||[];
     if(!asientos.length){b.innerHTML=`<div class="empty"><div class="ei">📒</div><div class="et">Sin asientos contables.<br>Usa ➕ Nuevo Asiento o aplica una Plantilla.</div></div>`;return;}
-    b.innerHTML=`<div class="tw"><table class="tbl">
+
+    // ── Verificador de cuadre por período ──────────────────────────────
+    const periodos={};
+    asientos.forEach(a=>{
+      const p=a.periodo||a.fecha?.slice(0,7)||'Sin período';
+      if(!periodos[p]) periodos[p]={debe:0,haber:0};
+      periodos[p].debe+=(+a.debe||0);
+      periodos[p].haber+=(+a.haber||0);
+    });
+    const cuadrePeriodos=Object.keys(periodos).sort().map(p=>{
+      const {debe,haber}=periodos[p];
+      const dif=Math.abs(debe-haber);
+      const ok=dif<1;
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 8px;border-radius:6px;
+        background:${ok?'var(--green2)':'var(--red2)'};border:1px solid ${ok?'var(--green)':'var(--red)'};margin-bottom:4px;">
+        <span style="font-size:10px;font-weight:700;color:${ok?'var(--green)':'var(--red)'};">${p}</span>
+        <span style="flex:1;font-size:9px;color:var(--muted);">Debe: ${fmt(debe)} · Haber: ${fmt(haber)}</span>
+        <span style="font-size:10px;font-weight:700;color:${ok?'var(--green)':'var(--red)'};">
+          ${ok?'✅ Cuadrado':'⚠️ Dif: '+fmt(dif)}
+        </span>
+      </div>`;
+    }).join('');
+
+    b.innerHTML=`
+    <div style="margin-bottom:10px;">
+      <div style="font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:6px;">🔍 VERIFICADOR DE CUADRE POR PERÍODO</div>
+      ${cuadrePeriodos}
+    </div>
+    <div class="tw"><table class="tbl">
       <thead><tr><th>Folio</th><th>Fecha</th><th>Período</th><th>Glosa</th><th>Cuenta Debe</th><th class="num">Debe</th><th>Cuenta Haber</th><th class="num">Haber</th><th>CC</th><th></th></tr></thead>
       <tbody>${asientos.map((a,i)=>`<tr>
         <td class="muted">${a.folio||i+1}</td>
@@ -5357,6 +5385,7 @@ function showContabTab(tab,btn){
     <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
       <button class="btn acc sm" onclick="go('diario')">📔 Ver Libro Diario</button>
       <button class="btn secondary sm" onclick="exportDiarioExcel()">📗 Excel Libro Diario</button>
+      <button class="btn success sm" onclick="exportMayorExcel()">📗 Excel Libro Mayor</button>
       <button class="btn red sm" onclick="limpiarAsientos()">🗑 Limpiar período</button>
     </div>`;
 
@@ -5419,28 +5448,45 @@ function addAsientoContab(){
   const db=DB();
   const cuentasSugg=['Caja','Banco','Clientes','Proveedores','Ventas','Compras','IVA Crédito Fiscal','IVA Débito Fiscal','Remuneraciones por Pagar','AFP por Pagar','Fonasa/Isapre por Pagar','Impuesto Único por Pagar','Depreciación Acumulada','Activos Fijos','Capital','Utilidad del Ejercicio','Pérdida del Ejercicio',...(db.planCuentas||[]).map(c=>c.nombre)];
   const año=db.periodoActual||new Date().getFullYear();
+  const preset=window._asientoTipoPreset||null;
+  window._asientoTipoPreset=null; // limpiar para próxima vez
+  const ats=db.asientosTipo||[];
+
   $('addTitle').textContent='📒 Nuevo Asiento Contable';$('addSub').textContent='Comprobante de Contabilidad';
   $('addBody').innerHTML=`
+    ${ats.length?`
+    <div style="background:var(--acc2);border:1px solid var(--acc);border-radius:8px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+      <span style="font-size:10px;font-weight:700;color:var(--acc);">📑 ASIENTO TIPO:</span>
+      <select class="fi" id="fac_preset" style="flex:1;font-size:11px;" onchange="cargarPresetAsiento(this.value)">
+        <option value="">— Seleccionar plantilla —</option>
+        ${ats.map((at,i)=>`<option value="${i}">${at.nombre}</option>`).join('')}
+      </select>
+    </div>`:''}
     <div class="frow h2">
       <div><div class="fl">Fecha *</div><input class="fi" type="date" id="fac_f" value="${isoToday()}"></div>
       <div><div class="fl">Período</div><input class="fi" id="fac_per" value="${año}-${String(new Date().getMonth()+1).padStart(2,'0')}"></div>
     </div>
-    <div class="frow"><div class="fl">Glosa / Descripción *</div><input class="fi" id="fac_glo" placeholder="Ej: Pago proveedor factura 1234"></div>
+    <div class="frow"><div class="fl">Glosa / Descripción *</div><input class="fi" id="fac_glo" placeholder="Ej: Pago proveedor factura 1234" value="${preset?preset.glosa||'':''}"></div>
     <div class="frow h2">
       <div><div class="fl">Cuenta DEBE *</div>
-        <input class="fi" id="fac_debe" list="fac_list" placeholder="Nombre cuenta">
-        <datalist id="fac_list">${cuentasSugg.map(c=>`<option value="${c}">`).join('')}</datalist>
+        <input class="fi" id="fac_debe" list="fac_list" placeholder="Nombre cuenta" value="${preset?preset.ctaDebe||'':''}">
+        <datalist id="fac_list">${cuentasSugg.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
       </div>
       <div><div class="fl">Monto Debe ($) *</div><input class="fi" type="number" id="fac_debe_m" placeholder="0" oninput="autoFillHaber()"></div>
     </div>
     <div class="frow h2">
       <div><div class="fl">Cuenta HABER *</div>
-        <input class="fi" id="fac_haber" list="fac_list2" placeholder="Nombre cuenta">
-        <datalist id="fac_list2">${cuentasSugg.map(c=>`<option value="${c}">`).join('')}</datalist>
+        <input class="fi" id="fac_haber" list="fac_list2" placeholder="Nombre cuenta" value="${preset?preset.ctaHaber||'':''}">
+        <datalist id="fac_list2">${cuentasSugg.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
       </div>
-      <div><div class="fl">Monto Haber ($) *</div><input class="fi" type="number" id="fac_haber_m" placeholder="0"></div>
+      <div><div class="fl">Monto Haber ($) * <span style="font-size:9px;color:var(--muted);">— doble clic para copiar Debe</span></div>
+        <input class="fi" type="number" id="fac_haber_m" placeholder="0"
+          ondblclick="this.value=$('fac_debe_m')?.value||0;this.select();"
+          title="Doble clic para copiar el valor del Debe">
+      </div>
     </div>
     <div class="frow"><div class="fl">Centro de Costos</div><input class="fi" id="fac_cc" placeholder="Opcional"></div>`;
+  $('addOk').textContent='💾 Guardar Asiento';
   $('addOk').onclick=()=>{
     const glo=$('fac_glo').value.trim();const debe=$('fac_debe').value.trim();const haber=$('fac_haber').value.trim();
     const debeM=+$('fac_debe_m').value||0;const haberM=+$('fac_haber_m').value||0;
@@ -5453,7 +5499,21 @@ function addAsientoContab(){
   };
   openModal('addModal');
 }
-function autoFillHaber(){const v=$('fac_debe_m')?.value;if(v&&$('fac_haber_m'))$('fac_haber_m').value=v;}
+
+function autoFillHaber(){const v=$('fac_debe_m')?.value;if(v&&$('fac_haber_m')&&!$('fac_haber_m').value)$('fac_haber_m').value=v;}
+
+// Cargar plantilla seleccionada en el formulario de asiento
+function cargarPresetAsiento(idx){
+  if(idx==='') return;
+  const at=(DB().asientosTipo||[])[+idx];
+  if(!at) return;
+  const debe=$('fac_debe'); if(debe) debe.value=at.ctaDebe||'';
+  const haber=$('fac_haber'); if(haber) haber.value=at.ctaHaber||'';
+  const glo=$('fac_glo'); if(glo&&!glo.value) glo.value=at.glosa||'';
+  // Enfocar el campo monto Debe para que el usuario ingrese el valor
+  setTimeout(()=>{ const m=$('fac_debe_m'); if(m){m.focus();m.select();} },100);
+  toast('📑 Plantilla cargada — ingresa el monto','ok');
+}
 function delAsiento(i){if(!confirm('¿Eliminar asiento?'))return;(DB().asientos||[]).splice(i,1);save();go(_tab==='diario'?'diario':'contab');toast('Eliminado','ok');}
 function limpiarAsientos(){if(!confirm('⚠️ ¿Eliminar TODOS los asientos del período actual? Esta acción no se puede deshacer.'))return;DB().asientos=[];save();go('contab');toast('Asientos eliminados','ok');}
 function exportAsientos(){
@@ -17087,16 +17147,43 @@ function renderAsientosTipo(){
   </div>`;
 }
 function addAsientoTipo(){
-  const nombre=prompt('Nombre de la plantilla:');if(!nombre)return;
-  const ctaDebe=prompt('Cuenta DEBE (código o nombre):');
-  const ctaHaber=prompt('Cuenta HABER (código o nombre):');
-  const glosa=prompt('Glosa / descripción:');
-  const db=DB();if(!db.asientosTipo)db.asientosTipo=[];
-  db.asientosTipo.push({nombre,ctaDebe,ctaHaber,glosa,id:Date.now()});
-  save();
-  const b=document.getElementById('contabBody');
-  if(b)b.innerHTML=renderAsientosTipo();
-  toast('Plantilla guardada','ok');
+  const db=DB();
+  const cuentasSugg=['Caja','Banco','Clientes','Proveedores','Ventas','Compras','IVA Crédito Fiscal','IVA Débito Fiscal','Remuneraciones por Pagar','AFP por Pagar','Fonasa/Isapre por Pagar','Impuesto Único por Pagar','Depreciación Acumulada','Activos Fijos','Capital','Utilidad del Ejercicio',...(db.planCuentas||[]).map(c=>c.nombre)];
+  $('addTitle').textContent='📑 Nueva Plantilla de Asiento';
+  $('addSub').textContent='Se guardará para reutilizar rápidamente';
+  $('addBody').innerHTML=`<div class="fgrid">
+    <div><div class="fl">NOMBRE DE LA PLANTILLA *</div>
+      <input class="fi" id="at_nombre" placeholder="Ej: Anticipos al Personal, Pago Arriendo..."></div>
+    <div class="frow h2">
+      <div><div class="fl">CUENTA DEBE *</div>
+        <input class="fi" id="at_debe" list="at_list1" placeholder="Nombre cuenta Debe">
+        <datalist id="at_list1">${cuentasSugg.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+      </div>
+      <div><div class="fl">CUENTA HABER *</div>
+        <input class="fi" id="at_haber" list="at_list2" placeholder="Nombre cuenta Haber">
+        <datalist id="at_list2">${cuentasSugg.map(c=>`<option value="${esc(c)}">`).join('')}</datalist>
+      </div>
+    </div>
+    <div><div class="fl">GLOSA / DESCRIPCIÓN</div>
+      <input class="fi" id="at_glosa" placeholder="Ej: Anticipos al Personal"></div>
+  </div>`;
+  $('addOk').textContent='💾 Guardar Plantilla';
+  $('addOk').onclick=function(){
+    const nombre=($('at_nombre')?.value||'').trim();
+    const ctaDebe=($('at_debe')?.value||'').trim();
+    const ctaHaber=($('at_haber')?.value||'').trim();
+    const glosa=($('at_glosa')?.value||'').trim();
+    if(!nombre||!ctaDebe||!ctaHaber){toast('Nombre, Cuenta Debe y Cuenta Haber son requeridos','err');return;}
+    if(!db.asientosTipo)db.asientosTipo=[];
+    db.asientosTipo.push({nombre,ctaDebe,ctaHaber,glosa,id:Date.now()});
+    save();
+    closeModal('addModal');
+    const b=document.getElementById('contabBody');
+    if(b)b.innerHTML=renderAsientosTipo();
+    toast('✅ Plantilla guardada','ok');
+  };
+  openModal('addModal');
+  setTimeout(()=>{const el=$('at_nombre');if(el)el.focus();},200);
 }
 function delAsientoTipo(i){
   if(!confirm('¿Eliminar plantilla?'))return;
@@ -17127,7 +17214,194 @@ function importarPlantillasBase(){
   toast(`✅ ${base.length} plantillas base importadas`,'ok');
 }
 
-// ── renderSueldoEmpresarial — renderiza panel de sueldos empresariales ─────────
+// ── EXPORTAR BALANCE GENERAL → EXCEL ─────────────────────────────────────
+function exportBalanceExcel(){
+  if(!window.XLSX){toast('SheetJS no disponible','err');return;}
+  const db=DB();const cfg=CFG();const año=db.periodoActual||new Date().getFullYear();
+  const asientos=db.asientos||[];
+  if(!asientos.length){toast('Sin asientos contables para generar el balance','err');return;}
+  const plan=db.planCuentas||[];
+
+  // Calcular saldos igual que en showBalTab
+  const saldos={};
+  asientos.forEach(a=>{
+    const debe=+a.debe||0,haber=+a.haber||0;
+    if(a.ctaDebe){if(!saldos[a.ctaDebe])saldos[a.ctaDebe]={debe:0,haber:0};saldos[a.ctaDebe].debe+=debe;}
+    if(a.ctaHaber){if(!saldos[a.ctaHaber])saldos[a.ctaHaber]={debe:0,haber:0};saldos[a.ctaHaber].haber+=haber;}
+  });
+  function getCod(nombre){const pc=plan.find(p=>p.nombre===nombre);return pc?pc.cod:'';}
+  function getClas(nombre){const pc=plan.find(p=>p.nombre===nombre);if(pc)return pc.clas;const cod=getCod(nombre);const p=cod?cod.charAt(0):'';const s=cod?cod.charAt(2):'';if(p==='1'&&s==='1')return'Activo Circulante';if(p==='1'&&s==='2')return'Activo Fijo';if(p==='1')return'Otros Activos';if(p==='2'&&s==='1')return'Pasivo Circulante';if(p==='2'&&s==='2')return'Pasivo No Corriente';if(p==='3')return'Patrimonio';if(p==='4')return'Ingresos';if(p==='5')return'Gastos';return'Otros';}
+
+  const cuentasSaldo=Object.keys(saldos).map(nombre=>{
+    const s=saldos[nombre];const cod=getCod(nombre);const clas=getClas(nombre);
+    const prim=cod?cod.charAt(0):'';
+    const saldo=(prim==='1'||prim==='5')?(s.debe-s.haber):(s.haber-s.debe);
+    return {nombre,cod,clas,debe:s.debe,haber:s.haber,saldo};
+  }).filter(c=>c.saldo!==0);
+
+  const grupos={'Activo Circulante':[],'Activo Fijo':[],'Otros Activos':[],'Pasivo Circulante':[],'Pasivo No Corriente':[],'Patrimonio':[]};
+  cuentasSaldo.forEach(c=>{if(grupos[c.clas])grupos[c.clas].push(c);});
+  const totalIngresos=cuentasSaldo.filter(c=>c.clas==='Ingresos').reduce((s,c)=>s+c.saldo,0);
+  const totalGastos=cuentasSaldo.filter(c=>c.clas==='Costos'||c.clas==='Gastos').reduce((s,c)=>s+c.saldo,0);
+  const resultado=totalIngresos-totalGastos;
+
+  const aoa=[];
+  aoa.push([cfg.emp||'SIN EMPRESA','','','',cfg.rut||'']);
+  aoa.push(['BALANCE GENERAL','','','','']);
+  aoa.push([`Período: 01/01/${año} al 31/12/${año}`,'','','','']);
+  aoa.push(['']);
+  aoa.push(['COD.','ACTIVO','MONTO ($)','','']);
+  const secActivoStart=aoa.length;
+  ['Activo Circulante','Activo Fijo','Otros Activos'].forEach(sec=>{
+    if(!grupos[sec].length)return;
+    aoa.push([sec.toUpperCase(),'','','','']);
+    grupos[sec].sort((a,b)=>(a.cod||'').localeCompare(b.cod||'')).forEach(c=>aoa.push([c.cod||'—',c.nombre,c.saldo,'','']));
+    aoa.push(['','TOTAL '+sec.toUpperCase(),grupos[sec].reduce((s,c)=>s+c.saldo,0),'','']);
+    aoa.push(['']);
+  });
+  const totActivo=['Activo Circulante','Activo Fijo','Otros Activos'].reduce((s,k)=>s+grupos[k].reduce((a,c)=>a+c.saldo,0),0);
+  aoa.push(['','TOTAL ACTIVO',totActivo,'','']);
+  aoa.push(['']);
+  aoa.push(['COD.','PASIVO Y PATRIMONIO','MONTO ($)','','']);
+  ['Pasivo Circulante','Pasivo No Corriente'].forEach(sec=>{
+    if(!grupos[sec].length)return;
+    aoa.push([sec.toUpperCase(),'','','','']);
+    grupos[sec].sort((a,b)=>(a.cod||'').localeCompare(b.cod||'')).forEach(c=>aoa.push([c.cod||'—',c.nombre,c.saldo,'','']));
+    aoa.push(['','TOTAL '+sec.toUpperCase(),grupos[sec].reduce((s,c)=>s+c.saldo,0),'','']);
+    aoa.push(['']);
+  });
+  const totPasivo=['Pasivo Circulante','Pasivo No Corriente'].reduce((s,k)=>s+grupos[k].reduce((a,c)=>a+c.saldo,0),0);
+  aoa.push(['','TOTAL PASIVO',totPasivo,'','']);
+  aoa.push(['']);
+  aoa.push(['PATRIMONIO','','','','']);
+  grupos['Patrimonio'].sort((a,b)=>(a.cod||'').localeCompare(b.cod||'')).forEach(c=>aoa.push([c.cod||'—',c.nombre,c.saldo,'','']));
+  if(resultado!==0)aoa.push(['—','Resultado del Ejercicio',resultado,'','']);
+  const totPatrimonio=grupos['Patrimonio'].reduce((s,c)=>s+c.saldo,0)+resultado;
+  aoa.push(['','TOTAL PATRIMONIO',totPatrimonio,'','']);
+  aoa.push(['']);
+  aoa.push(['','TOTAL PASIVO Y PATRIMONIO',totPasivo+totPatrimonio,'','']);
+  aoa.push(['']);
+  aoa.push(['','Diferencia (Activo - Pasivo+Patrimonio)',totActivo-(totPasivo+totPatrimonio),'','']);
+  aoa.push(['','Cifras en pesos chilenos · Balance preparado automáticamente','','','']);
+
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:12},{wch:40},{wch:18},{wch:5},{wch:5}];
+    XLSX.utils.book_append_sheet(wb,ws,'Balance General');
+    XLSX.writeFile(wb,`BalanceGeneral_${cfg.rut||'emp'}_${año}.xlsx`);
+    toast('✅ Balance General Excel exportado','ok');
+  }catch(e){toast('Error exportando: '+e.message,'err');}
+}
+
+// ── EXPORTAR BALANCE GENERAL → PDF ────────────────────────────────────────
+function exportBalancePDF(){
+  const db=DB();const cfg=CFG();const año=db.periodoActual||new Date().getFullYear();
+  const asientos=db.asientos||[];
+  if(!asientos.length){toast('Sin asientos para generar el balance','err');return;}
+  // Obtener el HTML del balance ya renderizado
+  const content=document.getElementById('balContent');
+  if(!content){toast('Abre el tab Balance General primero','err');return;}
+  const html=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8">
+  <title>Balance General ${año}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Arial,sans-serif;font-size:11px;color:#1a2538;background:#fff;padding:20px;}
+    h1{font-size:16px;font-weight:800;color:#1e40af;margin-bottom:4px;}
+    h2{font-size:12px;color:#6b7280;margin-bottom:16px;}
+    table{width:100%;border-collapse:collapse;margin-bottom:16px;}
+    th{background:#1e40af;color:#fff;padding:6px 8px;text-align:left;font-size:10px;}
+    th:last-child{text-align:right;}
+    td{padding:5px 8px;border-bottom:1px solid #e5e7eb;font-size:11px;}
+    td:last-child{text-align:right;font-family:monospace;font-weight:600;}
+    .sec{background:#f0f9ff;font-weight:800;font-size:10px;letter-spacing:.5px;color:#1e40af;padding:6px 8px;}
+    .tot{background:#f3f4f6;font-weight:800;border-top:2px solid #1e40af;}
+    .tot td{font-weight:800;}
+    .grand{background:#1e40af;color:#fff;}
+    .grand td{color:#fff;font-weight:800;font-size:12px;}
+    .nota{font-size:9px;color:#6b7280;text-align:center;margin-top:12px;border-top:1px solid #e5e7eb;padding-top:8px;}
+    @media print{body{padding:10px;}.no-print{display:none;}}
+  </style></head><body>
+  <div style="text-align:center;margin-bottom:16px;border-bottom:2px solid #1e40af;padding-bottom:12px;">
+    <h1>${cfg.emp||'SIN EMPRESA'} ${cfg.rut?'· RUT: '+cfg.rut:''}</h1>
+    <h2>BALANCE GENERAL · Período: 01/01/${año} al 31/12/${año}</h2>
+  </div>
+  ${content.innerHTML}
+  <div class="nota">Cifras en pesos chilenos · Balance preparado automáticamente desde Libro Diario ${año}<br>
+  ${cfg.emp||''} · ${new Date().toLocaleDateString('es-CL')}</div>
+  <div class="no-print" style="text-align:center;margin-top:20px;">
+    <button onclick="window.print()" style="padding:10px 24px;background:#1e40af;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="margin-left:10px;padding:10px 24px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">✕ Cerrar</button>
+  </div>
+  </body></html>`;
+  const win=window.open('','_blank','width=900,height=700,scrollbars=yes');
+  if(win){win.document.write(html);win.document.close();}
+  else{const blob=new Blob([html],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='BalanceGeneral_'+año+'.html';a.click();URL.revokeObjectURL(a.href);toast('📥 Balance descargado (popups bloqueados)','ok');}
+}
+
+// ── EXPORTAR LIBRO MAYOR → EXCEL PROFESIONAL ──────────────────────────────
+function exportMayorExcel(){
+  if(!window.XLSX){toast('SheetJS no disponible','err');return;}
+  const db=DB();const c=CFG();const asientos=db.asientos||[];
+  if(!asientos.length){toast('Sin asientos para exportar','err');return;}
+  const año=db.periodoActual||new Date().getFullYear();
+  try{
+    const wb=XLSX.utils.book_new();
+    const cuentas=new Set();
+    asientos.forEach(a=>{if(a.ctaDebe)cuentas.add(a.ctaDebe);if(a.ctaHaber)cuentas.add(a.ctaHaber);});
+
+    // Hoja resumen de saldos
+    const resumen=[
+      ['LIBRO MAYOR — RESUMEN DE SALDOS'],
+      ['Empresa',c.emp||'','RUT',c.rut||''],
+      ['Período',año,'Exportado',new Date().toLocaleDateString('es-CL')],
+      [''],
+      ['CUENTA','TOTAL DEBE','TOTAL HABER','SALDO','']
+    ];
+    const totRes={debe:0,haber:0};
+    [...cuentas].sort().forEach(cta=>{
+      const td=asientos.filter(a=>a.ctaDebe===cta).reduce((s,m)=>s+(+m.debe||0),0);
+      const th=asientos.filter(a=>a.ctaHaber===cta).reduce((s,m)=>s+(+m.haber||0),0);
+      const sal=td-th;
+      resumen.push([cta,td,th,sal,'']);
+      totRes.debe+=td;totRes.haber+=th;
+    });
+    resumen.push(['']);
+    resumen.push(['TOTALES',totRes.debe,totRes.haber,totRes.debe-totRes.haber,'']);
+    const wsRes=XLSX.utils.aoa_to_sheet(resumen);
+    wsRes['!cols']=[{wch:40},{wch:16},{wch:16},{wch:16},{wch:5}];
+    XLSX.utils.book_append_sheet(wb,wsRes,'Resumen Saldos');
+
+    // Una hoja por cuenta con movimientos detallados
+    [...cuentas].sort().forEach(cta=>{
+      const rows=[
+        ['CUENTA: '+cta],
+        ['Empresa',c.emp||'','RUT',c.rut||''],
+        [''],
+        ['Fecha','Folio','Glosa','Debe','Haber','Saldo acumulado']
+      ];
+      let saldo=0;let totD=0;let totH=0;
+      asientos.filter(a=>a.ctaDebe===cta||a.ctaHaber===cta)
+        .sort((a,b)=>(a.fecha||'').localeCompare(b.fecha||''))
+        .forEach(m=>{
+          const d=m.ctaDebe===cta?+m.debe||0:0;
+          const h=m.ctaHaber===cta?+m.haber||0:0;
+          saldo+=d-h;totD+=d;totH+=h;
+          rows.push([m.fecha||'',m.folio||'',m.glosa||'',d||'',h||'',saldo]);
+        });
+      rows.push(['']);
+      rows.push(['TOTAL','','',totD,totH,totD-totH]);
+      const wsC=XLSX.utils.aoa_to_sheet(rows);
+      wsC['!cols']=[{wch:12},{wch:8},{wch:35},{wch:14},{wch:14},{wch:16}];
+      // Nombre de hoja limitado a 31 chars (límite Excel)
+      const sheetName=cta.replace(/[\/\\?*\[\]]/g,'').slice(0,31);
+      XLSX.utils.book_append_sheet(wb,wsC,sheetName);
+    });
+
+    XLSX.writeFile(wb,`LibroMayor_${c.rut||'emp'}_${año}.xlsx`);
+    toast('✅ Libro Mayor Excel exportado ('+cuentas.size+' cuentas)','ok');
+  }catch(e){toast('Error exportando: '+e.message,'err');}
+}
 function renderSueldoEmpresarial(){
   const db=DB();const ses=db.sueldosEmp||[];
   if(!ses.length)return `<div class="info-box" style="margin-top:8px;">👔 Sin sueldos empresariales configurados. Agrégalos en el módulo Liquidación → Sueldos Empresariales.</div>`;
@@ -17320,10 +17594,14 @@ function renderBalance(){
   const activos=db.activos||[];
   const totalAct=activos.reduce((a,x)=>a+(+x.valorLibro||0),0);
   const cajaDisp=( db.cajas||[]).reduce((a,x)=>a+(x.tipo==='ingreso'?+x.monto:-+x.monto||0),0);
-  const tabs=['general','estado','flujo','comparativo','ratios'];
-  const labels={general:'📊 Resumen General',estado:'📈 Estado Resultados',flujo:'💵 Posición Financiera',comparativo:'📅 Comparativo',ratios:'📐 Ratios'};
+  const tabs=['general','estado','flujo','comparativo','ratios','inventario'];
+  const labels={general:'📊 Balance General',estado:'📈 Estado Resultados',flujo:'💵 Posición Financiera',comparativo:'📅 Comparativo',ratios:'📐 Ratios',inventario:'📖 Libro Inventario y Balance'};
   return `<div class="card">
-    <div class="card-hdr"><div class="ci" style="background:var(--green2)">⚖️</div><div><div class="ct">Balance General</div><div class="cs">Año ${db.periodoActual||new Date().getFullYear()} · Datos automáticos</div></div></div>
+    <div class="card-hdr"><div class="ci" style="background:var(--green2)">⚖️</div>
+      <div style="flex:1;"><div class="ct">Balance General</div><div class="cs">Año ${db.periodoActual||new Date().getFullYear()} · Desde Libro Mayor</div></div>
+      <button class="btn success sm" onclick="exportBalanceExcel()">📗 Excel</button>
+      <button class="btn danger sm" onclick="exportBalancePDF()">🖨️ PDF</button>
+    </div>
     <div class="card-body">
       <div class="tab-btns" id="balTabs">${tabs.map((t,i)=>`<button class="tab-btn${i===0?' active':''}" onclick="showBalTab('${t}',this)">${labels[t]}</button>`).join('')}</div>
       <div id="balContent"></div>
@@ -17676,6 +17954,139 @@ function showBalTab(tab,btn){
         <div style="font-size:9px;margin-top:3px;">${r.ok?'✅ Saludable':'⚠️ Revisar'}</div>
       </div>`).join('')}
     </div>`;
+  } else if(tab==='inventario'){
+    // ── LIBRO DE INVENTARIO Y BALANCE ─────────────────────────────────────
+    const asientos=db.asientos||[];
+    const plan=db.planCuentas||[];
+    const cfg=CFG();
+    const año=db.periodoActual||new Date().getFullYear();
+    if(!asientos.length){
+      el.innerHTML=`<div class="info-box" style="margin-top:10px;">ℹ️ Sin asientos contables. Ingresa asientos en 📒 <b>DIARIO</b> para generar el Libro de Inventario y Balance.</div>`;
+      return;
+    }
+    const _movs={};
+    asientos.forEach(a=>{
+      if(a.ctaDebe){if(!_movs[a.ctaDebe])_movs[a.ctaDebe]={cod:'',debe:0,haber:0};_movs[a.ctaDebe].debe+=(+a.debe||0);}
+      if(a.ctaHaber){if(!_movs[a.ctaHaber])_movs[a.ctaHaber]={cod:'',debe:0,haber:0};_movs[a.ctaHaber].haber+=(+a.haber||0);}
+    });
+    Object.keys(_movs).forEach(n=>{const pc=plan.find(p=>p.nombre===n);if(pc)_movs[n].cod=pc.cod;});
+    function _invFila(nombre){
+      const m=_movs[nombre];const cod=m.cod||'';const prim=cod?cod.charAt(0):'';
+      const debe=m.debe,haber=m.haber;
+      const esAG=(prim==='1'||prim==='5'||(!prim&&debe>=haber));
+      const deudor=esAG?Math.max(0,debe-haber):0;const acreedor=esAG?0:Math.max(0,haber-debe);
+      const esB=(prim==='1'||prim==='2'||prim==='3');
+      const activos=(prim==='1'||(!prim&&deudor>0&&esB))?deudor:0;
+      const pasivos=(prim==='2'||prim==='3'||(!prim&&acreedor>0&&esB))?acreedor:0;
+      const esR=(prim==='4'||prim==='5'||(!prim&&!esB));
+      const perdida=(prim==='5'||(!prim&&esR&&deudor>0))?deudor:0;
+      const ganancia=(prim==='4'||(!prim&&esR&&acreedor>0))?acreedor:0;
+      return {nombre,cod,debe,haber,deudor,acreedor,activos,pasivos,perdida,ganancia};
+    }
+    const _filas=Object.keys(_movs).sort((a,b)=>(_movs[a].cod||'z'+a).localeCompare(_movs[b].cod||'z'+b)).map(_invFila).filter(f=>f.debe>0||f.haber>0);
+    const _tot={debe:0,haber:0,deudor:0,acreedor:0,activos:0,pasivos:0,perdida:0,ganancia:0};
+    _filas.forEach(f=>{Object.keys(_tot).forEach(k=>{_tot[k]+=f[k];});});
+    const _util=_tot.ganancia-_tot.perdida;const _esU=_util>=0;
+    const _fN=(v)=>v>0?fmt(v):'';
+    const _thS='padding:5px 6px;text-align:right;font-size:9px;color:var(--muted);border-bottom:2px solid var(--border2);white-space:nowrap;';
+    const _tdS='padding:4px 6px;font-size:10px;text-align:right;font-family:monospace;border-bottom:1px solid var(--border);';
+    const _tdL='padding:4px 6px;font-size:10px;border-bottom:1px solid var(--border);';
+    el.innerHTML=`<div style="margin-top:10px;">
+      <div style="text-align:center;padding:10px;background:var(--s2);border-radius:8px;border:1px solid var(--border2);margin-bottom:12px;">
+        <div style="font-size:12px;font-weight:800;color:var(--acc);">${cfg.emp||'SIN EMPRESA'}${cfg.rut?' · RUT: '+cfg.rut:''}</div>
+        <div style="font-size:11px;font-weight:700;margin-top:2px;">LIBRO DE INVENTARIO Y BALANCE</div>
+        <div style="font-size:10px;color:var(--muted);">PERÍODO: 01/01/${año} al 31/12/${año}</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:12px;">
+        <button class="btn success sm" onclick="exportLibroInventarioExcel()">📗 Excel</button>
+        <button class="btn danger sm" onclick="exportLibroInventarioPDF()">🖨️ PDF</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%;border-collapse:collapse;font-size:10px;min-width:900px;">
+          <thead>
+            <tr style="background:var(--s3);">
+              <th style="padding:5px 6px;text-align:left;font-size:9px;color:var(--muted);border-bottom:2px solid var(--border2);width:65px;">CUENTA</th>
+              <th style="padding:5px 6px;text-align:left;font-size:9px;color:var(--muted);border-bottom:2px solid var(--border2);">NOMBRE</th>
+              <th colspan="2" style="${_thS}text-align:center;border-left:1px solid var(--border2);">MOVIMIENTOS</th>
+              <th colspan="2" style="${_thS}text-align:center;border-left:1px solid var(--border2);">SALDO</th>
+              <th colspan="2" style="${_thS}text-align:center;border-left:1px solid var(--border2);">INVENTARIO</th>
+              <th colspan="2" style="${_thS}text-align:center;border-left:1px solid var(--border2);">RESULTADO</th>
+            </tr>
+            <tr style="background:var(--s3);">
+              <th style="${_thS}"></th><th style="${_thS}"></th>
+              <th style="${_thS}border-left:1px solid var(--border2);">DÉBITOS</th><th style="${_thS}">CRÉDITOS</th>
+              <th style="${_thS}border-left:1px solid var(--border2);">DEUDOR</th><th style="${_thS}">ACREEDOR</th>
+              <th style="${_thS}border-left:1px solid var(--border2);">ACTIVOS</th><th style="${_thS}">PASIVOS</th>
+              <th style="${_thS}border-left:1px solid var(--border2);">PÉRDIDA</th><th style="${_thS}">GANANCIA</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${_filas.map(f=>`<tr>
+              <td style="${_tdL}color:var(--muted);font-family:monospace;font-size:9px;">${f.cod}</td>
+              <td style="${_tdL}font-weight:600;">${f.nombre}</td>
+              <td style="${_tdS}border-left:1px solid var(--border2);">${_fN(f.debe)}</td>
+              <td style="${_tdS}">${_fN(f.haber)}</td>
+              <td style="${_tdS}border-left:1px solid var(--border2);color:var(--blue);">${_fN(f.deudor)}</td>
+              <td style="${_tdS}color:var(--blue);">${_fN(f.acreedor)}</td>
+              <td style="${_tdS}border-left:1px solid var(--border2);color:var(--green);">${_fN(f.activos)}</td>
+              <td style="${_tdS}color:var(--red);">${_fN(f.pasivos)}</td>
+              <td style="${_tdS}border-left:1px solid var(--border2);color:var(--orange);">${_fN(f.perdida)}</td>
+              <td style="${_tdS}color:var(--teal);">${_fN(f.ganancia)}</td>
+            </tr>`).join('')}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--s2);border-top:2px solid var(--border2);">
+              <td colspan="2" style="padding:6px 8px;font-size:10px;font-weight:800;">SUBTOTALES</td>
+              <td style="${_tdS}font-weight:800;border-left:1px solid var(--border2);">${fmt(_tot.debe)}</td>
+              <td style="${_tdS}font-weight:800;">${fmt(_tot.haber)}</td>
+              <td style="${_tdS}font-weight:800;border-left:1px solid var(--border2);">${fmt(_tot.deudor)}</td>
+              <td style="${_tdS}font-weight:800;">${fmt(_tot.acreedor)}</td>
+              <td style="${_tdS}font-weight:800;border-left:1px solid var(--border2);">${fmt(_tot.activos)}</td>
+              <td style="${_tdS}font-weight:800;">${fmt(_tot.pasivos)}</td>
+              <td style="${_tdS}font-weight:800;border-left:1px solid var(--border2);">${fmt(_tot.perdida)}</td>
+              <td style="${_tdS}font-weight:800;">${fmt(_tot.ganancia)}</td>
+            </tr>
+            <tr style="background:${_esU?'var(--green2)':'var(--red2)'};">
+              <td colspan="2" style="padding:6px 8px;font-size:10px;font-weight:800;color:${_esU?'var(--green)':'var(--red)'};">${_esU?'UTILIDAD DEL EJERCICIO':'PÉRDIDA DEL EJERCICIO'}</td>
+              <td colspan="4" style="${_tdS}border-left:1px solid var(--border2);"></td>
+              <td style="${_tdS}font-weight:800;color:${_esU?'var(--green)':'var(--red)'};border-left:1px solid var(--border2);">${_esU?'':fmt(Math.abs(_util))}</td>
+              <td style="${_tdS}font-weight:800;color:${_esU?'var(--green)':'var(--red)'};">${_esU?fmt(_util):''}</td>
+              <td style="${_tdS}font-weight:800;color:${_esU?'var(--green)':'var(--red)'};border-left:1px solid var(--border2);">${_esU?fmt(_util):''}</td>
+              <td style="${_tdS}font-weight:800;color:${_esU?'var(--green)':'var(--red)'};">${_esU?'':fmt(Math.abs(_util))}</td>
+            </tr>
+            <tr style="background:var(--s3);border-top:2px solid var(--border2);">
+              <td colspan="2" style="padding:6px 8px;font-size:11px;font-weight:800;">TOTALES</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;border-left:1px solid var(--border2);">${fmt(_tot.debe)}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;">${fmt(_tot.haber)}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;border-left:1px solid var(--border2);">${fmt(_tot.deudor+Math.abs(_util))}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;">${fmt(_tot.acreedor+Math.abs(_util))}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;border-left:1px solid var(--border2);">${fmt(_tot.activos+(_esU?0:Math.abs(_util)))}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;">${fmt(_tot.pasivos+(_esU?_util:0))}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;border-left:1px solid var(--border2);">${fmt(_tot.perdida+(_esU?_util:0))}</td>
+              <td style="${_tdS}font-weight:800;font-size:11px;">${fmt(_tot.ganancia+(_esU?0:Math.abs(_util)))}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      <div style="margin-top:8px;padding:8px 12px;border-radius:8px;background:var(--s2);border:1px solid var(--border2);font-size:10px;display:flex;justify-content:space-between;">
+        <span style="color:var(--muted);">DIFERENCIA</span>
+        <span style="font-weight:800;color:${Math.abs(_tot.debe-_tot.haber)<1?'var(--green)':'var(--red)'};">${Math.abs(_tot.debe-_tot.haber)<1?'0 ✅ Cuadrado':fmt(Math.abs(_tot.debe-_tot.haber))+' ⚠️'}</span>
+      </div>
+      <div style="margin-top:20px;display:flex;justify-content:space-around;padding-top:12px;border-top:1px solid var(--border2);">
+        <div style="text-align:center;min-width:180px;">
+          <div style="border-top:1px solid var(--muted);margin-bottom:4px;margin-top:30px;"></div>
+          <div style="font-size:9px;color:var(--muted);">${cfg.cont||''}</div>
+          <div style="font-size:9px;color:var(--muted);">${cfg.contrut||''}</div>
+          <div style="font-size:9px;color:var(--muted);">CONTADOR</div>
+        </div>
+        <div style="text-align:center;min-width:180px;">
+          <div style="border-top:1px solid var(--muted);margin-bottom:4px;margin-top:30px;"></div>
+          <div style="font-size:9px;color:var(--muted);">${cfg.rep||''}</div>
+          <div style="font-size:9px;color:var(--muted);">${cfg.reprut||''}</div>
+          <div style="font-size:9px;color:var(--muted);">REPRESENTANTE LEGAL</div>
+        </div>
+      </div>
+    </div>`;
   } else {
     el.innerHTML=`<div style="margin-top:10px;">${[
       ['Disponible Caja/Banco',cajaDisp,'green'],
@@ -17687,6 +18098,153 @@ function showBalTab(tab,btn){
       <span style="color:var(--muted);">${l}</span><span style="font-family:'JetBrains Mono',monospace;color:var(--${c});">${fmt(v)}</span>
     </div>`).join('')}</div>`;
   }
+}
+
+// ── EXPORTAR LIBRO INVENTARIO Y BALANCE → EXCEL ───────────────────────────
+function exportLibroInventarioExcel(){
+  if(!window.XLSX){toast('SheetJS no disponible','err');return;}
+  const db=DB();const cfg=CFG();const año=db.periodoActual||new Date().getFullYear();
+  const asientos=db.asientos||[];const plan=db.planCuentas||[];
+  if(!asientos.length){toast('Sin asientos para exportar','err');return;}
+  const mv={};
+  asientos.forEach(a=>{
+    if(a.ctaDebe){if(!mv[a.ctaDebe])mv[a.ctaDebe]={cod:'',debe:0,haber:0};mv[a.ctaDebe].debe+=(+a.debe||0);}
+    if(a.ctaHaber){if(!mv[a.ctaHaber])mv[a.ctaHaber]={cod:'',debe:0,haber:0};mv[a.ctaHaber].haber+=(+a.haber||0);}
+  });
+  Object.keys(mv).forEach(n=>{const pc=plan.find(p=>p.nombre===n);if(pc)mv[n].cod=pc.cod;});
+  function _xF(nombre){
+    const m=mv[nombre];const cod=m.cod||'';const prim=cod?cod.charAt(0):'';
+    const debe=m.debe,haber=m.haber;
+    const esAG=(prim==='1'||prim==='5'||(!prim&&debe>=haber));
+    const deudor=esAG?Math.max(0,debe-haber):0;const acreedor=esAG?0:Math.max(0,haber-debe);
+    const esB=(prim==='1'||prim==='2'||prim==='3');
+    const activos=(prim==='1'||(!prim&&deudor>0&&esB))?deudor:0;
+    const pasivos=(prim==='2'||prim==='3'||(!prim&&acreedor>0&&esB))?acreedor:0;
+    const esR=(prim==='4'||prim==='5'||(!prim&&!esB));
+    const perdida=(prim==='5'||(!prim&&esR&&deudor>0))?deudor:0;
+    const ganancia=(prim==='4'||(!prim&&esR&&acreedor>0))?acreedor:0;
+    return {nombre,cod,debe,haber,deudor,acreedor,activos,pasivos,perdida,ganancia};
+  }
+  const filas=Object.keys(mv).sort((a,b)=>(mv[a].cod||'z'+a).localeCompare(mv[b].cod||'z'+b)).map(_xF).filter(f=>f.debe>0||f.haber>0);
+  const tot={debe:0,haber:0,deudor:0,acreedor:0,activos:0,pasivos:0,perdida:0,ganancia:0};
+  filas.forEach(f=>{Object.keys(tot).forEach(k=>{tot[k]+=f[k];});});
+  const util=tot.ganancia-tot.perdida;const esU=util>=0;
+  const aoa=[
+    [cfg.emp||'','','','','','','','','FOLIO N°',''],
+    [cfg.rut||''],[''],
+    [cfg.giro||''],
+    [cfg.rep||''],
+    [cfg.dir||'','','','','PERÍODO: 01/01/'+año+' al 31/12/'+año],
+    [''],
+    ['CUENTA','NOMBRE','DÉBITOS','CRÉDITOS','DEUDOR','ACREEDOR','ACTIVOS','PASIVOS','PÉRDIDA','GANANCIA'],
+  ];
+  filas.forEach(f=>aoa.push([f.cod,f.nombre,f.debe||'',f.haber||'',f.deudor||'',f.acreedor||'',f.activos||'',f.pasivos||'',f.perdida||'',f.ganancia||'']));
+  aoa.push(['']);
+  aoa.push(['','SUBTOTALES',tot.debe,tot.haber,tot.deudor,tot.acreedor,tot.activos,tot.pasivos,tot.perdida,tot.ganancia]);
+  aoa.push(['',esU?'UTILIDAD DEL EJERCICIO':'PÉRDIDA DEL EJERCICIO','','','','',esU?'':Math.abs(util),esU?util:'',esU?util:'',esU?'':Math.abs(util)]);
+  aoa.push(['','TOTALES',tot.debe,tot.haber,tot.deudor+Math.abs(util),tot.acreedor+Math.abs(util),tot.activos+(esU?0:Math.abs(util)),tot.pasivos+(esU?util:0),tot.perdida+(esU?util:0),tot.ganancia+(esU?0:Math.abs(util))]);
+  aoa.push(['']);
+  aoa.push(['DIFERENCIA 0','','','','','','','','TOTALES','']);
+  aoa.push(['']);
+  aoa.push(['De acuerdo al artículo 100 del Código Tributario dejo constancia que los datos proporcionados son fidedignos.']);
+  aoa.push(['','','','']);
+  aoa.push([cfg.cont||'','','',cfg.rep||'']);
+  aoa.push([cfg.contrut||'','','',cfg.reprut||'']);
+  aoa.push(['CONTADOR','','','REPRESENTANTE LEGAL']);
+  try{
+    const wb=XLSX.utils.book_new();
+    const ws=XLSX.utils.aoa_to_sheet(aoa);
+    ws['!cols']=[{wch:12},{wch:38},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14},{wch:14}];
+    XLSX.utils.book_append_sheet(wb,ws,'Libro Inventario y Balance');
+    XLSX.writeFile(wb,'LibroInventarioBalance_'+(cfg.rut||'emp')+'_'+año+'.xlsx');
+    toast('✅ Libro Inventario y Balance Excel exportado','ok');
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+// ── EXPORTAR LIBRO INVENTARIO Y BALANCE → PDF ─────────────────────────────
+function exportLibroInventarioPDF(){
+  const db=DB();const cfg=CFG();const año=db.periodoActual||new Date().getFullYear();
+  const asientos=db.asientos||[];const plan=db.planCuentas||[];
+  if(!asientos.length){toast('Sin asientos para generar el libro','err');return;}
+  const mv={};
+  asientos.forEach(a=>{
+    if(a.ctaDebe){if(!mv[a.ctaDebe])mv[a.ctaDebe]={cod:'',debe:0,haber:0};mv[a.ctaDebe].debe+=(+a.debe||0);}
+    if(a.ctaHaber){if(!mv[a.ctaHaber])mv[a.ctaHaber]={cod:'',debe:0,haber:0};mv[a.ctaHaber].haber+=(+a.haber||0);}
+  });
+  Object.keys(mv).forEach(n=>{const pc=plan.find(p=>p.nombre===n);if(pc)mv[n].cod=pc.cod;});
+  function _pF(nombre){
+    const m=mv[nombre];const cod=m.cod||'';const prim=cod?cod.charAt(0):'';
+    const debe=m.debe,haber=m.haber;
+    const esAG=(prim==='1'||prim==='5'||(!prim&&debe>=haber));
+    const deudor=esAG?Math.max(0,debe-haber):0;const acreedor=esAG?0:Math.max(0,haber-debe);
+    const esB=(prim==='1'||prim==='2'||prim==='3');
+    const activos=(prim==='1'||(!prim&&deudor>0&&esB))?deudor:0;
+    const pasivos=(prim==='2'||prim==='3'||(!prim&&acreedor>0&&esB))?acreedor:0;
+    const esR=(prim==='4'||prim==='5'||(!prim&&!esB));
+    const perdida=(prim==='5'||(!prim&&esR&&deudor>0))?deudor:0;
+    const ganancia=(prim==='4'||(!prim&&esR&&acreedor>0))?acreedor:0;
+    return {nombre,cod,debe,haber,deudor,acreedor,activos,pasivos,perdida,ganancia};
+  }
+  const filas=Object.keys(mv).sort((a,b)=>(mv[a].cod||'z'+a).localeCompare(mv[b].cod||'z'+b)).map(_pF).filter(f=>f.debe>0||f.haber>0);
+  const tot={debe:0,haber:0,deudor:0,acreedor:0,activos:0,pasivos:0,perdida:0,ganancia:0};
+  filas.forEach(f=>{Object.keys(tot).forEach(k=>{tot[k]+=f[k];});});
+  const util=tot.ganancia-tot.perdida;const esU=util>=0;
+  const fN=(v)=>v>0?new Intl.NumberFormat('es-CL').format(Math.round(v)):'';
+  const htm=`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"><title>Libro Inventario y Balance ${año}</title>
+  <style>*{margin:0;padding:0;box-sizing:border-box;}body{font-family:Arial,sans-serif;font-size:8px;color:#000;background:#fff;padding:15px;}
+  .hdr{text-align:center;margin-bottom:10px;border-bottom:2px solid #000;padding-bottom:8px;}.hdr h1{font-size:11px;font-weight:800;}.hdr p{font-size:9px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:8px;}
+  th{background:#1e3a5f;color:#fff;padding:4px 5px;font-size:8px;text-align:right;border:1px solid #ccc;}th.L{text-align:left;}th.C{text-align:center;}
+  td{padding:3px 5px;border-bottom:1px solid #e0e0e0;font-size:8px;text-align:right;}td.L{text-align:left;}td.cod{font-family:monospace;color:#555;font-size:7px;}
+  tr:nth-child(even){background:#f8f8f8;}
+  .sub td{background:#e8e8e8;font-weight:700;border-top:2px solid #000;}
+  .uti td{background:#d4edda;font-weight:700;color:#155724;}.per td{background:#f8d7da;color:#721c24;}
+  .tot td{background:#1e3a5f;color:#fff;font-weight:800;font-size:9px;border-top:3px solid #000;}
+  .firmas{display:flex;justify-content:space-around;margin-top:20px;padding-top:12px;border-top:1px solid #000;}
+  .firma{text-align:center;min-width:160px;}.fl{border-top:1px solid #000;margin-bottom:3px;margin-top:25px;}
+  .nota{font-size:7px;color:#555;margin-top:8px;text-align:center;}
+  .dif{display:flex;justify-content:space-between;padding:5px 8px;background:#f0f0f0;border:1px solid #ccc;font-weight:700;font-size:9px;margin-top:4px;}
+  @media print{body{padding:5px;}.np{display:none;}}</style></head><body>
+  <div class="hdr"><h1>${cfg.emp||'SIN EMPRESA'}</h1><p>${cfg.rut||''}</p><p>${cfg.giro||''}</p><p>${cfg.rep||''}</p>
+  <p>${cfg.dir||''}&nbsp;·&nbsp;PERÍODO: 01/01/${año} al 31/12/${año}</p><h1 style="margin-top:6px;">LIBRO DE INVENTARIO Y BALANCE</h1></div>
+  <table><thead>
+    <tr><th class="L" style="width:65px;">CUENTA</th><th class="L">NOMBRE</th>
+      <th class="C" colspan="2">MOVIMIENTOS</th><th class="C" colspan="2">SALDO</th>
+      <th class="C" colspan="2">INVENTARIO</th><th class="C" colspan="2">RESULTADO</th></tr>
+    <tr><th class="L"></th><th class="L"></th>
+      <th>DÉBITOS</th><th>CRÉDITOS</th><th>DEUDOR</th><th>ACREEDOR</th>
+      <th>ACTIVOS</th><th>PASIVOS</th><th>PÉRDIDA</th><th>GANANCIA</th></tr>
+  </thead><tbody>
+    ${filas.map(f=>`<tr><td class="cod L">${f.cod}</td><td class="L">${f.nombre}</td>
+      <td>${fN(f.debe)}</td><td>${fN(f.haber)}</td><td>${fN(f.deudor)}</td><td>${fN(f.acreedor)}</td>
+      <td>${fN(f.activos)}</td><td>${fN(f.pasivos)}</td><td>${fN(f.perdida)}</td><td>${fN(f.ganancia)}</td></tr>`).join('')}
+  </tbody><tfoot>
+    <tr class="sub"><td colspan="2" class="L">SUBTOTALES</td>
+      <td>${fN(tot.debe)}</td><td>${fN(tot.haber)}</td><td>${fN(tot.deudor)}</td><td>${fN(tot.acreedor)}</td>
+      <td>${fN(tot.activos)}</td><td>${fN(tot.pasivos)}</td><td>${fN(tot.perdida)}</td><td>${fN(tot.ganancia)}</td></tr>
+    <tr class="${esU?'uti':'per'}"><td colspan="2" class="L">${esU?'UTILIDAD DEL EJERCICIO':'PÉRDIDA DEL EJERCICIO'}</td>
+      <td></td><td></td><td></td><td></td>
+      <td>${esU?'':fN(Math.abs(util))}</td><td>${esU?fN(util):''}</td>
+      <td>${esU?fN(util):''}</td><td>${esU?'':fN(Math.abs(util))}</td></tr>
+    <tr class="tot"><td colspan="2" class="L">TOTALES</td>
+      <td>${fN(tot.debe)}</td><td>${fN(tot.haber)}</td>
+      <td>${fN(tot.deudor+Math.abs(util))}</td><td>${fN(tot.acreedor+Math.abs(util))}</td>
+      <td>${fN(tot.activos+(esU?0:Math.abs(util)))}</td><td>${fN(tot.pasivos+(esU?util:0))}</td>
+      <td>${fN(tot.perdida+(esU?util:0))}</td><td>${fN(tot.ganancia+(esU?0:Math.abs(util)))}</td></tr>
+  </tfoot></table>
+  <div class="dif"><span>DIFERENCIA 0</span><span>TOTALES &nbsp; ${fN(tot.debe)} &nbsp;&nbsp; ${fN(tot.haber)}</span></div>
+  <p class="nota">De acuerdo al artículo 100 del Código Tributario dejo constancia que los datos proporcionados para confeccionar el presente Libro son fidedignos.</p>
+  <div class="firmas">
+    <div class="firma"><div class="fl"></div><p>${cfg.cont||''}</p><p>${cfg.contrut||''}</p><p><b>CONTADOR</b></p></div>
+    <div class="firma"><div class="fl"></div><p>${cfg.rep||''}</p><p>${cfg.reprut||''}</p><p><b>REPRESENTANTE LEGAL</b></p></div>
+  </div>
+  <div class="np" style="text-align:center;margin-top:16px;">
+    <button onclick="window.print()" style="padding:8px 20px;background:#1e3a5f;color:#fff;border:none;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;">🖨️ Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="margin-left:8px;padding:8px 20px;background:#e5e7eb;color:#374151;border:none;border-radius:4px;font-size:12px;cursor:pointer;">✕ Cerrar</button>
+  </div></body></html>`;
+  const win=window.open('','_blank','width=1100,height=750,scrollbars=yes');
+  if(win){win.document.write(htm);win.document.close();}
+  else{const blob=new Blob([htm],{type:'text/html;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='LibroInventarioBalance_'+año+'.html';a.click();URL.revokeObjectURL(a.href);toast('📥 Libro descargado','ok');}
 }
 
 // ── renderLibroCaja14D ────────────────────────────────────────────────────────
