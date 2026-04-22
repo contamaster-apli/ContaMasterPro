@@ -1715,13 +1715,7 @@ function renderTrab(){
   else if(sub==='jornadas') body = _rTrabJornadas();
   else if(sub==='importar') body = _rTrabImportarGT();
   else                     body = _rTrabPlantilla();
-  // Añadir botones export al nav de trabajadores
-  const exportBtns=sub==='lista'?`<div style="display:flex;gap:5px;flex-wrap:wrap;padding:8px 13px;background:var(--s2);border-bottom:1px solid var(--border);">
-    <span style="font-size:9px;color:var(--muted);align-self:center;">EXPORTAR:</span>
-    <button class="btn success sm" onclick="exportTrabajadores()">📊 Excel</button>
-    <button class="btn danger sm" onclick="modPrint('Trabajadores',document.querySelector('#mc .tw')?.outerHTML||'')">📄 PDF</button>
-  </div>`:'';
-  return nav + exportBtns + body;
+  return nav + body;
 }
 
 // ── Sub-vista: Lista de trabajadores ──
@@ -1738,6 +1732,8 @@ function _rTrabListaGT(){
       </div>
       <button class="btn primary sm" onclick="openAddTrab()">+ Agregar</button>
       <button class="btn info sm" onclick="window._trab.sub='importar';go('trab')">📥 Importar</button>
+      <button class="btn success sm" onclick="exportTrabajadores()">📊 Excel</button>
+      <button class="btn danger sm" onclick="modPrint('Trabajadores',document.querySelector('#mc .tw')?.outerHTML||'')">📄 PDF</button>
     </div>
     <div class="card-body">
       ${total ? DB().trabajadores.map(t=>`
