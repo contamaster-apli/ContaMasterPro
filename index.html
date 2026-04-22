@@ -1705,12 +1705,14 @@ function renderTrab(){
   const sub = (window._trab||{}).sub || 'lista';
   const subtabs = [
     {id:'lista',     lbl:'👥 Lista'},
+    {id:'jornadas',  lbl:'⚡ Asignar Jornadas'},
     {id:'importar',  lbl:'📥 Importar Excel'},
     {id:'plantilla', lbl:'📋 Plantilla'},
   ];
   const nav = `<div class="sec-nav">${subtabs.map(t=>`<button class="sec-nav-btn${sub===t.id?' active':''}" onclick="window._trab.sub='${t.id}';go('trab')">${t.lbl}</button>`).join('')}</div>`;
   let body = '';
   if(sub==='lista')        body = _rTrabListaGT();
+  else if(sub==='jornadas') body = _rTrabJornadas();
   else if(sub==='importar') body = _rTrabImportarGT();
   else                     body = _rTrabPlantilla();
   // Añadir botones export al nav de trabajadores
@@ -1746,7 +1748,7 @@ function _rTrabListaGT(){
           <div style="font-size:9px;color:var(--muted);margin-top:3px;line-height:1.7;">
             RUT: ${esc(t.rut||'—')} | Cargo: ${esc(t.cargo||'—')} | Ingreso: ${esc(t.fi||'—')}<br>
             AFP: ${t.afp||'—'} | Salud: ${t.salud||'—'} | Contrato: ${t.contrato||'—'}<br>
-            Sueldo: <span style="color:var(--acc);font-weight:700;">${t.sb?fmt(t.sb):'—'}</span>
+            Sueldo: <span style="color:var(--acc);font-weight:700;">${t.sb?fmt(t.sb):'—'}</span> | Jornada: <span style="color:var(--cyan);font-weight:700;">${t.jornada||42}h/sem</span>
           </div>
         </div>
         <div style="display:flex;gap:4px;flex-direction:column;">
@@ -1761,6 +1763,78 @@ function _rTrabListaGT(){
 }
 
 // ── Sub-vista: Importar Excel ── (100% reactiva, sin getElementById en lógica)
+function _rTrabJornadas(){
+  const trabs=DB().trabajadores||[];
+  if(!trabs.length) return `<div class="empty"><div class="ei">👥</div><div class="et">Sin trabajadores registrados.</div></div>`;
+  const opciones=[44,42,40,30,20];
+  return `<div class="card-body">
+    <div class="info-box" style="margin-bottom:12px;">
+      ⚡ <b>Asignación masiva de jornada.</b> Selecciona la jornada de cada trabajador directamente en la tabla.
+      Los cambios se guardan al hacer clic en <b>💾 Guardar</b>. Útil para clasificar todos los trabajadores de una vez.
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
+      <span style="font-size:10px;color:var(--muted);align-self:center;">Asignar todos a:</span>
+      ${opciones.map(h=>`<button class="btn sm secondary" onclick="asignarJornadaTodos(${h})">${h}h a todos</button>`).join('')}
+    </div>
+    <div class="tw"><table class="tbl">
+      <thead><tr>
+        <th style="width:30px;">#</th>
+        <th>NOMBRE</th>
+        <th>CARGO</th>
+        <th style="width:200px;">JORNADA ACTUAL</th>
+        <th style="width:220px;">NUEVA JORNADA</th>
+      </tr></thead>
+      <tbody id="trab_jornadas_tbody">
+        ${trabs.map((t,i)=>`<tr id="tjrow_${t.id}">
+          <td class="muted">${i+1}</td>
+          <td style="font-weight:600;">${esc(t.nombre)}</td>
+          <td class="muted" style="font-size:9px;">${esc(t.cargo||'—')}</td>
+          <td style="text-align:center;">
+            <span class="badge ${!t.jornada||t.jornada>=42?'info':t.jornada>=30?'ok':'warn'}">${t.jornada||42}h/sem</span>
+          </td>
+          <td>
+            <select class="fi" id="tj_${t.id}" style="font-size:11px;padding:3px 6px;"
+              onchange="document.getElementById('tjrow_${t.id}').style.background='rgba(200,168,75,.08)'">
+              ${opciones.map(h=>`<option value="${h}" ${(t.jornada||42)==h?'selected':''}>${h}h — ${h>=42?'Jornada completa':h>=30?'Parcial 3/4':'Media jornada'}</option>`).join('')}
+              <option value="custom" ${(!opciones.includes(t.jornada||42))?'selected':''}>Otra...</option>
+            </select>
+            <input type="number" id="tj_custom_${t.id}" placeholder="hrs" min="1" max="45"
+              value="${!opciones.includes(t.jornada||42)?t.jornada:''}"
+              style="width:55px;padding:3px 5px;font-size:11px;border:1px solid var(--border2);border-radius:4px;background:var(--s1);color:var(--text);margin-left:4px;display:${!opciones.includes(t.jornada||42)?'inline-block':'none'}">
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table></div>
+    <div style="margin-top:12px;display:flex;gap:8px;">
+      <button class="btn success" onclick="guardarJornadasMasivas()" style="min-width:140px;">💾 Guardar todos</button>
+      <button class="btn secondary" onclick="window._trab.sub='lista';go('trab')">← Volver a lista</button>
+    </div>
+  </div>`;
+}
+
+function asignarJornadaTodos(h){
+  (DB().trabajadores||[]).forEach(t=>{
+    const sel=document.getElementById('tj_'+t.id);
+    if(sel){sel.value=h;document.getElementById('tjrow_'+t.id).style.background='rgba(200,168,75,.08)';}
+  });
+  toast(`✅ ${h}h asignado a todos — aún no guardado, haz clic en Guardar`,'ok');
+}
+
+function guardarJornadasMasivas(){
+  const trabs=DB().trabajadores||[];
+  let cambios=0;
+  trabs.forEach(t=>{
+    const sel=document.getElementById('tj_'+t.id);
+    if(!sel) return;
+    let val=sel.value==='custom'?parseInt(document.getElementById('tj_custom_'+t.id)?.value||0):parseInt(sel.value);
+    if(!val||val<1||val>45) val=42;
+    if(t.jornada!==val){ t.jornada=val; cambios++; }
+  });
+  saveDB();
+  go('trab');
+  toast(`✅ ${cambios} jornada${cambios!==1?'s':''} actualizada${cambios!==1?'s':''}. Los cambios se reflejan en todas las tarjetas nuevas.`,'ok');
+}
+
 function _rTrabImportarGT(){
   const datos  = window._impData;
   const log    = (window._trab||{}).importLog;
@@ -2380,22 +2454,47 @@ function impDescargarCSV(){
 
 function openAddTrab(id){
   const t=id?DB().trabajadores.find(x=>x.id===id)||{}:{};
+  const jornadaActual=t.jornada||42;
   $('addTitle').textContent=id?'Editar trabajador':'Agregar trabajador';
   $('addBody').innerHTML=`
     <div class="frow h2"><div><div class="fl">Nombre completo</div><input class="fi" id="f_nombre" value="${t.nombre||''}"></div><div><div class="fl">RUT</div><input class="fi" id="f_rut" value="${t.rut||''}" placeholder="XX.XXX.XXX-X"></div></div>
     <div class="frow h2"><div><div class="fl">Cargo</div><input class="fi" id="f_cargo" value="${t.cargo||''}"></div><div><div class="fl">Fecha ingreso</div><input class="fi" type="date" id="f_fi" value="${t.fi||''}"></div></div>
     <div class="frow h2"><div><div class="fl">Sueldo base</div><input class="fi" type="number" id="f_sb" value="${t.sb||''}"></div><div><div class="fl">Tipo contrato</div><select class="fi" id="f_contrato"><option ${t.contrato==='Indefinido'?'selected':''}>Indefinido</option><option ${t.contrato==='Plazo fijo'?'selected':''}>Plazo fijo</option><option ${t.contrato==='Por obra'?'selected':''}>Por obra</option></select></div></div>
+    <div class="frow h2">
+      <div><div class="fl">🕐 Jornada semanal (hrs/sem)</div>
+        <select class="fi" id="f_jornada">
+          <option value="42" ${jornadaActual==42?'selected':''}>42h — Jornada completa (Ley 21.561 desde 26 Abr 2026)</option>
+          <option value="44" ${jornadaActual==44?'selected':''}>44h — Jornada completa (hasta 25 Abr 2026)</option>
+          <option value="40" ${jornadaActual==40?'selected':''}>40h — Jornada completa (desde 26 Abr 2028)</option>
+          <option value="30" ${jornadaActual==30?'selected':''}>30h — Jornada parcial 3/4</option>
+          <option value="20" ${jornadaActual==20?'selected':''}>20h — Media jornada</option>
+          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?'selected':''}>Otra (especificar)</option>
+        </select>
+        <input class="fi" type="number" id="f_jornada_custom" placeholder="Ej: 35" min="1" max="45"
+          value="${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?jornadaActual:''}"
+          style="margin-top:4px;display:${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?'block':'none'}"
+          oninput="">
+      </div>
+      <div><div class="fl">Departamento</div><input class="fi" id="f_depto" value="${t.depto||''}"></div>
+    </div>
     <div class="frow h2"><div><div class="fl">AFP</div><select class="fi" id="f_afp"><option value="">Jubilado/Sin AFP</option>${Object.keys(AFP_TASAS).map(a=>`<option ${t.afp===a?'selected':''}>${a}</option>`).join('')}</select></div><div><div class="fl">Salud</div><select class="fi" id="f_salud"><option ${t.salud==='FONASA'?'selected':''}>FONASA</option><option ${t.salud==='BANMEDICA'?'selected':''}>BANMEDICA</option><option ${t.salud==='COLMENA'?'selected':''}>COLMENA</option><option ${t.salud==='CRUZ BLANCA'?'selected':''}>CRUZ BLANCA</option><option ${t.salud==='CONSALUD'?'selected':''}>CONSALUD</option><option ${t.salud==='VIDA TRES'?'selected':''}>VIDA TRES</option><option ${t.salud==='MASVIDA'?'selected':''}>MASVIDA</option></select></div></div>
     <div class="frow h2"><div><div class="fl">Banco</div><input class="fi" id="f_banco" value="${t.banco||''}" placeholder="Ej: BancoEstado"></div><div><div class="fl">N° Cuenta</div><input class="fi" id="f_cuenta" value="${t.cuenta||''}" placeholder="Número de cuenta"></div></div>
     <div class="frow"><div class="fl">Estado</div><select class="fi" id="f_estado"><option ${!t.estado||t.estado==='Activo'?'selected':''}>Activo</option><option ${t.estado==='Inactivo'?'selected':''}>Inactivo</option></select></div>
     <div class="frow"><div class="fl">Observaciones</div><textarea class="fi" id="f_obs" rows="2">${t.obs||''}</textarea></div>`;
+  // Mostrar/ocultar campo custom según selección
+  document.getElementById('f_jornada').addEventListener('change',function(){
+    const cust=document.getElementById('f_jornada_custom');
+    if(cust) cust.style.display=this.value==='custom'?'block':'none';
+  });
   $('addOk').onclick=()=>{
-    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs')};
+    const jornadaSel=document.getElementById('f_jornada')?.value;
+    const jornadaVal=jornadaSel==='custom'?fv(document.getElementById('f_jornada_custom')?.value||42):parseInt(jornadaSel)||42;
+    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
     if(!item.nombre){toast('Ingresa nombre','err');return;}
     if(!validRutToast(item.rut,'Trabajador'))return;
     if(id){const ix=DB().trabajadores.findIndex(x=>x.id===id);if(ix>=0)DB().trabajadores[ix]=item;}
     else DB().trabajadores.push(item);
-    saveDB();closeModal('addModal');go('trab');toast('✅ Trabajador guardado');
+    saveDB();closeModal('addModal');go('trab');toast('✅ Trabajador guardado · Jornada: '+jornadaVal+'h/sem');
   };
   openModal('addModal');
 }
@@ -8664,19 +8763,20 @@ const FESTIVOS_CL = {
 // Desde el 26 de Abril 2024: máx 44h/sem
 // Desde el 26 de Abril 2026: máx 42h/sem
 // Desde el 26 de Abril 2028: máx 40h/sem
-function getHorasMaxSemana(anio, mes){
-  // Ley 21.561: cambios entran en vigor el 26 de Abril de cada año umbral
-  // Si se pasa mes, se considera con precisión; si no, se usa el año completo (conservador)
-  const m = mes || 1; // sin mes = Enero = conservador (usa umbral anterior)
-  if(anio > 2028 || (anio === 2028 && m >= 4)) return 40;
-  if(anio > 2026 || (anio === 2026 && m >= 4)) return 42;
+function getHorasMaxSemana(anio, mes, dia){
+  // Ley 21.561: 42h rige desde el 26 de Abril de 2026 (no desde el 1 de abril)
+  // Si se pasa día exacto, se evalúa con precisión de día
+  const m = mes || 1;
+  const d = dia || 1;
+  if(anio > 2028 || (anio === 2028 && m > 4) || (anio === 2028 && m === 4 && d >= 26)) return 40;
+  if(anio > 2026 || (anio === 2026 && m > 4) || (anio === 2026 && m === 4 && d >= 26)) return 42;
   return 44;
 }
-function getInfoLey21561(anio, mes){
-  const h=getHorasMaxSemana(anio, mes);
-  if(h===40) return {horas:h, etapa:'3ª Etapa · desde Abr 2028', color:'var(--green)'};
-  if(h===42) return {horas:h, etapa:'2ª Etapa · desde Abr 2026', color:'var(--cyan)'};
-  return {horas:h, etapa:'1ª Etapa · hasta Mar 2026', color:'var(--orange)'};
+function getInfoLey21561(anio, mes, dia){
+  const h=getHorasMaxSemana(anio, mes, dia);
+  if(h===40) return {horas:h, etapa:'3ª Etapa · desde 26 Abr 2028', color:'var(--green)'};
+  if(h===42) return {horas:h, etapa:'2ª Etapa · desde 26 Abr 2026', color:'var(--cyan)'};
+  return {horas:h, etapa:'1ª Etapa · hasta 25 Abr 2026', color:'var(--orange)'};
 }
 
 // Tipos de jornada predefinidos
@@ -11139,9 +11239,22 @@ function _rTarjeta(){
 
         <!-- JORNADA -->
         <div>
-          <div class="fl" style="margin-bottom:6px">JORNADA LABORAL (hrs/semana)</div>
+          <div class="fl" style="margin-bottom:6px">JORNADA LABORAL (hrs/semana)
+            ${(()=>{const trab=DB().trabajadores.find(t=>t.id===st.trabId);return trab&&trab.jornada?`<span style="font-size:9px;color:var(--cyan);margin-left:6px;">📋 Contrato: ${trab.jornada}h/sem</span>`:''})()}
+          </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${[getHorasMaxSemana(st.anio,st.mes),30,20].map(h=>`<button class="btn sm ${jornada===h?'cyan':'secondary'}" onclick="tkSetJornada(${h},null)">${h}h <span style="font-size:9px;opacity:.7">${h===getHorasMaxSemana(st.anio,st.mes)?'Completa':h===30?'Parcial':'Media'}</span></button>`).join('')}
+            ${(()=>{
+              const legal=getHorasMaxSemana(st.anio,st.mes);
+              const trab=DB().trabajadores.find(t=>t.id===st.trabId);
+              const jContrato=trab&&trab.jornada?trab.jornada:null;
+              const opciones=[...new Set([legal,42,44,30,20].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
+              return opciones.map(h=>{
+                const esContrato=h===jContrato;
+                const esLegal=h===legal;
+                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':'';
+                return `<button class="btn sm ${jornada===h?'cyan':'secondary'}" onclick="tkSetJornada(${h},null)">${h}h <span style="font-size:9px;opacity:.7">${etiq}</span></button>`;
+              }).join('');
+            })()}
             <button class="btn sm ${st.jornadaCustom?'teal':'secondary'}" onclick="tkSetJornada(0,null)">✏️ Custom</button>
             ${st.jornadaCustom?`<input class="fi" type="number" id="tk_jcustom" value="${st.jornadaCustom}" min="1" max="45" style="width:70px;padding:4px 7px;font-size:12px" onchange="tkSetJornada(0,this.value)">`:
             `<span id="tk_jcustom_wrap"></span>`}
@@ -11170,6 +11283,50 @@ function _rTarjeta(){
             <div class="rval" style="color:${balance>=0?'var(--green)':'var(--red)'};font-size:16px">${balance>=0?'+':''}${_m2hm(balance)}</div>
           </div>
         </div>
+
+        <!-- RESUMEN POR SEMANA -->
+        ${(()=>{
+          const nDias=new Date(anio,mes,0).getDate();
+          const semanas=[];
+          for(let d=1;d<=nDias;d++){
+            const sem=Math.ceil(d/7)-1;
+            if(!semanas[sem]) semanas[sem]={min:0,dias:0,label:`Sem ${sem+1} (${d}`};
+            const r=st.diasData[d];
+            if(r){const m=_calcDia(r);if(m>0){semanas[sem].min+=m;semanas[sem].dias++;}}
+            semanas[sem].last=d;
+          }
+          const jornadaSemMin=jornada*60;
+          const filas=semanas.map((s,i)=>{
+            if(!s) return '';
+            const extra=Math.max(0,s.min-jornadaSemMin);
+            const desc=Math.max(0,jornadaSemMin-s.min);
+            const bal=s.min-jornadaSemMin;
+            return `<tr style="border-bottom:1px solid var(--border);">
+              <td style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--muted);">Sem ${i+1}<br><span style="font-size:8px;">${s.label}–${s.last})</span></td>
+              <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;">${s.dias}d</td>
+              <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;font-weight:700;">${_m2hm(s.min)}</td>
+              <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;color:var(--muted);">${_m2hm(jornadaSemMin)}</td>
+              <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;color:${extra>0?'var(--green)':'var(--muted)'};">${extra>0?'+'+_m2hm(extra):'—'}</td>
+              <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;color:${desc>0?'var(--red)':'var(--muted)'};">${desc>0?'-'+_m2hm(desc):'—'}</td>
+              <td style="padding:4px 8px;font-size:11px;text-align:right;font-family:monospace;font-weight:800;color:${bal>=0?'var(--green)':'var(--red)'};">${bal>=0?'+':''}${_m2hm(bal)}</td>
+            </tr>`;
+          }).join('');
+          return filas?`<div style="margin-top:10px;">
+            <div class="fl" style="margin-bottom:6px;">📅 DESGLOSE POR SEMANA — Jornada: ${jornada}h/sem</div>
+            <div class="tw"><table style="width:100%;border-collapse:collapse;font-size:10px;">
+              <thead><tr style="background:var(--s3);">
+                <th style="padding:4px 8px;text-align:left;font-size:9px;color:var(--muted);">SEMANA</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--muted);">DÍAS</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--muted);">H. TRABAJADAS</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--muted);">H. NORMAL</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--green);">H. EXTRA</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--red);">H. DESC.</th>
+                <th style="padding:4px 8px;text-align:right;font-size:9px;color:var(--muted);">BALANCE</th>
+              </tr></thead>
+              <tbody>${filas}</tbody>
+            </table></div>
+          </div>`:'';
+        })()}
 
         ${yaGuardada?`<div class="info-box" style="border-color:var(--orange);color:var(--orange)">⚠️ Ya existe una tarjeta guardada para este trabajador en ${MESES_N[mes]} ${anio}. Al guardar se <b>reemplazará</b>.</div>`:''}
 
@@ -11367,7 +11524,13 @@ function tkAutoTrabSearch(val){
     window._tarj.depto=t.depto||'';
     window._tarj.diasData={};
     window._tarj.editId=null;
-    if(t.jornada) window._tarj.jornada=t.jornada;
+    // Usar jornada del contrato del trabajador; si no tiene, usar la legal del período
+    if(t.jornada && t.jornada>0 && t.jornada<=45){
+      window._tarj.jornada=t.jornada;
+    } else {
+      window._tarj.jornada=getHorasMaxSemana(anio,mes);
+    }
+    window._tarj.jornadaCustom=null;
   }
 
   // Actualizar campo nombre en tarjeta
@@ -12895,7 +13058,8 @@ function impDesdeHorarioSoloFaltantes(mes, anio){
 }
 
 function _guardarTarjetaDesdeHorario(t, mes, anio, dias){
-  const jornada=window._tarj.jornada||42;
+  // Usar jornada del contrato del trabajador; si no tiene, usar la legal del período
+  const jornada=t.jornada||window._tarj.jornada||getHorasMaxSemana(anio,mes);
   const {totalMin,diasTrab,extra,desc,jornadaMin}=_resumenTarjeta(dias,mes,anio,jornada);
   const obj={
     id:Date.now()+t.id, esTarjeta:true,
