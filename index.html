@@ -12030,6 +12030,36 @@ function tkExportarExcelIndividual(){
   }]);
 }
 
+// ── HELPER: calcular desglose semanal para PDF ────────────────────────────
+function _calcSemanasPDF(diasData, mes, anio, jornada){
+  const nDias=new Date(anio,mes,0).getDate();
+  const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const semanas=[], semMap={};
+  let semIdx=0;
+  for(let d=1;d<=nDias;d++){
+    const dt=new Date(anio,mes-1,d);
+    const dow=dt.getDay();
+    const diffALunes=dow===0?-6:1-dow;
+    const lunes=new Date(dt);
+    lunes.setDate(dt.getDate()+diffALunes);
+    const lunesKey=lunes.toISOString().slice(0,10);
+    if(semMap[lunesKey]===undefined){semMap[lunesKey]=semIdx;semanas[semIdx]={min:0,dias:0,primerDia:d,ultimoDia:d};semIdx++;}
+    semanas[semMap[lunesKey]].ultimoDia=d;
+    const r=diasData[d];
+    if(r){const m=_calcDia(r);if(m>0){semanas[semMap[lunesKey]].min+=m;semanas[semMap[lunesKey]].dias++;}}
+  }
+  const jornadaSemMin=jornada*60;
+  return semanas.map((s,i)=>{
+    const extra=Math.max(0,s.min-jornadaSemMin);
+    const desc=Math.max(0,jornadaSemMin-s.min);
+    const bal=s.min-jornadaSemMin;
+    const pNom=DIAS_S[new Date(anio,mes-1,s.primerDia).getDay()];
+    const uNom=DIAS_S[new Date(anio,mes-1,s.ultimoDia).getDay()];
+    return {idx:i+1,label:`Sem ${i+1} · ${pNom} ${s.primerDia} – ${uNom} ${s.ultimoDia}`,
+      dias:s.dias,min:s.min,jornadaSemMin,extra,desc,bal};
+  });
+}
+
 // ── GENERAR HTML PARA TARJETA INDIVIDUAL ─────────────────────────────
 function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -12093,6 +12123,32 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
     <div class="res-item"><div class="res-lbl">HRS EXTRA</div><div class="res-val green">+${_m2hm(extra)}</div></div>
     <div class="res-item"><div class="res-lbl">HRS DESCONTAR</div><div class="res-val red">-${_m2hm(desc)}</div></div>
     <div class="res-item"><div class="res-lbl">BALANCE FINAL</div><div class="res-val ${balance>=0?'green':'red'}">${balance>=0?'+':''}${_m2hm(balance)}</div></div>
+  </div>
+  <div style="margin-top:14px;">
+    <div style="font-size:10px;font-weight:700;color:#1a2538;letter-spacing:.5px;margin-bottom:6px;border-bottom:2px solid #1a2538;padding-bottom:4px;">📅 DESGLOSE POR SEMANA — Jornada: ${jornada}h/sem</div>
+    <table style="width:100%;border-collapse:collapse;font-size:10px;">
+      <thead><tr style="background:#253347;color:#a8c0d8;">
+        <th style="padding:5px 7px;text-align:left;">SEMANA</th>
+        <th style="padding:5px 7px;text-align:right;">DÍAS</th>
+        <th style="padding:5px 7px;text-align:right;">H. TRABAJADAS</th>
+        <th style="padding:5px 7px;text-align:right;">H. NORMAL</th>
+        <th style="padding:5px 7px;text-align:right;color:#20b86a;">H. EXTRA</th>
+        <th style="padding:5px 7px;text-align:right;color:#e83c3c;">H. DESC.</th>
+        <th style="padding:5px 7px;text-align:right;">BALANCE</th>
+      </tr></thead>
+      <tbody>
+        ${_calcSemanasPDF(diasData,mes,anio,jornada).map(s=>`
+        <tr style="border-bottom:1px solid #eee;">
+          <td style="padding:4px 7px;font-size:9px;color:#555;">${s.label}</td>
+          <td style="padding:4px 7px;text-align:right;">${s.dias}d</td>
+          <td style="padding:4px 7px;text-align:right;font-weight:700;color:#4a8ff5;">${_m2hm(s.min)}</td>
+          <td style="padding:4px 7px;text-align:right;color:#888;">${_m2hm(s.jornadaSemMin)}</td>
+          <td style="padding:4px 7px;text-align:right;color:${s.extra>0?'#20b86a':'#aaa'};font-weight:${s.extra>0?'700':'400'};">${s.extra>0?'+'+_m2hm(s.extra):'—'}</td>
+          <td style="padding:4px 7px;text-align:right;color:${s.desc>0?'#e83c3c':'#aaa'};font-weight:${s.desc>0?'700':'400'};">${s.desc>0?'-'+_m2hm(s.desc):'—'}</td>
+          <td style="padding:4px 7px;text-align:right;font-weight:800;color:${s.bal>=0?'#20b86a':'#e83c3c'};">${s.bal>=0?'+':''}${_m2hm(s.bal)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
   </div>
   <div style="display:flex;gap:8px;margin-top:16px;justify-content:center;">
     <button onclick="window.print()" style="padding:8px 18px;background:#c8a84b;border:none;border-radius:6px;font-weight:700;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>
@@ -12329,6 +12385,32 @@ function tkExportarPDFMasivo(){
         <div class="res-box"><div class="res-l">HRS EXTRA</div><div class="res-v green">+${_m2hm(t.extra)}</div></div>
         <div class="res-box"><div class="res-l">HRS DESCONTAR</div><div class="res-v red">-${_m2hm(t.desc)}</div></div>
         <div class="res-box"><div class="res-l">BALANCE FINAL</div><div class="res-v ${bal>=0?'green':'red'}">${bal>=0?'+':''}${_m2hm(bal)}</div></div>
+      </div>
+      <div style="margin-top:10px;">
+        <div style="font-size:9px;font-weight:700;color:#1a2538;letter-spacing:.5px;margin-bottom:5px;border-bottom:1px solid #1a2538;padding-bottom:3px;">📅 DESGLOSE POR SEMANA — Jornada: ${t.jornada}h/sem</div>
+        <table style="width:100%;border-collapse:collapse;font-size:9px;">
+          <thead><tr style="background:#253347;color:#a8c0d8;">
+            <th style="padding:3px 6px;text-align:left;">SEMANA</th>
+            <th style="padding:3px 6px;text-align:right;">DÍAS</th>
+            <th style="padding:3px 6px;text-align:right;">H. TRABAJADAS</th>
+            <th style="padding:3px 6px;text-align:right;">H. NORMAL</th>
+            <th style="padding:3px 6px;text-align:right;color:#20b86a;">H. EXTRA</th>
+            <th style="padding:3px 6px;text-align:right;color:#e83c3c;">H. DESC.</th>
+            <th style="padding:3px 6px;text-align:right;">BALANCE</th>
+          </tr></thead>
+          <tbody>
+            ${_calcSemanasPDF(t.diasData||{},t.mes,t.anio,t.jornada).map(s=>`
+            <tr style="border-bottom:1px solid #f0f0f0;">
+              <td style="padding:3px 6px;color:#555;">${s.label}</td>
+              <td style="padding:3px 6px;text-align:right;">${s.dias}d</td>
+              <td style="padding:3px 6px;text-align:right;font-weight:700;color:#4a8ff5;">${_m2hm(s.min)}</td>
+              <td style="padding:3px 6px;text-align:right;color:#888;">${_m2hm(s.jornadaSemMin)}</td>
+              <td style="padding:3px 6px;text-align:right;color:${s.extra>0?'#20b86a':'#aaa'};font-weight:${s.extra>0?'700':'400'};">${s.extra>0?'+'+_m2hm(s.extra):'—'}</td>
+              <td style="padding:3px 6px;text-align:right;color:${s.desc>0?'#e83c3c':'#aaa'};font-weight:${s.desc>0?'700':'400'};">${s.desc>0?'-'+_m2hm(s.desc):'—'}</td>
+              <td style="padding:3px 6px;text-align:right;font-weight:800;color:${s.bal>=0?'#20b86a':'#e83c3c'};">${s.bal>=0?'+':''}${_m2hm(s.bal)}</td>
+            </tr>`).join('')}
+          </tbody>
+        </table>
       </div>
     </div>`;
   }).join('');
