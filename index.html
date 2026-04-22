@@ -11287,22 +11287,45 @@ function _rTarjeta(){
         <!-- RESUMEN POR SEMANA -->
         ${(()=>{
           const nDias=new Date(anio,mes,0).getDate();
+          // Agrupar por semana real del calendario: semana empieza el Lunes
+          // Cada día se asigna a la semana según su Lunes de inicio
           const semanas=[];
+          const semMap={};
+          let semIdx=0;
           for(let d=1;d<=nDias;d++){
-            const sem=Math.ceil(d/7)-1;
-            if(!semanas[sem]) semanas[sem]={min:0,dias:0,label:`Sem ${sem+1} (${d}`};
+            const dt=new Date(anio,mes-1,d);
+            const dow=dt.getDay(); // 0=Dom,1=Lun,...,6=Sab
+            // Lunes de la semana a la que pertenece este día
+            const diffALunes=dow===0?-6:1-dow; // días hasta el lunes anterior/actual
+            const lunes=new Date(dt);
+            lunes.setDate(dt.getDate()+diffALunes);
+            const lunesKey=lunes.toISOString().slice(0,10);
+            if(semMap[lunesKey]===undefined){
+              semMap[lunesKey]=semIdx;
+              semanas[semIdx]={min:0,dias:0,primerDia:d,ultimoDia:d,lunesKey};
+              semIdx++;
+            }
+            const si=semMap[lunesKey];
+            semanas[si].ultimoDia=d;
             const r=st.diasData[d];
-            if(r){const m=_calcDia(r);if(m>0){semanas[sem].min+=m;semanas[sem].dias++;}}
-            semanas[sem].last=d;
+            if(r){const m=_calcDia(r);if(m>0){semanas[si].min+=m;semanas[si].dias++;}}
           }
-          const jornadaSemMin=jornada*60;
+          // Jornada normal por semana — proporcional a días de esa semana en el mes
+          const DIAS_SEM_LABELS=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
           const filas=semanas.map((s,i)=>{
             if(!s) return '';
+            // Calcular días laborables de esa semana (Lun-Sab según jornada)
+            // Para H.NORMAL usamos jornada completa semanal
+            const jornadaSemMin=jornada*60;
             const extra=Math.max(0,s.min-jornadaSemMin);
             const desc=Math.max(0,jornadaSemMin-s.min);
             const bal=s.min-jornadaSemMin;
+            const primerDt=new Date(anio,mes-1,s.primerDia);
+            const ultimoDt=new Date(anio,mes-1,s.ultimoDia);
+            const nomPrim=DIAS_SEM_LABELS[primerDt.getDay()];
+            const nomUlt=DIAS_SEM_LABELS[ultimoDt.getDay()];
             return `<tr style="border-bottom:1px solid var(--border);">
-              <td style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--muted);">Sem ${i+1}<br><span style="font-size:8px;">${s.label}–${s.last})</span></td>
+              <td style="padding:4px 8px;font-size:10px;font-weight:600;color:var(--muted);">Sem ${i+1}<br><span style="font-size:8px;">${nomPrim} ${s.primerDia} – ${nomUlt} ${s.ultimoDia}</span></td>
               <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;">${s.dias}d</td>
               <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;font-weight:700;">${_m2hm(s.min)}</td>
               <td style="padding:4px 8px;font-size:10px;text-align:right;font-family:monospace;color:var(--muted);">${_m2hm(jornadaSemMin)}</td>
