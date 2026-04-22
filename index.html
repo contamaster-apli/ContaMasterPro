@@ -11933,13 +11933,19 @@ function tkExportarExcel(){
   const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
   if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
   const aoa=[
     [`CONSOLIDADO ASISTENCIA — ${MESES_N[st.mes]} ${st.anio}`],
     [],
     ['Nº','NOMBRE','DEPTO','JORNADA(h)','DÍAS TRAB.','H.TRABAJADAS','H.NORMALES','H.EXTRA','H.DESCONTAR','BALANCE','AUSENCIAS'],
     ...tarjetas.map(t=>{
-      const bal=t.totalMin-t.jornadaMin;
-      return [t.num||'',t.nombre,t.depto||'',t.jornada,t.diasTrab,_m2hm(t.totalMin),_m2hm(t.jornadaMin),_m2hm(t.extra),_m2hm(t.desc),(bal>=0?'+':'')+_m2hm(bal),t.ausencias||0];
+      const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
+      const jornadaMin=jornadaReal*4*60;
+      const extra=Math.max(0,t.totalMin-jornadaMin);
+      const desc=Math.max(0,jornadaMin-t.totalMin);
+      const bal=t.totalMin-jornadaMin;
+      return [t.num||'',t.nombre,t.depto||'',jornadaReal,t.diasTrab,_m2hm(t.totalMin),_m2hm(jornadaMin),_m2hm(extra),_m2hm(desc),(bal>=0?'+':'')+_m2hm(bal),t.ausencias||0];
     })
   ];
   modXLSX(`Asistencia_${MESES_N[st.mes]}_${st.anio}`,[{
@@ -12176,9 +12182,19 @@ function tkExportarPDFConsolidado(){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
   if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
-  const totalExtra=tarjetas.reduce((s,t)=>s+t.extra,0);
-  const totalDesc=tarjetas.reduce((s,t)=>s+t.desc,0);
-  let filas=tarjetas.map(t=>{
+  // Usar jornada real del trabajador
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+  const tarjetasCalc=tarjetas.map(t=>{
+    const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
+    const jornadaMin=jornadaReal*4*60;
+    const extra=Math.max(0,t.totalMin-jornadaMin);
+    const desc=Math.max(0,jornadaMin-t.totalMin);
+    return {...t,jornada:jornadaReal,jornadaMin,extra,desc};
+  });
+  const totalExtra=tarjetasCalc.reduce((s,t)=>s+t.extra,0);
+  const totalDesc=tarjetasCalc.reduce((s,t)=>s+t.desc,0);
+  let filas=tarjetasCalc.map(t=>{
     const bal=t.totalMin-t.jornadaMin;
     const estado=t.extra>60?'⏱ EXTRA':t.desc>60?'⚠️ DESC.':'✅ OK';
     return `<tr>
@@ -12308,11 +12324,24 @@ function tkExportarPDFMasivo(){
   const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
   if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
 
-  const totalExtra=tarjetas.reduce((s,t)=>s+t.extra,0);
-  const totalDesc=tarjetas.reduce((s,t)=>s+t.desc,0);
+  // Mapa jornada real del trabajador — siempre usar la ficha, no la tarjeta
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+
+  // Enriquecer cada tarjeta con jornada real y recalcular totales
+  const tarjetasCalc=tarjetas.map(t=>{
+    const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
+    const jornadaMin=jornadaReal*4*60;
+    const extra=Math.max(0,t.totalMin-jornadaMin);
+    const desc=Math.max(0,jornadaMin-t.totalMin);
+    return {...t, jornada:jornadaReal, jornadaMin, extra, desc};
+  });
+
+  const totalExtra=tarjetasCalc.reduce((s,t)=>s+t.extra,0);
+  const totalDesc=tarjetasCalc.reduce((s,t)=>s+t.desc,0);
 
   // Página 1: portada + resumen consolidado
-  const filasCons=tarjetas.map(t=>{
+  const filasCons=tarjetasCalc.map(t=>{
     const bal=t.totalMin-t.jornadaMin;
     const est=t.extra>60?'<span style="color:#18b5a0;font-weight:700">⏱ EXTRA</span>':t.desc>60?'<span style="color:#f07d32;font-weight:700">⚠️ DESC.</span>':'<span style="color:#20b86a">✅ OK</span>';
     return `<tr style="background:${t.desc>60?'#fff8f0':t.extra>60?'#f0fff8':''}">
@@ -12331,7 +12360,7 @@ function tkExportarPDFMasivo(){
   }).join('');
 
   // Una sección por trabajador con tabla de días
-  const seccionesTarjetas=tarjetas.map(t=>{
+  const seccionesTarjetas=tarjetasCalc.map(t=>{
     const diasData=t.diasData||{};
     const numDias=new Date(t.anio,t.mes,0).getDate();
     const bal=t.totalMin-t.jornadaMin;
