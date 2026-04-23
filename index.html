@@ -11028,6 +11028,33 @@ function generarHorario4x4(trabajadorId, jornadaId, mes, anio, offsetDia){
 
 // Estado global módulo asistencia v2
 window._trab = window._trab || { sub: 'lista', importLog: null };
+
+// Campos de importación de trabajadores con sinónimos para autodetección
+window.IMP_CAMPOS = window.IMP_CAMPOS || [
+  {key:'rut',      label:'RUT',               oblig:true,  sinon:['RUT','R.U.T','RUT *','RUN','RUN *']},
+  {key:'nombre',   label:'Nombre(s)',          oblig:true,  sinon:['NOMBRE(S)','NOMBRE(S) *','NOMBRE','NOMBRES','NOMBRE DE PILA']},
+  {key:'apPat',    label:'Apellido Paterno',   oblig:true,  sinon:['APELLIDO PATERNO','APELLIDO PATERNO *','AP. PATERNO','PATERNO','PRIMER APELLIDO']},
+  {key:'apMat',    label:'Apellido Materno',   oblig:false, sinon:['APELLIDO MATERNO','AP. MATERNO','MATERNO','SEGUNDO APELLIDO']},
+  {key:'cargo',    label:'Cargo',              oblig:false, sinon:['CARGO','CARGO *','PUESTO','FUNCION','FUNCIÓN','OCUPACION','OCUPACIÓN']},
+  {key:'depto',    label:'Departamento',       oblig:false, sinon:['DEPARTAMENTO','DEPARTAMENTO *','DEPTO','ÁREA','AREA','SECCIÓN','SECCION','COD. DEPTO.']},
+  {key:'fi',       label:'Fecha Ingreso',      oblig:false, sinon:['FECHA INGRESO','FECHA INGRESO *','F. INGRESO','F.INGRESO','INGRESO','FECHA DE INGRESO']},
+  {key:'ft',       label:'Fecha Término',      oblig:false, sinon:['FECHA TÉRMINO','FECHA TERMINO','F. TÉRMINO','F.TERMINO','TERMINO','FECHA TÉRMINO']},
+  {key:'estado',   label:'Estado',             oblig:false, sinon:['ESTADO','ESTADO *','SITUACION','SITUACIÓN']},
+  {key:'contrato', label:'Tipo Contrato',      oblig:false, sinon:['TIPO CONTRATO','TIPO CONTRATO *','CONTRATO','TIPO DE CONTRATO']},
+  {key:'jornada',  label:'Hrs Semanales',      oblig:false, sinon:['HRS SEMANALES','HRS SEMANALES *','HORAS SEMANALES','HORAS/SEMANA','HRS/SEM','JORNADA']},
+  {key:'tJornada', label:'Tipo Jornada',       oblig:false, sinon:['TIPO JORNADA','TIPO DE JORNADA','JORNADA TIPO']},
+  {key:'sb',       label:'Sueldo Base ($)',    oblig:false, sinon:['SUELDO BASE ($)','SUELDO BASE ($) *','SUELDO BASE','SUELDO','REMUNERACION','REMUNERACIÓN']},
+  {key:'gratif',   label:'Gratificación',      oblig:false, sinon:['GRATIFICACION','GRATIFICACIÓN','GRATIF','GRATI']},
+  {key:'afp',      label:'AFP',                oblig:false, sinon:['AFP','AFP *','PREVISION','PREVISIÓN']},
+  {key:'salud',    label:'Isapre/Fonasa',       oblig:false, sinon:['ISAPRE / FONASA','ISAPRE / FONASA *','ISAPRE','FONASA','SALUD','PLAN DE SALUD']},
+  {key:'semCor',   label:'Semana Corrida',     oblig:false, sinon:['SEMANA CORRIDA','SEMANA CORRIDA *','SEM. CORRIDA','SEMCORRIDA']},
+  {key:'ajusteSB', label:'Ajuste Sueldo Base', oblig:false, sinon:['AJUSTE SUELDO BASE','AJUSTE SB','AJUSTE']},
+  {key:'banco',    label:'Banco',              oblig:false, sinon:['BANCO']},
+  {key:'tipoCta',  label:'Tipo Cuenta',        oblig:false, sinon:['TIPO CUENTA','TIPO DE CUENTA','TIPO CTA']},
+  {key:'numCta',   label:'Nro. Cuenta',        oblig:false, sinon:['NRO. CUENTA','NRO CUENTA','NUMERO CUENTA','NÚMERO CUENTA','N° CUENTA']},
+  {key:'num',      label:'Código Interno',     oblig:false, sinon:['CÓDIGO INTERNO','CODIGO INTERNO','COD. INTERNO','N° TARJETA','NUMERO']},
+  {key:'obs',      label:'Observaciones',      oblig:false, sinon:['OBSERVACIONES','OBSERVACION','OBS']},
+];
 window._tarj = window._tarj || {
   sub: 'tarjeta',   // 'tarjeta' | 'consolidado' | 'config'
   trabId: null,
