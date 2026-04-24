@@ -1776,7 +1776,7 @@ function _rTrabListaGT(){
 function _rTrabJornadas(){
   const trabs=DB().trabajadores||[];
   if(!trabs.length) return `<div class="empty"><div class="ei">👥</div><div class="et">Sin trabajadores registrados.</div></div>`;
-  const opciones=[44,42,40,30,20];
+  const opciones=[44,42,40,30,20,10];
   return `<div class="card-body">
     <div class="info-box" style="margin-bottom:12px;">
       ⚡ <b>Asignación masiva de jornada.</b> Marca los trabajadores con el checkbox y asígnales la jornada en grupo.
@@ -2510,7 +2510,8 @@ function openAddTrab(id){
           <option value="40" ${jornadaActual==40?'selected':''}>40h — Jornada completa (desde 26 Abr 2028)</option>
           <option value="30" ${jornadaActual==30?'selected':''}>30h — Jornada parcial 3/4</option>
           <option value="20" ${jornadaActual==20?'selected':''}>20h — Media jornada</option>
-          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?'selected':''}>Otra (especificar)</option>
+          <option value="10" ${jornadaActual==10?'selected':''}>10h — Jornada parcial</option>
+          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20&&jornadaActual!=10)?'selected':''}>Otra (especificar)</option>
         </select>
         <input class="fi" type="number" id="f_jornada_custom" placeholder="Ej: 35" min="1" max="45"
           value="${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?jornadaActual:''}"
@@ -11317,11 +11318,11 @@ function _rTarjeta(){
               const legal=getHorasMaxSemana(st.anio,st.mes);
               const trab=DB().trabajadores.find(t=>t.id===st.trabId);
               const jContrato=trab&&trab.jornada?trab.jornada:null;
-              const opciones=[...new Set([legal,42,44,30,20].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
+              const opciones=[...new Set([legal,42,44,30,20,10].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
               return opciones.map(h=>{
                 const esContrato=h===jContrato;
                 const esLegal=h===legal;
-                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':'';
+                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':h===10?'Parcial':'';
                 return `<button class="btn sm ${jornada===h?'cyan':'secondary'}" onclick="tkSetJornada(${h},null)">${h}h <span style="font-size:9px;opacity:.7">${etiq}</span></button>`;
               }).join('');
             })()}
@@ -12475,9 +12476,8 @@ function tkExportarPDFDias(diasSel){
     const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
     const diasData=t.diasData||{};
 
-    // Calcular totales y contar días trabajados de los días seleccionados
+    // Calcular totales solo de los días seleccionados
     let totalMinSel=0;
-    let diasTrabSel=0;
     const celdasDias=diasSel.map(d=>{
       const r=diasData[d];
       if(!r||(! r.amIn&&!r.pmIn&&!r.otIn)){
@@ -12485,7 +12485,6 @@ function tkExportarPDFDias(diasSel){
       }
       const min=_calcDia(r);
       totalMinSel+=min;
-      diasTrabSel++;
       const hhmm=_m2hm(min);
       const dt=new Date(st.anio,st.mes-1,d);
       const esFinde=dt.getDay()===0||dt.getDay()===6;
@@ -12495,19 +12494,14 @@ function tkExportarPDFDias(diasSel){
       </td>`;
     }).join('');
 
-    // Color DÍAS TRAB.: solo alerta en rojo/amarillo para jornada 44h (ellos tienen domingos libres obligatorios)
-    // 20h y 30h trabajan domingos normalmente, no se alertan
-    const esJornadaCompleta=jornadaReal>=40;
-    const colorDias=esJornadaCompleta?(diasTrabSel===diasSel.length?'#e83c3c':diasTrabSel>=2?'#f5a623':'#20b86a'):'#888';
-    return {diasTrabSel, html:`<tr style="border-bottom:1px solid #eee;">
+    return `<tr style="border-bottom:1px solid #eee;">
       <td style="padding:5px 8px;font-weight:700;font-size:10px;white-space:nowrap;">${t.nombre}</td>
       <td style="padding:5px 8px;font-size:9px;color:#888;">${t.depto||'—'}</td>
       <td style="padding:5px 8px;text-align:center;font-size:9px;">${jornadaReal}h</td>
       ${celdasDias}
       <td style="padding:5px 8px;text-align:right;font-weight:800;font-size:11px;color:#4a8ff5;">${_m2hm(totalMinSel)}</td>
-      <td style="padding:5px 8px;text-align:center;font-weight:800;font-size:11px;color:${colorDias};">${diasTrabSel}/${diasSel.length}</td>
-    </tr>`};
-  }).sort((a,b)=>b.diasTrabSel-a.diasTrabSel).map(x=>x.html).join('');
+    </tr>`;
+  }).join('');
 
   const totalMinGlobal=trabsFiltrados.reduce((s,t)=>{
     return s+diasSel.reduce((ss,d)=>{
@@ -12551,7 +12545,6 @@ function tkExportarPDFDias(diasSel){
       <th>JORN.</th>
       ${filasDias}
       <th style="text-align:right;min-width:70px;">TOTAL HRS</th>
-      <th style="text-align:center;min-width:60px;">DÍAS TRAB.</th>
     </tr></thead>
     <tbody>${seccionesTrabs}</tbody>
   </table>
