@@ -1791,11 +1791,6 @@ function _rTrabJornadas(){
       ${opciones.map(h=>`<button class="btn sm cyan" onclick="asignarJornadaSeleccionados(${h})">${h}h sel.</button>`).join('')}
       <span style="font-size:9px;color:var(--muted);margin-left:4px;" id="tj_sel_count">0 seleccionados</span>
     </div>
-    <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">
-      <input type="text" id="tj_buscar" placeholder="🔍 Buscar trabajador por nombre..." oninput="tjFiltrarNombre(this.value)"
-        style="flex:1;padding:7px 12px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--s2);color:var(--text);">
-      <button class="btn sm secondary" onclick="document.getElementById('tj_buscar').value='';tjFiltrarNombre('')">✕</button>
-    </div>
     <div class="tw"><table class="tbl">
       <thead><tr>
         <th style="width:30px;text-align:center;">
@@ -1836,14 +1831,6 @@ function _rTrabJornadas(){
       <button class="btn secondary" onclick="window._trab.sub='lista';go('trab')">← Volver a lista</button>
     </div>
   </div>`;
-}
-
-function tjFiltrarNombre(q){
-  const texto=q.toLowerCase().trim();
-  document.querySelectorAll('#trab_jornadas_tbody tr').forEach(tr=>{
-    const nombre=tr.querySelector('td:nth-child(3)')?.textContent?.toLowerCase()||'';
-    tr.style.display=(!texto||nombre.includes(texto))?'':'none';
-  });
 }
 
 function tjSelAll(checked){
@@ -12581,9 +12568,9 @@ function tkExportarPDFMasivo(){
     <input type="radio" name="jfiltro" value="${j.v}" ${j.v===''?'checked':''} style="accent-color:var(--acc);">
     <span style="font-size:13px;">${j.l}</span>
   </label>`).join('');
-  document.getElementById('addModalTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
-  document.getElementById('addModalBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
-  document.getElementById('addModalOk').onclick=()=>{
+  document.getElementById('addTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
+  document.getElementById('addBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
+  document.getElementById('addOk').onclick=()=>{
     const sel=document.querySelector('input[name="jfiltro"]:checked');
     const filtro=sel?sel.value:'';
     closeModal('addModal');
