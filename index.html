@@ -12475,8 +12475,9 @@ function tkExportarPDFDias(diasSel){
     const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
     const diasData=t.diasData||{};
 
-    // Calcular totales solo de los días seleccionados
+    // Calcular totales y contar días trabajados de los días seleccionados
     let totalMinSel=0;
+    let diasTrabSel=0;
     const celdasDias=diasSel.map(d=>{
       const r=diasData[d];
       if(!r||(! r.amIn&&!r.pmIn&&!r.otIn)){
@@ -12484,6 +12485,7 @@ function tkExportarPDFDias(diasSel){
       }
       const min=_calcDia(r);
       totalMinSel+=min;
+      diasTrabSel++;
       const hhmm=_m2hm(min);
       const dt=new Date(st.anio,st.mes-1,d);
       const esFinde=dt.getDay()===0||dt.getDay()===6;
@@ -12493,14 +12495,19 @@ function tkExportarPDFDias(diasSel){
       </td>`;
     }).join('');
 
-    return `<tr style="border-bottom:1px solid #eee;">
+    // Color DÍAS TRAB.: solo alerta en rojo/amarillo para jornada 44h (ellos tienen domingos libres obligatorios)
+    // 20h y 30h trabajan domingos normalmente, no se alertan
+    const esJornadaCompleta=jornadaReal>=40;
+    const colorDias=esJornadaCompleta?(diasTrabSel===diasSel.length?'#e83c3c':diasTrabSel>=2?'#f5a623':'#20b86a'):'#888';
+    return {diasTrabSel, html:`<tr style="border-bottom:1px solid #eee;">
       <td style="padding:5px 8px;font-weight:700;font-size:10px;white-space:nowrap;">${t.nombre}</td>
       <td style="padding:5px 8px;font-size:9px;color:#888;">${t.depto||'—'}</td>
       <td style="padding:5px 8px;text-align:center;font-size:9px;">${jornadaReal}h</td>
       ${celdasDias}
       <td style="padding:5px 8px;text-align:right;font-weight:800;font-size:11px;color:#4a8ff5;">${_m2hm(totalMinSel)}</td>
-    </tr>`;
-  }).join('');
+      <td style="padding:5px 8px;text-align:center;font-weight:800;font-size:11px;color:${colorDias};">${diasTrabSel}/${diasSel.length}</td>
+    </tr>`};
+  }).sort((a,b)=>b.diasTrabSel-a.diasTrabSel).map(x=>x.html).join('');
 
   const totalMinGlobal=trabsFiltrados.reduce((s,t)=>{
     return s+diasSel.reduce((ss,d)=>{
@@ -12544,6 +12551,7 @@ function tkExportarPDFDias(diasSel){
       <th>JORN.</th>
       ${filasDias}
       <th style="text-align:right;min-width:70px;">TOTAL HRS</th>
+      <th style="text-align:center;min-width:60px;">DÍAS TRAB.</th>
     </tr></thead>
     <tbody>${seccionesTrabs}</tbody>
   </table>
