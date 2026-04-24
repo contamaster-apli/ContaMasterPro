@@ -1776,7 +1776,7 @@ function _rTrabListaGT(){
 function _rTrabJornadas(){
   const trabs=DB().trabajadores||[];
   if(!trabs.length) return `<div class="empty"><div class="ei">👥</div><div class="et">Sin trabajadores registrados.</div></div>`;
-  const opciones=[44,42,40,30,20,10];
+  const opciones=[44,42,40,30,20];
   return `<div class="card-body">
     <div class="info-box" style="margin-bottom:12px;">
       ⚡ <b>Asignación masiva de jornada.</b> Marca los trabajadores con el checkbox y asígnales la jornada en grupo.
@@ -2510,8 +2510,7 @@ function openAddTrab(id){
           <option value="40" ${jornadaActual==40?'selected':''}>40h — Jornada completa (desde 26 Abr 2028)</option>
           <option value="30" ${jornadaActual==30?'selected':''}>30h — Jornada parcial 3/4</option>
           <option value="20" ${jornadaActual==20?'selected':''}>20h — Media jornada</option>
-          <option value="10" ${jornadaActual==10?'selected':''}>10h — Jornada parcial</option>
-          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20&&jornadaActual!=10)?'selected':''}>Otra (especificar)</option>
+          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?'selected':''}>Otra (especificar)</option>
         </select>
         <input class="fi" type="number" id="f_jornada_custom" placeholder="Ej: 35" min="1" max="45"
           value="${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?jornadaActual:''}"
@@ -11318,11 +11317,11 @@ function _rTarjeta(){
               const legal=getHorasMaxSemana(st.anio,st.mes);
               const trab=DB().trabajadores.find(t=>t.id===st.trabId);
               const jContrato=trab&&trab.jornada?trab.jornada:null;
-              const opciones=[...new Set([legal,42,44,30,20,10].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
+              const opciones=[...new Set([legal,42,44,30,20].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
               return opciones.map(h=>{
                 const esContrato=h===jContrato;
                 const esLegal=h===legal;
-                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':h===10?'Parcial':'';
+                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':'';
                 return `<button class="btn sm ${jornada===h?'cyan':'secondary'}" onclick="tkSetJornada(${h},null)">${h}h <span style="font-size:9px;opacity:.7">${etiq}</span></button>`;
               }).join('');
             })()}
@@ -12563,15 +12562,38 @@ function tkExportarPDFDias(diasSel){
 }
 
 function tkExportarPDFMasivo(){
+  // Modal de selección de jornada antes de generar
+  const jornadas=[{v:'',l:'Todas las jornadas'},{v:44,l:'44h — Jornada completa'},{v:42,l:'42h — Jornada completa'},{v:40,l:'40h — Jornada completa'},{v:30,l:'30h — Jornada parcial 3/4'},{v:20,l:'20h — Media jornada'},{v:10,l:'10h — Jornada parcial'}];
+  const opts=jornadas.map(j=>`<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border2);background:var(--s2);">
+    <input type="radio" name="jfiltro" value="${j.v}" ${j.v===''?'checked':''} style="accent-color:var(--acc);">
+    <span style="font-size:13px;">${j.l}</span>
+  </label>`).join('');
+  document.getElementById('addModalTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
+  document.getElementById('addModalBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
+  document.getElementById('addModalOk').onclick=()=>{
+    const sel=document.querySelector('input[name="jfiltro"]:checked');
+    const filtro=sel?sel.value:'';
+    closeModal('addModal');
+    _tkExportarPDFMasivoFiltrado(filtro===''?null:Number(filtro));
+  };
+  openModal('addModal');
+}
+
+function _tkExportarPDFMasivoFiltrado(jornadaFiltro){
   const st=window._tarj;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
-  if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
 
   // Mapa jornada real del trabajador — siempre usar la ficha, no la tarjeta
   const trabMap={};
   (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+
+  const tarjetasBase=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
+  if(!tarjetasBase.length){toast('Sin tarjetas para exportar','err');return;}
+  const tarjetas=jornadaFiltro?tarjetasBase.filter(t=>(trabMap[t.trabajadorId]||t.jornada||44)===jornadaFiltro):tarjetasBase;
+  if(!tarjetas.length){toast(`Sin tarjetas para jornada ${jornadaFiltro}h`,'warn');return;}
+
+  const filtroLabel=jornadaFiltro?` · Jornada ${jornadaFiltro}h`:'';
 
   // Enriquecer cada tarjeta con jornada real y recalcular totales
   const tarjetasCalc=tarjetas.map(t=>{
@@ -12687,7 +12709,7 @@ function tkExportarPDFMasivo(){
   }).join('');
 
   const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Tarjetas Masivas — ${MESES_N[st.mes]} ${st.anio}</title>
+  <title>Tarjetas Masivas — ${MESES_N[st.mes]} ${st.anio}${filtroLabel}</title>
   <style>
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Segoe UI',Arial,sans-serif;color:#111;background:#fff;font-size:11px;}
@@ -12731,7 +12753,7 @@ function tkExportarPDFMasivo(){
   <div class="portada">
     <h1>📋 CONTROL DE ASISTENCIA — EXPORTACIÓN MASIVA</h1>
     <div class="sub">Empresa: ${(DB().cfg&&DB().cfg.emp)||'—'} &nbsp;·&nbsp; Generado: ${new Date().toLocaleDateString('es-CL')}</div>
-    <div class="periodo">📅 ${MESES_N[st.mes]} ${st.anio} &nbsp;·&nbsp; ${tarjetas.length} trabajadores</div>
+    <div class="periodo">📅 ${MESES_N[st.mes]} ${st.anio} &nbsp;·&nbsp; ${tarjetas.length} trabajadores${filtroLabel}</div>
   </div>
   <div style="padding:16px 24px;">
     <div style="font-size:11px;font-weight:800;color:#1a2538;letter-spacing:1px;margin-bottom:8px;">📊 RESUMEN CONSOLIDADO</div>
@@ -12765,7 +12787,7 @@ function tkExportarPDFMasivo(){
   const win=window.open('','_blank','width=1100,height=750');
   if(win){win.document.write(html);win.document.close();}
   else toast('Permite ventanas emergentes para exportar','warn');
-  toast(`✅ PDF masivo generado · ${tarjetas.length} tarjetas`,'ok');
+  toast(`✅ PDF masivo generado · ${tarjetas.length} tarjetas${filtroLabel}`,'ok');
 }
 
 // ════════════════════════════════════════════════════════════════════
