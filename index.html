@@ -1776,7 +1776,7 @@ function _rTrabListaGT(){
 function _rTrabJornadas(){
   const trabs=DB().trabajadores||[];
   if(!trabs.length) return `<div class="empty"><div class="ei">👥</div><div class="et">Sin trabajadores registrados.</div></div>`;
-  const opciones=[44,42,40,30,20,10];
+  const opciones=[44,42,40,30,20];
   return `<div class="card-body">
     <div class="info-box" style="margin-bottom:12px;">
       ⚡ <b>Asignación masiva de jornada.</b> Marca los trabajadores con el checkbox y asígnales la jornada en grupo.
@@ -1790,6 +1790,11 @@ function _rTrabJornadas(){
       <span style="font-size:10px;color:var(--acc);font-weight:700;">Asignar a <b>seleccionados</b>:</span>
       ${opciones.map(h=>`<button class="btn sm cyan" onclick="asignarJornadaSeleccionados(${h})">${h}h sel.</button>`).join('')}
       <span style="font-size:9px;color:var(--muted);margin-left:4px;" id="tj_sel_count">0 seleccionados</span>
+    </div>
+    <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">
+      <input type="text" id="tj_buscar" placeholder="🔍 Buscar trabajador por nombre..." oninput="tjFiltrarNombre(this.value)"
+        style="flex:1;padding:7px 12px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--s2);color:var(--text);">
+      <button class="btn sm secondary" onclick="document.getElementById('tj_buscar').value='';tjFiltrarNombre('')">✕</button>
     </div>
     <div class="tw"><table class="tbl">
       <thead><tr>
@@ -1831,6 +1836,14 @@ function _rTrabJornadas(){
       <button class="btn secondary" onclick="window._trab.sub='lista';go('trab')">← Volver a lista</button>
     </div>
   </div>`;
+}
+
+function tjFiltrarNombre(q){
+  const texto=q.toLowerCase().trim();
+  document.querySelectorAll('#trab_jornadas_tbody tr').forEach(tr=>{
+    const nombre=tr.querySelector('td:nth-child(3)')?.textContent?.toLowerCase()||'';
+    tr.style.display=(!texto||nombre.includes(texto))?'':'none';
+  });
 }
 
 function tjSelAll(checked){
@@ -2510,8 +2523,7 @@ function openAddTrab(id){
           <option value="40" ${jornadaActual==40?'selected':''}>40h — Jornada completa (desde 26 Abr 2028)</option>
           <option value="30" ${jornadaActual==30?'selected':''}>30h — Jornada parcial 3/4</option>
           <option value="20" ${jornadaActual==20?'selected':''}>20h — Media jornada</option>
-          <option value="10" ${jornadaActual==10?'selected':''}>10h — Jornada parcial</option>
-          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20&&jornadaActual!=10)?'selected':''}>Otra (especificar)</option>
+          <option value="custom" ${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?'selected':''}>Otra (especificar)</option>
         </select>
         <input class="fi" type="number" id="f_jornada_custom" placeholder="Ej: 35" min="1" max="45"
           value="${(jornadaActual!=42&&jornadaActual!=44&&jornadaActual!=40&&jornadaActual!=30&&jornadaActual!=20)?jornadaActual:''}"
@@ -11318,11 +11330,11 @@ function _rTarjeta(){
               const legal=getHorasMaxSemana(st.anio,st.mes);
               const trab=DB().trabajadores.find(t=>t.id===st.trabId);
               const jContrato=trab&&trab.jornada?trab.jornada:null;
-              const opciones=[...new Set([legal,42,44,30,20,10].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
+              const opciones=[...new Set([legal,42,44,30,20].concat(jContrato?[jContrato]:[]))].sort((a,b)=>b-a);
               return opciones.map(h=>{
                 const esContrato=h===jContrato;
                 const esLegal=h===legal;
-                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':h===10?'Parcial':'';
+                const etiq=esContrato?'🔑 Contrato':esLegal?'Legal':h===30?'Parcial':h===20?'Media':'';
                 return `<button class="btn sm ${jornada===h?'cyan':'secondary'}" onclick="tkSetJornada(${h},null)">${h}h <span style="font-size:9px;opacity:.7">${etiq}</span></button>`;
               }).join('');
             })()}
