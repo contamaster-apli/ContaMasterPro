@@ -12586,9 +12586,9 @@ function tkExportarPDFMasivo(){
     <input type="radio" name="jfiltro" value="${j.v}" ${j.v===''?'checked':''} style="accent-color:var(--acc);">
     <span style="font-size:13px;">${j.l}</span>
   </label>`).join('');
-  document.getElementById('addTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
-  document.getElementById('addBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
-  document.getElementById('addOk').onclick=()=>{
+  document.getElementById('addModalTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
+  document.getElementById('addModalBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
+  document.getElementById('addModalOk').onclick=()=>{
     const sel=document.querySelector('input[name="jfiltro"]:checked');
     const filtro=sel?sel.value:'';
     closeModal('addModal');
@@ -21433,6 +21433,8 @@ function _cmpFormulario(tipo, d){
         </select>
       </td>
       <td style="padding:6px;min-width:160px;">
+        <input type="text" placeholder="🔍 Buscar..." oninput="cmpFiltrarAdj(this,'cmp_a_${c.id}')"
+          style="width:100%;padding:3px 6px;font-size:10px;border:1px solid var(--border2);border-radius:4px;background:var(--s2);color:var(--text);margin-bottom:3px;">
         <select class="fi" id="cmp_a_${c.id}" style="font-size:10px;padding:4px 6px;"
           title="Adjuntar documento del Archivador a este concepto">
           ${archOpts}
