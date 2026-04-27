@@ -20979,10 +20979,13 @@ function _archSubirArchivos(input, categoriaId, mesClave) {
     const reader = new FileReader();
     reader.onload = (e) => {
       const id = 'a'+Date.now()+Math.random().toString(36).slice(2,6);
+      // Intentar extraer fecha del nombre del archivo (formato DD-MM-YYYY)
+      const matchFecha=file.name.match(/(\d{2})-(\d{2})-(\d{4})/);
+      const fechaDoc=matchFecha?`${matchFecha[3]}-${matchFecha[2]}-${matchFecha[1]}`:new Date().toISOString().split('T')[0];
       arch.archivos.push({
         id, categoriaId, mesCarpeta: mk,
         nombre: file.name, tipo: file.type, size: file.size,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: fechaDoc,
         fechaHora: new Date().toISOString(),
         data: e.target.result, notas: ''
       });
@@ -21392,13 +21395,7 @@ function _cmpFormulario(tipo, d){
       .sort((a,b)=>b.fecha.localeCompare(a.fecha));
   })();
   const archOpts='<option value="">— Sin adjunto —</option>'+
-    ARCH_CATEGORIAS.map(cat=>{
-      const docs=archMes.filter(a=>a.categoriaId===cat.id);
-      if(!docs.length) return '';
-      return `<optgroup label="${cat.icono} ${cat.nombre}">`+
-        docs.map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
-        `</optgroup>`;
-    }).join('');
+    archMes.map(a=>`<option value="${a.id}">${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('');
 
   const filasConceptos=conceptos.map(c=>`
     <tr style="border-bottom:1px solid var(--border);">
@@ -21999,13 +21996,7 @@ function cmpAdjuntar(idx){
     .sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
   const archOpts=(selId)=>'<option value="">— Sin adjunto —</option>'+
-    ARCH_CATEGORIAS.map(cat=>{
-      const docs=archivos.filter(a=>a.categoriaId===cat.id);
-      if(!docs.length) return '';
-      return `<optgroup label="${cat.icono} ${cat.nombre}">`+
-        docs.map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
-        `</optgroup>`;
-    }).join('');
+    archivos.map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('');
 
   $('addTitle').textContent='📎 Adjuntar documentos por concepto';
   $('addSub').textContent=`Comprobante N° ${reg.folio} · ${reg.fecha}`;
