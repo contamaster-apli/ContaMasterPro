@@ -11720,10 +11720,37 @@ function tkSeleccionarDeLista(id){
   if(!t) return;
   window._tarj._panelLista=false;
   window._tarj._filtroLista='';
-  // Reutilizar la misma lógica de carga de tkAutoTrabSearch
-  if(document.getElementById('tk_trab_search'))
-    document.getElementById('tk_trab_search').value=t.nombre;
-  tkAutoTrabSearch(t.nombre);
+  // Cargar directamente por id sin depender de match exacto por nombre
+  const mes=window._tarj.mes, anio=window._tarj.anio;
+  const tarjetaExistente=(DB().asistencia||[]).find(a=>
+    a.esTarjeta && a.trabajadorId===t.id && a.mes===mes && a.anio===anio
+  );
+  if(tarjetaExistente){
+    window._tarj.nombre=t.nombre;
+    window._tarj.trabId=t.id;
+    window._tarj.num=tarjetaExistente.num||'';
+    window._tarj.depto=tarjetaExistente.depto||t.depto||'';
+    window._tarj.jornada=tarjetaExistente.jornada||getHorasMaxSemana(anio,mes);
+    window._tarj.jornadaCustom=null;
+    window._tarj.turno=tarjetaExistente.turno||'normal';
+    window._tarj.diasData=tarjetaExistente.diasData||{};
+    window._tarj.editId=tarjetaExistente.id;
+    window._tarj._irAlSiguienteDia=true;
+    toast(`📋 Tarjeta cargada — continuando desde día registrado`,'ok');
+  } else {
+    window._tarj.nombre=t.nombre;
+    window._tarj.trabId=t.id;
+    window._tarj.depto=t.depto||'';
+    window._tarj.diasData={};
+    window._tarj.editId=null;
+    window._tarj.jornada=(t.jornada&&t.jornada>0&&t.jornada<=45)?t.jornada:getHorasMaxSemana(anio,mes);
+    window._tarj.jornadaCustom=null;
+    window._tarj._irAlSiguienteDia=false;
+  }
+  if($('tk_trab_search')) document.getElementById('tk_trab_search').value=t.nombre;
+  if($('tk_nombre')) $('tk_nombre').value=t.nombre;
+  if($('tk_depto')) $('tk_depto').value=window._tarj.depto||'';
+  go('asist');
 }
 // ── FIN PANEL LISTADO ──────────────────────────────────────────────────
 function tkSetJornada(h, custom){
@@ -21433,8 +21460,6 @@ function _cmpFormulario(tipo, d){
         </select>
       </td>
       <td style="padding:6px;min-width:160px;">
-        <input type="text" placeholder="🔍 Buscar..." oninput="cmpFiltrarAdj(this,'cmp_a_${c.id}')"
-          style="width:100%;padding:3px 6px;font-size:10px;border:1px solid var(--border2);border-radius:4px;background:var(--s2);color:var(--text);margin-bottom:3px;">
         <select class="fi" id="cmp_a_${c.id}" style="font-size:10px;padding:4px 6px;"
           title="Adjuntar documento del Archivador a este concepto">
           ${archOpts}
