@@ -1791,11 +1791,6 @@ function _rTrabJornadas(){
       ${opciones.map(h=>`<button class="btn sm cyan" onclick="asignarJornadaSeleccionados(${h})">${h}h sel.</button>`).join('')}
       <span style="font-size:9px;color:var(--muted);margin-left:4px;" id="tj_sel_count">0 seleccionados</span>
     </div>
-    <div style="margin-bottom:8px;display:flex;align-items:center;gap:8px;">
-      <input type="text" id="tj_buscar" placeholder="🔍 Buscar trabajador por nombre..." oninput="tjFiltrarNombre(this.value)"
-        style="flex:1;padding:7px 12px;font-size:13px;border:1px solid var(--border2);border-radius:8px;background:var(--s2);color:var(--text);">
-      <button class="btn sm secondary" onclick="document.getElementById('tj_buscar').value='';tjFiltrarNombre('')">✕</button>
-    </div>
     <div class="tw"><table class="tbl">
       <thead><tr>
         <th style="width:30px;text-align:center;">
@@ -1836,14 +1831,6 @@ function _rTrabJornadas(){
       <button class="btn secondary" onclick="window._trab.sub='lista';go('trab')">← Volver a lista</button>
     </div>
   </div>`;
-}
-
-function tjFiltrarNombre(q){
-  const texto=q.toLowerCase().trim();
-  document.querySelectorAll('#trab_jornadas_tbody tr').forEach(tr=>{
-    const nombre=tr.querySelector('td:nth-child(3)')?.textContent?.toLowerCase()||'';
-    tr.style.display=(!texto||nombre.includes(texto))?'':'none';
-  });
 }
 
 function tjSelAll(checked){
@@ -21352,7 +21339,10 @@ function _cmpLista(d){
             <td style="padding:7px 8px;text-align:center;font-size:9px;color:var(--muted);">${r.semanaEF||'—'}</td>
             <td style="padding:4px;">
               <div style="display:flex;gap:3px;flex-wrap:wrap;">
-                ${(()=>{const nAdj=(r.detalles||[]).filter(d=>d.archivadorId).length;
+                ${(()=>{
+                  const nDet=(r.detalles||[]).filter(d=>d.archivadorId).length;
+                  const nGen=(r.archivadorIds||[]).length||(r.archivadorId?1:0);
+                  const nAdj=nDet+nGen;
                   return nAdj?`<button class="abt" onclick="event.stopPropagation();cmpVerTodosAdjuntos(${idxOrig})" title="${nAdj} adjunto(s)" style="color:var(--acc);font-size:10px;">📎${nAdj}</button>`:'';})()}
                 <button class="abt" onclick="event.stopPropagation();cmpVerDetalle(${idxOrig})" title="Ver" style="color:var(--blue);">👁</button>
                 <button class="abt" onclick="event.stopPropagation();cmpAdjuntar(${idxOrig})" title="Gestionar adjuntos" style="color:var(--acc);">📎</button>
@@ -21407,24 +21397,8 @@ function _cmpFormulario(tipo, d){
       .filter(a=>a.mesCarpeta===hoy.slice(0,7)||a.fecha.startsWith(hoy.slice(0,7)))
       .sort((a,b)=>b.fecha.localeCompare(a.fecha));
   })();
-  const archOpts=(()=>{
-    if(!archMes.length) return '<option value="">— Sin adjunto —</option>';
-    const grupos={};
-    archMes.forEach(a=>{
-      const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
-      if(!grupos[sem]) grupos[sem]=[];
-      grupos[sem].push(a);
-    });
-    const [ay,am]=hoy.slice(0,7).split('-').map(Number);
-    const diasMes=new Date(ay,am,0).getDate();
-    return '<option value="">— Sin adjunto —</option>'+
-      Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
-        const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
-        return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
-          grupos[ns].map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
-          `</optgroup>`;
-      }).join('');
-  })();
+  const archOpts='<option value="">— Sin adjunto —</option>'+
+    archMes.map(a=>`<option value="${a.id}">${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('');
 
   const filasConceptos=conceptos.map(c=>`
     <tr style="border-bottom:1px solid var(--border);">
@@ -21441,8 +21415,6 @@ function _cmpFormulario(tipo, d){
         </select>
       </td>
       <td style="padding:6px;min-width:160px;">
-        <input type="text" placeholder="🔍 Buscar..." oninput="cmpFiltrarAdj(this,'cmp_a_${c.id}')"
-          style="width:100%;padding:3px 6px;font-size:10px;border:1px solid var(--border2);border-radius:4px;background:var(--s2);color:var(--text);margin-bottom:3px;">
         <select class="fi" id="cmp_a_${c.id}" style="font-size:10px;padding:4px 6px;"
           title="Adjuntar documento del Archivador a este concepto">
           ${archOpts}
@@ -21534,23 +21506,36 @@ function _cmpFormulario(tipo, d){
 
       <!-- Conexión con Archivador -->
       <div style="background:var(--s3);border:1px solid var(--border2);border-radius:8px;padding:10px 14px;font-size:10px;margin-bottom:16px;">
-        📎 <b>Adjuntar documento del Archivador</b> (opcional) — vincula el comprobante físico escaneado
+        📎 <b>Adjuntar documentos del Archivador</b> (opcional) — puedes seleccionar uno o más archivos
         <div style="margin-top:8px;">
-          <div class="fl" style="color:var(--muted);">ARCHIVO DEL ARCHIVADOR</div>
-          <select class="fi" id="cmp_arch_id" style="font-size:11px;">
-            <option value="">— Sin adjunto —</option>
+          <div class="fl" style="color:var(--muted);">ARCHIVOS ADJUNTOS <span style="color:var(--acc)">(Ctrl+clic para seleccionar varios)</span></div>
+          <input type="text" placeholder="🔍 Buscar archivo..." oninput="cmpFiltrarAdj(this,'cmp_arch_id')"
+            style="width:100%;padding:4px 8px;font-size:10px;border:1px solid var(--border2);border-radius:6px;background:var(--s2);color:var(--text);margin-bottom:5px;">
+          <select class="fi" id="cmp_arch_id" multiple style="font-size:11px;min-height:90px;">
             ${(()=>{
               const arch=DB().archivador||{archivos:[]};
               const mesReg=(document.getElementById('cmp_fecha')?.value||new Date().toISOString().split('T')[0]).slice(0,7);
-              const opciones=arch.archivos
+              const archivos=arch.archivos
                 .filter(a=>a.mesCarpeta===mesReg||a.fecha.startsWith(mesReg))
-                .sort((a,b)=>b.fecha.localeCompare(a.fecha))
-                .map(a=>`<option value="${a.id}">${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`)
-                .join('');
-              return opciones||'<option disabled>Sin archivos en este mes</option>';
+                .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+              if(!archivos.length) return '<option disabled>Sin archivos en este mes</option>';
+              const grupos={};
+              archivos.forEach(a=>{
+                const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
+                if(!grupos[sem]) grupos[sem]=[];
+                grupos[sem].push(a);
+              });
+              const [ay,am]=mesReg.split('-').map(Number);
+              const diasMes=new Date(ay,am,0).getDate();
+              return Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
+                const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
+                return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
+                  grupos[ns].map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
+                  `</optgroup>`;
+              }).join('');
             })()}
           </select>
-          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Solo se muestran archivos del mismo mes del comprobante. Si no encuentras el archivo, súbelo primero al Archivador.</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Solo se muestran archivos del mismo mes. Usa Ctrl+clic para seleccionar varios. Si no encuentras el archivo, súbelo primero al Archivador.</div>
         </div>
       </div>
 
@@ -21686,17 +21671,6 @@ function cmpEliminarConcepto(tipo,id){
   saveDB();go('comprobantes');toast('✅ Concepto eliminado');
 }
 
-function cmpFiltrarAdj(input,selectId){
-  const q=input.value.toLowerCase().trim();
-  const sel=document.getElementById(selectId);
-  if(!sel) return;
-  Array.from(sel.options).forEach(opt=>{
-    if(!opt.value) return;
-    opt.hidden=q?!opt.text.toLowerCase().includes(q):false;
-  });
-  if(sel.selectedOptions[0]&&sel.selectedOptions[0].hidden) sel.value='';
-}
-
 function cmpRecalcular(){
   const d=_cmpDB();
   const sub=window._cmpSub||'';
@@ -21753,7 +21727,8 @@ function cmpGuardar(tipo){
     senor: senor||extra.concepto_gen||'',
     detalles, total,
     semanaEF: getWeekKey(new Date(fecha+'T12:00:00')),
-    archivadorId: document.getElementById('cmp_arch_id')?.value||'', // ← enlace al archivador
+    archivadorIds: Array.from(document.getElementById('cmp_arch_id')?.selectedOptions||[]).map(o=>o.value).filter(Boolean),
+    archivadorId: Array.from(document.getElementById('cmp_arch_id')?.selectedOptions||[])[0]?.value||'', // compatibilidad
     ...extra,
     ts: Date.now()
   };
@@ -21991,11 +21966,34 @@ function cmpVerTodosAdjuntos(idx){
   if(!reg)return;
   const arch=DB().archivador||{archivos:[]};
   const conAdj=reg.detalles.filter(d=>d.archivadorId);
-  if(!conAdj.length){ toast('Este comprobante no tiene adjuntos por concepto','ok'); return; }
+  // Adjuntos generales: archivadorIds (nuevo) o archivadorId (compatibilidad)
+  const idsGen=reg.archivadorIds&&reg.archivadorIds.length?reg.archivadorIds:(reg.archivadorId?[reg.archivadorId]:[]);
+  if(!conAdj.length&&!idsGen.length){ toast('Este comprobante no tiene adjuntos','ok'); return; }
 
   $('addTitle').textContent='📎 Documentos adjuntos del comprobante N° '+reg.folio;
   $('addSub').textContent=reg.fecha+(reg.senor?' · '+reg.senor:'');
-  $('addBody').innerHTML=conAdj.map(det=>{
+
+  const htmlGen=idsGen.map(aid=>{
+    const a=arch.archivos.find(x=>x.id===aid);
+    if(!a) return `<div style="padding:8px;border-radius:8px;background:var(--red2);border:1px solid var(--red);font-size:10px;margin-bottom:6px;">⚠️ Archivo eliminado del Archivador</div>`;
+    return `<div style="border:1px solid var(--border2);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--s2);display:flex;align-items:center;gap:10px;">
+      <div style="font-size:22px;">${_archIconoTipo(a.tipo)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-size:10px;color:var(--acc);margin-bottom:2px;">📎 Adjunto general</div>
+        <div style="font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(a.nombre)}</div>
+        <div style="font-size:9px;color:var(--muted);">📅 ${_fmtFechaArch(a.fecha)} · ${_fmtSize(a.size)}</div>
+      </div>
+      <div style="display:flex;gap:4px;">
+        ${(a.tipo&&(a.tipo.startsWith('image')||a.tipo==='application/pdf'))?
+          `<button class="btn sm cyan" onclick="cmpVerAdjunto('${a.id}')">👁 Ver</button>`:''}
+        <button class="btn sm secondary" onclick="_archDescargar('${a.id}')">⬇️</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  $('addTitle').textContent='📎 Documentos adjuntos del comprobante N° '+reg.folio;
+  $('addSub').textContent=reg.fecha+(reg.senor?' · '+reg.senor:'');
+  $('addBody').innerHTML=htmlGen+conAdj.map(det=>{
     const a=arch.archivos.find(x=>x.id===det.archivadorId);
     if(!a) return `<div style="padding:8px;border-radius:8px;background:var(--red2);border:1px solid var(--red);font-size:10px;margin-bottom:6px;">
       ⚠️ <b>${det.concepto}</b> — Archivo eliminado del Archivador</div>`;
@@ -22037,24 +22035,8 @@ function cmpAdjuntar(idx){
     .filter(a=>meses.some(m=>a.mesCarpeta===m||a.fecha.startsWith(m)))
     .sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
-  const archOpts=(selId)=>{
-    if(!archivos.length) return '<option value="">— Sin adjunto —</option>';
-    const grupos={};
-    archivos.forEach(a=>{
-      const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
-      if(!grupos[sem]) grupos[sem]=[];
-      grupos[sem].push(a);
-    });
-    const [ay,am]=mesReg.split('-').map(Number);
-    const diasMes=new Date(ay,am,0).getDate();
-    return '<option value="">— Sin adjunto —</option>'+
-      Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
-        const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
-        return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
-          grupos[ns].map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
-          `</optgroup>`;
-      }).join('');
-  };
+  const archOpts=(selId)=>'<option value="">— Sin adjunto —</option>'+
+    archivos.map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('');
 
   $('addTitle').textContent='📎 Adjuntar documentos por concepto';
   $('addSub').textContent=`Comprobante N° ${reg.folio} · ${reg.fecha}`;
@@ -22070,8 +22052,6 @@ function cmpAdjuntar(idx){
           <span style="font-size:11px;font-weight:700;">${det.concepto}</span>
           <span style="font-size:11px;font-family:monospace;color:${reg.tipo==='ing'?'var(--green)':'var(--red)'};">${fmt(det.valor)}</span>
         </div>
-        <input type="text" placeholder="🔍 Buscar archivo..." oninput="cmpFiltrarAdj(this,'cmp_adj_${i}')"
-          style="width:100%;padding:4px 8px;font-size:10px;border:1px solid var(--border2);border-radius:6px;background:var(--s3);color:var(--text);margin-bottom:5px;">
         <select class="fi" id="cmp_adj_${i}" style="font-size:10px;">
           ${archOpts(det.archivadorId||'')}
         </select>
