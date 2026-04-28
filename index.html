@@ -21489,8 +21489,24 @@ function _cmpFormulario(tipo, d){
       .filter(a=>a.mesCarpeta===hoy.slice(0,7)||a.fecha.startsWith(hoy.slice(0,7)))
       .sort((a,b)=>b.fecha.localeCompare(a.fecha));
   })();
-  const archOpts='<option value="">— Sin adjunto —</option>'+
-    archMes.map(a=>`<option value="${a.id}">${_archIconoTipo(a.tipo)} ${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('');
+  const archOpts=(()=>{
+    if(!archMes.length) return '<option value="">— Sin adjunto —</option>';
+    const grupos={};
+    archMes.forEach(a=>{
+      const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
+      if(!grupos[sem]) grupos[sem]=[];
+      grupos[sem].push(a);
+    });
+    const [ay,am]=hoy.slice(0,7).split('-').map(Number);
+    const diasMes=new Date(ay,am,0).getDate();
+    return '<option value="">— Sin adjunto —</option>'+
+      Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
+        const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
+        return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
+          grupos[ns].map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
+          `</optgroup>`;
+      }).join('');
+  })();
 
   const filasConceptos=conceptos.map(c=>`
     <tr style="border-bottom:1px solid var(--border);">
