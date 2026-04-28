@@ -8759,6 +8759,15 @@ function getWeekDates(wk){
 function fmtWeekLabel(wk){
   if(!wk)return 'Semana actual';
   try{
+    // Si la semana tiene fechas personalizadas, usarlas
+    const semData=(DB().estadoFin?.semanas||[]).find(s=>s.semana===wk);
+    if(semData?.fechaIniCustom&&semData?.fechaFinCustom){
+      const M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+      const ini=new Date(semData.fechaIniCustom+'T12:00:00');
+      const fin=new Date(semData.fechaFinCustom+'T12:00:00');
+      const w=wk.split('-W')[1];
+      return `Sem ${w} — ${ini.getDate()} ${M[ini.getMonth()]} al ${fin.getDate()} ${M[fin.getMonth()]} ${fin.getFullYear()}`;
+    }
     const lunes=weekKeyToDate(wk);
     const viernes=new Date(lunes);viernes.setDate(lunes.getDate()+4);
     const M=['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
@@ -15649,7 +15658,7 @@ function rEstFin(){
   <div class="card">
     <div class="card-hdr">
       <div class="ci" style="background:var(--acc2)">📊</div>
-      <div style="flex:1"><div class="ct">Estado Financiero Semanal</div><div class="cs">${fmtWeekLabel(wk)}</div></div>
+      <div style="flex:1"><div class="ct">Estado Financiero Semanal</div><div class="cs" style="display:flex;align-items:center;gap:6px;">${fmtWeekLabel(wk)}<button class="abt" onclick="efEditarFechasSemana('${wk}')" title="Editar rango de fechas" style="font-size:10px;padding:2px 6px;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);border-radius:4px;color:var(--blue);">✏️ Fechas</button></div></div>
       <button class="ibtn" onclick="window._efSemana=prevWeek('${wk}');window._efSub='resumen';go('estfin')" title="Semana anterior">◀</button>
       <button class="ibtn" onclick="window._efSemana=nextWeek('${wk}');window._efSub='resumen';go('estfin')" title="Semana siguiente">▶</button>
       <button class="btn teal sm" onclick="window._efSemana=getWeekKey(new Date());go('estfin')">HOY</button>
@@ -15783,6 +15792,44 @@ function rEstFin(){
 }
 
 // ── FUNCIONES CORREGIDAS para estadoFin (no flujoCaja) ──
+function efEditarFechasSemana(wk){
+  const semData=(DB().estadoFin.semanas||[]).find(s=>s.semana===wk)||{};
+  const iniVal=semData.fechaIniCustom||'';
+  const finVal=semData.fechaFinCustom||'';
+  $('addTitle').textContent='✏️ Editar rango de fechas — '+fmtWeekLabel(wk);
+  $('addSub').textContent='Define el período exacto que cubre este reporte';
+  $('addBody').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:12px;padding:8px 0;">
+      <div>
+        <div style="font-size:11px;font-weight:600;margin-bottom:4px;">📅 Fecha inicio del período</div>
+        <input type="date" id="ef_fecha_ini" class="fi" value="${iniVal}" style="width:100%;">
+      </div>
+      <div>
+        <div style="font-size:11px;font-weight:600;margin-bottom:4px;">📅 Fecha fin del período</div>
+        <input type="date" id="ef_fecha_fin" class="fi" value="${finVal}" style="width:100%;">
+      </div>
+      <div style="font-size:9px;color:var(--muted);">Estas fechas reemplazarán el rango automático en el encabezado y PDF del reporte.</div>
+    </div>`;
+  $('addOk').textContent='💾 Guardar fechas';
+  $('addOk').onclick=()=>{
+    const ini=document.getElementById('ef_fecha_ini').value;
+    const fin=document.getElementById('ef_fecha_fin').value;
+    if(!ini||!fin){toast('Debes ingresar ambas fechas','err');return;}
+    if(ini>fin){toast('La fecha inicio debe ser anterior al fin','err');return;}
+    const d=DB();
+    let sem=d.estadoFin.semanas.find(s=>s.semana===wk);
+    if(!sem){sem={semana:wk,saldoInicial:0,valores:{},movimientos:{}};d.estadoFin.semanas.push(sem);}
+    sem.fechaIniCustom=ini;
+    sem.fechaFinCustom=fin;
+    saveDB();
+    closeModal('addModal');
+    $('addOk').textContent='✅ Guardar';
+    toast('✅ Fechas actualizadas','ok');
+    go('estfin');
+  };
+  openModal('addModal');
+}
+
 function efSetSaldoIni_ef(wk,val){
   if(!DB().estadoFin.semanas)DB().estadoFin.semanas=[];
   let s=DB().estadoFin.semanas.find(x=>x.semana===wk);
@@ -16196,12 +16243,12 @@ function efImprimirResumen(wk){
 
   // RESUMEN — parte superior (idéntico a RESUMEN_EF.xlsx)
   const resumenFilas=[
-    ...conceptos.filter(c=>c.tipo==='ing_fijo').map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
-    ...conceptos.filter(c=>c.tipo==='otro_ing').map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
+    ...conceptos.filter(c=>c.tipo==='ing_fijo'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
+    ...conceptos.filter(c=>c.tipo==='otro_ing'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
     `<tr class="sub green"><td>INGRESOS DE LA SEMANA (${label})</td><td class="r">${f$(totalIng)}</td></tr>`,
     `<tr><td colspan="2" style="height:8px"></td></tr>`,
-    ...conceptos.filter(c=>c.tipo==='egr_fijo').map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
-    ...conceptos.filter(c=>c.tipo==='otro_egr').map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
+    ...conceptos.filter(c=>c.tipo==='egr_fijo'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
+    ...conceptos.filter(c=>c.tipo==='otro_egr'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
     `<tr class="sub red"><td>EGRESOS DE LA SEMANA (${label})</td><td class="r">${f$(totalEgr)}</td></tr>`,
     `<tr><td colspan="2" style="height:8px"></td></tr>`,
     `<tr class="sub"><td>MOVIMIENTO SEMANAL (${label})</td><td class="r" style="color:${movSem>=0?'#1a7d3f':'#c00'}">${movSem>=0?'+':''}${f$(movSem)}</td></tr>`,
@@ -16214,11 +16261,11 @@ function efImprimirResumen(wk){
 
   // DETALLE — movimientos agrupados (como borra.xlsx)
   const detalleIngs=[
-    ...conceptos.filter(c=>c.tipo==='ing_fijo').map(c=>`<h4 style="color:#1a7d3f;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'ing')}`),
-    ...conceptos.filter(c=>c.tipo==='otro_ing').map(c=>`<h4 style="color:#0a7a8f;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'ing')}`),
+    ...conceptos.filter(c=>c.tipo==='ing_fijo'&&val(c.id)>0).map(c=>`<h4 style="color:#1a7d3f;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'ing')}`),
+    ...conceptos.filter(c=>c.tipo==='otro_ing'&&val(c.id)>0).map(c=>`<h4 style="color:#0a7a8f;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'ing')}`),
   ].join('');
   const detalleEgrs=[
-    ...conceptos.filter(c=>c.tipo==='egr_fijo'||c.tipo==='otro_egr').map(c=>`<h4 style="color:#c00;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'egr')}`),
+    ...conceptos.filter(c=>(c.tipo==='egr_fijo'||c.tipo==='otro_egr')&&val(c.id)>0).map(c=>`<h4 style="color:#c00;margin:16px 0 4px">${c.nombre}</h4>${tablaMovimientos(c,'egr')}`),
   ].join('');
 
   const w=window.open('','_blank','width=800,height=1000');
