@@ -12495,12 +12495,24 @@ function tkExportarPDFDias(diasSel){
   (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
 
   // Filtrar solo trabajadores que trabajaron al menos uno de los días seleccionados
-  const trabsFiltrados=tarjetas.filter(t=>{
+  // Filtrar trabajadores que trabajaron al menos uno de los días seleccionados
+  const _trabsFiltradosRaw=tarjetas.filter(t=>{
     return diasSel.some(d=>{
       const r=(t.diasData||{})[d];
       return r&&(r.amIn||r.pmIn||r.otIn);
     });
   });
+  // Deduplicar por trabajadorId: conservar el que tiene más días con datos
+  const _trabsDedupeMap={};
+  _trabsFiltradosRaw.forEach(t=>{
+    const tid=t.trabajadorId;
+    const diasConDatos=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;
+    if(!_trabsDedupeMap[tid]||diasConDatos>_trabsDedupeMap[tid]._diasConDatos){
+      t._diasConDatos=diasConDatos;
+      _trabsDedupeMap[tid]=t;
+    }
+  });
+  const trabsFiltrados=Object.values(_trabsDedupeMap);
 
   if(!trabsFiltrados.length){
     toast('Ningún trabajador trabajó en los días seleccionados','warn');
