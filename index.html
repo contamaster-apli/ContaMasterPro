@@ -12538,8 +12538,14 @@ function tkExportarPDFDias(diasSel){
       const hhmm=_m2hm(min);
       const dt=new Date(st.anio,st.mes-1,d);
       const esFinde=dt.getDay()===0||dt.getDay()===6;
+      // Construir bloques horarios presentes
+      const bloques=[];
+      if(r.amIn&&r.amOut) bloques.push(`${r.amIn}–${r.amOut}`);
+      if(r.pmIn&&r.pmOut) bloques.push(`${r.pmIn}–${r.pmOut}`);
+      if(r.otIn&&r.otOut) bloques.push(`${r.otIn}–${r.otOut}`);
+      if(!bloques.length&&r.amIn) bloques.push(`${r.amIn}–${r.amOut||'?'}`);
       return `<td style="padding:4px 6px;text-align:center;font-size:10px;font-weight:700;color:${esFinde?'#f5a623':'#4a8ff5'};background:${esFinde?'rgba(245,166,35,.08)':''};">
-        ${r.amIn||''}–${r.amOut||r.pmOut||''}<br>
+        ${bloques.map(b=>`<span style="display:block;white-space:nowrap;">${b}</span>`).join('')}
         <span style="color:#20b86a;">${hhmm}</span>
       </td>`;
     }).join('');
@@ -15632,13 +15638,26 @@ function rEstFin(){
     const lista=conceptos.filter(c=>c.tipo===tipo);
     if(!lista.length) return `<div style="font-size:10px;color:var(--muted);padding:8px 0;">Sin conceptos. Haz clic en + Agregar.</div>`;
     return lista.map(c=>`
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border);">
-        <div style="flex:1;font-size:11px;font-weight:600;">${c.nombre}</div>
-        ${tipo==='egr_pagar'||tipo==='ing_cobrar'?`<input class="fi" type="date" style="width:130px;font-size:9px;padding:4px 6px;" value="${semData.vence?.[c.id]||''}" onchange="efSetVence_ef('${wk}',${c.id},this.value)">`:'' }
-        <input class="fi" type="number" style="width:120px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;" placeholder="0" value="${semData.valores[c.id]||''}" oninput="efSetVal_ef('${wk}',${c.id},this.value)">
-        <button class="abt" style="cursor:pointer;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);color:var(--blue);border-radius:5px;padding:2px 6px;font-size:10px" onclick="efVerDetalle('${wk}',${c.id})" title="Ver/editar movimientos detallados">📋</button>
-        <button class="abt edit" onclick="efEditConcepto(${c.id},'fc')" title="Renombrar">✏️</button>
-        <button class="abt del" onclick="efDelConcepto_ef(${c.id})" title="Eliminar">🗑</button>
+      <div style="padding:7px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:${(tipo==='ing_fijo'||tipo==='otro_ing'||tipo==='egr_fijo'||tipo==='otro_egr')?'5':'0'}px;">
+          <div style="flex:1;font-size:11px;font-weight:600;">${c.nombre}</div>
+          ${tipo==='egr_pagar'||tipo==='ing_cobrar'?`<input class="fi" type="date" style="width:130px;font-size:9px;padding:4px 6px;" value="${semData.vence?.[c.id]||''}" onchange="efSetVence_ef('${wk}',${c.id},this.value)">`:'' }
+          <input class="fi" type="number" style="width:120px;text-align:right;font-family:'JetBrains Mono',monospace;font-size:12px;" placeholder="0" value="${semData.valores[c.id]||''}" oninput="efSetVal_ef('${wk}',${c.id},this.value)">
+          <button class="abt" style="cursor:pointer;background:rgba(96,165,250,.1);border:1px solid rgba(96,165,250,.2);color:var(--blue);border-radius:5px;padding:2px 6px;font-size:10px" onclick="efVerDetalle('${wk}',${c.id})" title="Ver/editar movimientos detallados">📋</button>
+          <button class="abt edit" onclick="efEditConcepto(${c.id},'fc')" title="Renombrar">✏️</button>
+          <button class="abt del" onclick="efDelConcepto_ef(${c.id})" title="Eliminar">🗑</button>
+        </div>
+        ${(tipo==='ing_fijo'||tipo==='otro_ing'||tipo==='egr_fijo'||tipo==='otro_egr')?`
+        <div style="display:flex;align-items:center;gap:10px;margin-left:4px;">
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:9px;color:var(--muted);white-space:nowrap;">Fecha cobro:</span>
+            <input class="fi" type="date" style="font-size:9px;padding:3px 6px;width:130px;" value="${semData.fechas?.[c.id]?.cobro||''}" onchange="efSetFecha_ef('${wk}',${c.id},'cobro',this.value)" title="Fecha de cobro">
+          </div>
+          <div style="display:flex;align-items:center;gap:4px;">
+            <span style="font-size:9px;color:var(--muted);white-space:nowrap;">Fecha depósito:</span>
+            <input class="fi" type="date" style="font-size:9px;padding:3px 6px;width:130px;" value="${semData.fechas?.[c.id]?.dep||''}" onchange="efSetFecha_ef('${wk}',${c.id},'dep',this.value)" title="Fecha de depósito en cartola bancaria">
+          </div>
+        </div>`:''}
       </div>`).join('');
   }
 
@@ -15857,6 +15876,15 @@ function efSetVence_ef(wk,id,val){
   if(!s.vence)s.vence={};
   s.vence[id]=val;saveDB();
 }
+function efSetFecha_ef(wk,id,campo,val){
+  if(!DB().estadoFin.semanas)DB().estadoFin.semanas=[];
+  let s=DB().estadoFin.semanas.find(x=>x.semana===wk);
+  if(!s){s={semana:wk,saldoInicial:0,valores:{}};DB().estadoFin.semanas.push(s);}
+  if(!s.fechas)s.fechas={};
+  if(!s.fechas[id])s.fechas[id]={};
+  s.fechas[id][campo]=val;
+  saveDB();
+}
 function efSetField_ef(wk,campo,val){
   if(!DB().estadoFin.semanas)DB().estadoFin.semanas=[];
   let s=DB().estadoFin.semanas.find(x=>x.semana===wk);
@@ -15961,13 +15989,15 @@ function _buildEFDetalle(wk, conceptos, semData){
 }
 
 function efAgregarMovimiento(wk,conceptoId){
+  const _efSemF=(DB().estadoFin.semanas||[]).find(x=>x.semana===wk);
+  const _efFechas=_efSemF?.fechas?.[conceptoId]||{};
   $('addTitle').textContent='➕ Agregar Movimiento';
   $('addSub').textContent='';
   $('addBody').innerHTML=`<div class="fgrid">
     <div><div class="fl">DETALLE / DESCRIPCIÓN</div><input class="fi" id="efm_det" placeholder="Ej: Cobros diarios Talca-Curico"></div>
     <div class="frow h2">
-      <div><div class="fl">FECHA COBRO</div><input class="fi" type="date" id="efm_fecCobro"></div>
-      <div><div class="fl">FECHA DEPÓSITO</div><input class="fi" type="date" id="efm_fecDep"></div>
+      <div><div class="fl">FECHA COBRO</div><input class="fi" type="date" id="efm_fecCobro" value="${_efFechas.cobro||''}"></div>
+      <div><div class="fl">FECHA DEPÓSITO</div><input class="fi" type="date" id="efm_fecDep" value="${_efFechas.dep||''}"></div>
     </div>
     <div class="frow h2">
       <div><div class="fl">FOLIO / N° DOC</div><input class="fi" id="efm_folio" placeholder="Ej: 482"></div>
@@ -16099,7 +16129,8 @@ function efExportarResumen(wk){
       if(movs.length){
         movs.forEach(m=>rows2.push([m.detalle||c.nombre,m.medioPago||'',m.fechaDep||'','',fv(m.valor),'']));
       } else {
-        rows2.push([c.nombre,'','','',val(c.id),'']);
+        const fc=s.fechas?.[c.id];
+        rows2.push([c.nombre,fc?.cobro||'',fc?.dep||'','',val(c.id),'']);
       }
     });
     rows2.push(['TOTAL OTROS INGRESOS','','','',otroIng,'']);
@@ -16119,7 +16150,8 @@ function efExportarResumen(wk){
     if(movs.length){
       movs.forEach(m=>rows2.push([m.detalle||c.nombre,m.fechaCobro||'',m.medioPago||'',m.fechaDep||'',fv(m.valor),'']));
     } else {
-      rows2.push([c.nombre,'','','',val(c.id),'']);
+      const fc=s.fechas?.[c.id];
+      rows2.push([c.nombre,fc?.cobro||'',fc?.dep||'','',val(c.id),'']);
     }
   });
   rows2.push(['TOTAL EGRESOS','','','',totalEgr,'']);
@@ -16138,13 +16170,20 @@ function efExportarResumen(wk){
   // --- DETALLE POR CONCEPTO (como borra.xlsx — tablas individuales) ---
   conceptos.filter(c=>c.tipo!=='egr_pagar'&&c.tipo!=='ing_cobrar').forEach(c=>{
     const movs=(s.movimientos||{})[c.id]||[];
-    if(!movs.length) return;
+    const fc=s.fechas?.[c.id];
+    const tieneDetalle=movs.length||(fc?.cobro||fc?.dep);
+    if(!tieneDetalle) return;
     rows2.push(['']);
     rows2.push(['']);
     rows2.push([null,'DETALLE '+c.nombre.toUpperCase(),'','','','']);
     rows2.push(['DETALLE','FECHA DE COBRO','FOLIO','CHEQUE/TRANSF.','FECHA DEPÓSITO','VALOR']);
-    movs.forEach(m=>rows2.push([m.detalle||c.nombre,m.fechaCobro||'',m.folio||'',m.medioPago||'',m.fechaDep||'',fv(m.valor)]));
-    rows2.push(['TOTAL '+c.nombre.toUpperCase(),'','','','',movs.reduce((a,m)=>a+fv(m.valor),0)]);
+    if(movs.length){
+      movs.forEach(m=>rows2.push([m.detalle||c.nombre,m.fechaCobro||'',m.folio||'',m.medioPago||'',m.fechaDep||'',fv(m.valor)]));
+      rows2.push(['TOTAL '+c.nombre.toUpperCase(),'','','','',movs.reduce((a,m)=>a+fv(m.valor),0)]);
+    } else {
+      rows2.push([c.nombre,fc?.cobro||'','','',fc?.dep||'',val(c.id)]);
+      rows2.push(['TOTAL '+c.nombre.toUpperCase(),'','','','',val(c.id)]);
+    }
   });
 
   const ws2=XLSX.utils.aoa_to_sheet(rows2);
@@ -16227,7 +16266,15 @@ function efImprimirResumen(wk){
   // Tabla de movimientos por concepto (como borra.xlsx)
   function tablaMovimientos(c, columnas){
     const movs=(s.movimientos||{})[c.id]||[];
-    if(!movs.length) return '';
+    const fc=s.fechas?.[c.id];
+    if(!movs.length){
+      if(!fc?.cobro&&!fc?.dep) return '';
+      const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('es-CL'):'';
+      if(columnas==='egr'){
+        return `<table class="dt"><thead><tr><th>DETALLE</th><th>FECHA</th><th>CHEQUE/TRANSF.</th><th>RETIRO DEL BCO</th><th>VALOR</th></tr></thead><tbody><tr><td>${c.nombre}</td><td>${fmtD(fc.cobro)}</td><td></td><td>${fmtD(fc.dep)}</td><td style="text-align:right;font-family:monospace">${f$(val(c.id))}</td></tr></tbody></table>`;
+      }
+      return `<table class="dt"><thead><tr><th>DETALLE</th><th>FECHA DE COBRO</th><th>FOLIO</th><th>CHEQUE</th><th>FECHA DEPÓSITO</th><th>VALOR</th></tr></thead><tbody><tr><td>${c.nombre}</td><td>${fmtD(fc.cobro)}</td><td></td><td></td><td>${fmtD(fc.dep)}</td><td style="text-align:right;font-family:monospace">${f$(val(c.id))}</td></tr><tr class="tot"><td colspan="5">TOTAL ${c.nombre.toUpperCase()}</td><td style="text-align:right;font-family:monospace">${f$(val(c.id))}</td></tr></tbody></table>`;
+    }
     const filas=movs.map(m=>{
       if(columnas==='egr'){
         return `<tr><td>${m.detalle||c.nombre}</td><td>${m.fechaCobro?new Date(m.fechaCobro+'T00:00:00').toLocaleDateString('es-CL'):''}</td><td>${m.medioPago||''}</td><td>${m.fechaDep?new Date(m.fechaDep+'T00:00:00').toLocaleDateString('es-CL'):''}</td><td style="text-align:right;font-family:monospace">${f$(fv(m.valor))}</td></tr>`;
@@ -21525,10 +21572,14 @@ function _cmpFormulario(tipo, d){
       <td style="padding:6px;min-width:160px;">
         <input type="text" placeholder="🔍 Buscar..." oninput="cmpFiltrarAdj(this,'cmp_a_${c.id}')"
           style="width:100%;padding:3px 6px;font-size:10px;border:1px solid var(--border2);border-radius:4px;background:var(--s2);color:var(--text);margin-bottom:3px;">
-        <select class="fi" id="cmp_a_${c.id}" style="font-size:10px;padding:4px 6px;"
-          title="Adjuntar documento del Archivador a este concepto">
-          ${archOpts}
-        </select>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <select class="fi" id="cmp_a_${c.id}" style="font-size:10px;padding:4px 6px;flex:1;"
+            title="Adjuntar documento del Archivador a este concepto">
+            ${archOpts}
+          </select>
+          <button class="abt" title="Ver adjunto" style="font-size:14px;padding:2px 5px;"
+            onclick="(function(){const v=document.getElementById('cmp_a_${c.id}')?.value;if(v)_archPreview(v);else alert('Selecciona un adjunto primero');})();">👁</button>
+        </div>
       </td>
     </tr>`).join('');
 
@@ -22190,9 +22241,13 @@ function cmpAdjuntar(idx){
         </div>
         <input type="text" placeholder="🔍 Buscar archivo..." oninput="cmpFiltrarAdj(this,'cmp_adj_${i}')"
           style="width:100%;padding:4px 8px;font-size:10px;border:1px solid var(--border2);border-radius:6px;background:var(--s3);color:var(--text);margin-bottom:5px;">
-        <select class="fi" id="cmp_adj_${i}" style="font-size:10px;">
-          ${archOpts(det.archivadorId||'')}
-        </select>
+        <div style="display:flex;align-items:center;gap:4px;">
+          <select class="fi" id="cmp_adj_${i}" style="font-size:10px;flex:1;">
+            ${archOpts(det.archivadorId||'')}
+          </select>
+          <button class="abt" title="Ver adjunto" style="font-size:14px;padding:2px 5px;"
+            onclick="(function(){const v=document.getElementById('cmp_adj_${i}')?.value;if(v)_archPreview(v);else alert('Selecciona un adjunto primero');})();">👁</button>
+        </div>
       </div>`).join('')}
     </div>`;
   $('addOk').textContent='💾 Guardar adjuntos';
