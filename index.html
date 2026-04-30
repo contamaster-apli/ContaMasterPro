@@ -1452,7 +1452,7 @@ function render(t){
     case 'dash': mc.innerHTML=renderDash();break;
     case 'liq': mc.innerHTML=renderLiq();setTimeout(()=>initLiqEvents(),50);break;
     case 'trab': mc.innerHTML=renderTrab();break;
-    case 'asist': mc.innerHTML=renderAsist();setTimeout(()=>{if(window._tarj&&window._tarj.diasData){const nd=new Date(window._tarj.anio,window._tarj.mes,0).getDate();for(let d=1;d<=nd;d++){if(window._tarj.diasData[d])tkUpd(d);}}},50);break;
+    case 'asist': mc.innerHTML=renderAsist();setTimeout(()=>{if(window._tarj&&window._tarj.diasData){const nd=new Date(window._tarj.anio,window._tarj.mes,0).getDate();for(let d=1;d<=nd;d++){if(window._tarj.diasData[d])tkUpd(d,true);}}},50);break;
     case 'horarios': mc.innerHTML=renderHorarios();break;
     case 'finiq': mc.innerHTML=renderFiniq();break;
     case 'vacac': mc.innerHTML=renderVacac();break;
@@ -11609,19 +11609,12 @@ function tkAutoTrab(){
 }
 
 function tkAutoTrabSearch(val){
-  // Si se está cargando desde Lista, ignorar este disparo automático
-  if(window._tarj._cargandoDeLista){ window._tarj._cargandoDeLista=false; return; }
   const nombre=(val||'').trim();
   // Buscar trabajador por nombre exacto (como viene del datalist)
   const t=DB().trabajadores.find(x=>x.nombre===nombre);
   if(!t) return; // Aún escribiendo, no hacer nada hasta match exacto
 
-  // Leer mes/anio desde el select visual para evitar desincronía
-  const _tkMesEl2=document.getElementById('tk_mes');
-  const _tkAnioEl2=document.getElementById('tk_anio');
-  const mes=(_tkMesEl2?parseInt(_tkMesEl2.value):null)||window._tarj.mes;
-  const anio=(_tkAnioEl2?parseInt(_tkAnioEl2.value):null)||window._tarj.anio;
-  window._tarj.mes=mes; window._tarj.anio=anio;
+  const mes=window._tarj.mes, anio=window._tarj.anio;
 
   // Buscar tarjeta guardada de este trabajador en el mes/año actual
   const tarjetaExistente=(DB().asistencia||[]).find(a=>
@@ -11736,14 +11729,8 @@ function tkSeleccionarDeLista(id){
   if(!t) return;
   window._tarj._panelLista=false;
   window._tarj._filtroLista='';
-  window._tarj._cargandoDeLista=true; // flag para evitar que tkAutoTrabSearch pise la carga
   // Cargar directamente por id sin depender de match exacto por nombre
-  // Leer mes/anio desde el select visual para evitar desincronía con window._tarj
-  const _tkMesEl=document.getElementById('tk_mes');
-  const _tkAnioEl=document.getElementById('tk_anio');
-  const mes=(_tkMesEl?parseInt(_tkMesEl.value):null)||window._tarj.mes;
-  const anio=(_tkAnioEl?parseInt(_tkAnioEl.value):null)||window._tarj.anio;
-  window._tarj.mes=mes; window._tarj.anio=anio;
+  const mes=window._tarj.mes, anio=window._tarj.anio;
   const tarjetaExistente=(DB().asistencia||[]).find(a=>
     a.esTarjeta && a.trabajadorId===t.id && a.mes===mes && a.anio===anio
   );
@@ -11920,17 +11907,23 @@ function _tkDiaUpd(changedId){
   if(!isNaN(d)) tkUpd(d);
 }
 
-function tkUpd(d){
+function tkUpd(d,soloVisual){
   if(!window._tarj.diasData) window._tarj.diasData={};
-  const r={
-    amIn:$(`tk_${d}_amIn`)?.value||'',
-    amOut:$(`tk_${d}_amOut`)?.value||'',
-    pmIn:$(`tk_${d}_pmIn`)?.value||'',
-    pmOut:$(`tk_${d}_pmOut`)?.value||'',
-    otIn:$(`tk_${d}_otIn`)?.value||'',
-    otOut:$(`tk_${d}_otOut`)?.value||''
-  };
-  window._tarj.diasData[d]=r;
+  let r;
+  if(soloVisual && window._tarj.diasData[d]){
+    // Solo actualizar visual — usar datos ya cargados sin pisar con DOM vacío
+    r=window._tarj.diasData[d];
+  } else {
+    r={
+      amIn:$(`tk_${d}_amIn`)?.value||'',
+      amOut:$(`tk_${d}_amOut`)?.value||'',
+      pmIn:$(`tk_${d}_pmIn`)?.value||'',
+      pmOut:$(`tk_${d}_pmOut`)?.value||'',
+      otIn:$(`tk_${d}_otIn`)?.value||'',
+      otOut:$(`tk_${d}_otOut`)?.value||''
+    };
+    window._tarj.diasData[d]=r;
+  }
   const mins=_calcDia(r);
   const el=$(`tk_${d}_tot`);
   if(!el) return;
