@@ -12163,6 +12163,38 @@ function tkExportarExcelIndividual(){
 }
 
 // ── HELPER: calcular desglose semanal para PDF ────────────────────────────
+function _calcSemanasDesdeDiasRango(diasRango, jornada){
+  // Igual que _calcSemanasPDF pero opera sobre array [{d,mes,anio,r,dt}]
+  const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const semanas=[], semMap={};
+  let semIdx=0;
+  diasRango.forEach(({d,mes,anio,r,dt})=>{
+    const dow=dt.getDay();
+    const diffALunes=dow===0?-6:1-dow;
+    const lunes=new Date(dt);
+    lunes.setDate(dt.getDate()+diffALunes);
+    const lunesKey=lunes.toISOString().slice(0,10);
+    if(semMap[lunesKey]===undefined){
+      semMap[lunesKey]=semIdx;
+      semanas[semIdx]={min:0,dias:0,primerDt:dt,ultimoDt:dt,primerLabel:d+' '+['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][mes-1],ultimoLabel:d+' '+['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][mes-1]};
+      semIdx++;
+    }
+    semanas[semMap[lunesKey]].ultimoDt=dt;
+    semanas[semMap[lunesKey]].ultimoLabel=d+' '+['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'][mes-1];
+    if(r){const m=_calcDia(r);if(m>0){semanas[semMap[lunesKey]].min+=m;semanas[semMap[lunesKey]].dias++;}}
+  });
+  const jornadaSemMin=jornada*60;
+  return semanas.map((s,i)=>{
+    const extra=Math.max(0,s.min-jornadaSemMin);
+    const desc=Math.max(0,jornadaSemMin-s.min);
+    const bal=s.min-jornadaSemMin;
+    const pNom=DIAS_S[s.primerDt.getDay()];
+    const uNom=DIAS_S[s.ultimoDt.getDay()];
+    return {idx:i+1,label:`Sem ${i+1} · ${pNom} ${s.primerLabel} – ${uNom} ${s.ultimoLabel}`,
+      dias:s.dias,min:s.min,jornadaSemMin,extra,desc,bal};
+  });
+}
+
 function _calcSemanasPDF(diasData, mes, anio, jornada){
   const nDias=new Date(anio,mes,0).getDate();
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -12952,7 +12984,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         <div class="worker-meta">
           ${t.num?`<span>Nº ${t.num}</span>`:''}
           ${t.depto?`<span>${t.depto}</span>`:''}
-          <span>${MESES_N[t.mes]} ${t.anio}</span>
+          <span>${t._rangoLabel||MESES_N[t.mes]+' '+t.anio}</span>
           <span>Jornada ${t.jornada}h/sem</span>
         </div>
       </div>
@@ -12981,7 +13013,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
             <th style="padding:3px 6px;text-align:right;">BALANCE</th>
           </tr></thead>
           <tbody>
-            ${_calcSemanasPDF(t.diasData||{},t.mes,t.anio,t.jornada).map(s=>`
+            ${(t._diasRango&&[...new Set(t._diasRango.map(x=>x.mes))].length>1?_calcSemanasDesdeDiasRango(t._diasRango,t.jornada):_calcSemanasPDF(t.diasData||{},t.mes,t.anio,t.jornada)).map(s=>`
             <tr style="border-bottom:1px solid #f0f0f0;">
               <td style="padding:3px 6px;color:#555;">${s.label}</td>
               <td style="padding:3px 6px;text-align:right;">${s.dias}d</td>
