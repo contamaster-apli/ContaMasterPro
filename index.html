@@ -12548,121 +12548,131 @@ function _tkExportarExcelMasivoConRango(rango){
 function tkModalPDFDias(){
   const st=window._tarj;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const nDias=new Date(st.anio,st.mes,0).getDate();
-  // Construir grilla de días del mes
-  let diasHtml='';
-  for(let d=1;d<=nDias;d++){
-    const dt=new Date(st.anio,st.mes-1,d);
-    const dow=dt.getDay();
-    const esFinde=dow===0||dow===6;
-    diasHtml+=`<label style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:${esFinde?'var(--orange2)':'var(--s2)'};margin:3px;">
-      <input type="checkbox" class="pdf_dia_chk" value="${d}">
-      <span style="font-size:10px;font-weight:600;">${d}</span>
-      <span style="font-size:9px;color:var(--muted);">${DIAS_S[dow]}</span>
-    </label>`;
-  }
-  $('addTitle').textContent=`📅 PDF por Días — ${MESES_N[st.mes]} ${st.anio}`;
+  const mesesDisp=[...new Set((DB().asistencia||[]).filter(a=>a.esTarjeta).map(a=>a.anio*100+a.mes))].sort();
+  const mesOpts=mesesDisp.map(ym=>{
+    const m=ym%100,y=Math.floor(ym/100);
+    return `<option value="${ym}" ${(m===st.mes&&y===st.anio)?'selected':''}>${MESES_N[m]} ${y}</option>`;
+  }).join('');
+  $('addTitle').textContent='📅 PDF por Días — Rango de Fechas';
   $('addBody').innerHTML=`
-    <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
-      Selecciona los días que quieres consultar. El PDF mostrará solo los trabajadores que trabajaron al menos uno de esos días, con el detalle de horas de cada día seleccionado.
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+      Define el rango. Puede cruzar meses (ej: 22 Mar → 24 Abr).
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:var(--s2);border-radius:8px;border:1px solid var(--border2);flex-wrap:wrap;">
-      <span style="font-size:10px;color:var(--muted);white-space:nowrap;">📅 Rango rápido:</span>
-      <span style="font-size:10px;color:var(--muted);">Desde</span>
-      <input class="fi" type="number" id="dias_desde" min="1" max="${nDias}" value="1" style="width:55px;text-align:center;font-size:11px;padding:3px 6px;">
-      <span style="font-size:10px;color:var(--muted);">Hasta</span>
-      <input class="fi" type="number" id="dias_hasta" min="1" max="${nDias}" value="${nDias}" style="width:55px;text-align:center;font-size:11px;padding:3px 6px;">
-      <button class="btn sm teal" onclick="(function(){const desde=Math.max(1,Math.min(${nDias},parseInt(document.getElementById('dias_desde')?.value)||1));const hasta=Math.max(desde,Math.min(${nDias},parseInt(document.getElementById('dias_hasta')?.value)||${nDias}));document.querySelectorAll('.pdf_dia_chk').forEach(c=>{const d=parseInt(c.value);c.checked=(d>=desde&&d<=hasta);});})()">Aplicar rango</button>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">📅 DESDE</div>
+        <select class="fi" id="pdias_mes_desde" style="width:100%;margin-bottom:6px;">${mesOpts}</select>
+        <input class="fi" type="number" id="pdias_dia_desde" min="1" max="31" value="1" placeholder="Día" style="width:100%;text-align:center;">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">📅 HASTA</div>
+        <select class="fi" id="pdias_mes_hasta" style="width:100%;margin-bottom:6px;">${mesOpts}</select>
+        <input class="fi" type="number" id="pdias_dia_hasta" min="1" max="31" value="${new Date(st.anio,st.mes,0).getDate()}" placeholder="Día" style="width:100%;text-align:center;">
+      </div>
     </div>
-    <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
-      <button class="btn sm secondary" onclick="document.querySelectorAll('.pdf_dia_chk').forEach(c=>c.checked=true)">☑ Todos</button>
-      <button class="btn sm secondary" onclick="document.querySelectorAll('.pdf_dia_chk').forEach(c=>c.checked=false)">☐ Ninguno</button>
-      <button class="btn sm secondary" onclick="document.querySelectorAll('.pdf_dia_chk').forEach(c=>{const d=parseInt(c.value);const dow=new Date(${st.anio},${st.mes-1},d).getDay();c.checked=(dow===0||dow===6);})">Solo Fines de Semana</button>
-      <button class="btn sm secondary" onclick="document.querySelectorAll('.pdf_dia_chk').forEach(c=>{const d=parseInt(c.value);const dow=new Date(${st.anio},${st.mes-1},d).getDay();c.checked=(dow!==0&&dow!==6);})">Solo Días Hábiles</button>
-    </div>
-    <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:12px;">${diasHtml}</div>
-    <div style="font-size:10px;color:var(--muted);">
-      <span style="background:var(--orange2);padding:2px 6px;border-radius:4px;">Naranja = Sábado/Domingo</span>
+    <div style="font-size:10px;color:var(--muted);padding:8px;background:var(--s2);border-radius:6px;">
+      💡 Ejemplo: Desde <b>22 Marzo</b> Hasta <b>24 Abril</b>.
     </div>`;
   $('addOk').textContent='📄 Generar PDF';
+  $('addOk').style.display='';
   $('addOk').onclick=()=>{
-    const diasSel=[...document.querySelectorAll('.pdf_dia_chk:checked')].map(c=>parseInt(c.value));
-    if(!diasSel.length){toast('Selecciona al menos un día','err');return;}
+    const ymD=parseInt(document.getElementById('pdias_mes_desde')?.value)||0;
+    const ymH=parseInt(document.getElementById('pdias_mes_hasta')?.value)||0;
+    const dD=Math.max(1,parseInt(document.getElementById('pdias_dia_desde')?.value)||1);
+    const dH=Math.max(1,parseInt(document.getElementById('pdias_dia_hasta')?.value)||31);
+    if(!ymD||!ymH){toast('Selecciona los meses','err');return;}
+    if(ymH<ymD||(ymH===ymD&&dH<dD)){toast('La fecha fin debe ser posterior al inicio','err');return;}
+    const mD=ymD%100,aD=Math.floor(ymD/100),mH=ymH%100,aH=Math.floor(ymH/100);
+    const segs=[];
+    if(mD===mH&&aD===aH){
+      segs.push({mes:mD,anio:aD,desde:dD,hasta:dH});
+    } else {
+      segs.push({mes:mD,anio:aD,desde:dD,hasta:new Date(aD,mD,0).getDate()});
+      let m=mD+1,a=aD; if(m>12){m=1;a++;}
+      while(a<aH||(a===aH&&m<mH)){segs.push({mes:m,anio:a,desde:1,hasta:new Date(a,m,0).getDate()});m++;if(m>12){m=1;a++;}}
+      segs.push({mes:mH,anio:aH,desde:1,hasta:dH});
+    }
+    const lbl=dD+' '+MESES_N[mD]+' '+aD+' – '+dH+' '+MESES_N[mH]+' '+aH;
     closeModal('addModal');
-    tkExportarPDFDias(diasSel);
+    tkExportarPDFDias({segmentos:segs,label:lbl});
   };
   openModal('addModal');
 }
-
-function tkExportarPDFDias(diasSel){
-  const st=window._tarj;
+function tkExportarPDFDias(param){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
-  if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
+  // Soporte objeto {segmentos,label} o array legacy
+  const segmentos=Array.isArray(param)?null:param?.segmentos;
+  const rangoLabel=Array.isArray(param)?'':param?.label||'';
+  const st=window._tarj;
 
-  // Jornada real del trabajador
+  // Construir lista unificada de días del período completo
+  let diasUnificados=[]; // [{d, mes, anio, dt}]
+  if(segmentos){
+    segmentos.forEach(s=>{
+      for(let d=s.desde;d<=s.hasta;d++){
+        diasUnificados.push({d,mes:s.mes,anio:s.anio,dt:new Date(s.anio,s.mes-1,d)});
+      }
+    });
+  } else {
+    // legacy: param es array de números de día del mes activo
+    param.forEach(d=>diasUnificados.push({d,mes:st.mes,anio:st.anio,dt:new Date(st.anio,st.mes-1,d)}));
+  }
+  if(!diasUnificados.length){toast('Sin días seleccionados','err');return;}
+
+  // Obtener todas las tarjetas de los meses involucrados
+  const mesesInv=[...new Set(diasUnificados.map(x=>x.anio*100+x.mes))];
+  const todasTarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&mesesInv.includes(a.anio*100+a.mes));
+  if(!todasTarjetas.length){toast('Sin tarjetas para exportar','err');return;}
+
   const trabMap={};
   (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
 
-  // Filtrar solo trabajadores que trabajaron al menos uno de los días seleccionados
-  // Filtrar trabajadores que trabajaron al menos uno de los días seleccionados
-  const _trabsFiltradosRaw=tarjetas.filter(t=>{
-    return diasSel.some(d=>{
-      const r=(t.diasData||{})[d];
+  // Filtrar trabajadores que trabajaron al menos uno de los días del rango
+  const trabIds=[...new Set(todasTarjetas.map(t=>t.trabajadorId))];
+  const trabIdsFiltrados=trabIds.filter(tid=>{
+    return diasUnificados.some(({d,mes,anio})=>{
+      const ficha=todasTarjetas.find(t=>t.trabajadorId===tid&&t.mes===mes&&t.anio===anio);
+      const r=(ficha?.diasData||{})[String(d)];
       return r&&(r.amIn||r.pmIn||r.otIn);
     });
   });
-  // Deduplicar por trabajadorId: conservar el que tiene más días con datos
-  const _trabsDedupeMap={};
-  _trabsFiltradosRaw.forEach(t=>{
-    const tid=t.trabajadorId;
-    const diasConDatos=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;
-    if(!_trabsDedupeMap[tid]||diasConDatos>_trabsDedupeMap[tid]._diasConDatos){
-      t._diasConDatos=diasConDatos;
-      _trabsDedupeMap[tid]=t;
-    }
+  if(!trabIdsFiltrados.length){toast('Ningún trabajador trabajó en ese rango','warn');return;}
+
+  // Deduplicar — si hay 2 tarjetas del mismo trabId en distintos meses es normal, ambas se usan
+  // Construir objeto por trabajador con datos de todos los días
+  const trabsFiltrados=trabIdsFiltrados.map(tid=>{
+    const fichas=todasTarjetas.filter(t=>t.trabajadorId===tid);
+    return {...fichas[0], _fichas:fichas};
   });
-  const trabsFiltrados=Object.values(_trabsDedupeMap);
 
-  if(!trabsFiltrados.length){
-    toast('Ningún trabajador trabajó en los días seleccionados','warn');
-    return;
-  }
-
-  const diasLabel=diasSel.map(d=>{
-    const dt=new Date(st.anio,st.mes-1,d);
-    return `${DIAS_S[dt.getDay()]} ${d}`;
-  }).join(', ');
+  const diasLabel=rangoLabel||(diasUnificados[0]?DIAS_S[diasUnificados[0].dt.getDay()]+' '+diasUnificados[0].d:'');
 
   // Generar tabla de días para cada trabajador
-  const filasDias=diasSel.map(d=>{
-    const dt=new Date(st.anio,st.mes-1,d);
+  const filasDias=diasUnificados.map(({d,mes,anio,dt})=>{
     const dow=dt.getDay();
     const esFinde=dow===0||dow===6;
-    return `<th style="padding:4px 6px;text-align:center;min-width:70px;background:${esFinde?'#3a2a10':'#253347'};color:${esFinde?'#f5a623':'#a8c0d8'};font-size:9px;">${DIAS_S[dow]}<br>${d}</th>`;
+    const lbl=mes!==st.mes?`${d} ${MESES_N[mes].substring(0,3)}`:String(d);
+    return `<th style="padding:4px 6px;text-align:center;min-width:70px;background:${esFinde?'#3a2a10':'#253347'};color:${esFinde?'#f5a623':'#a8c0d8'};font-size:9px;">${DIAS_S[dow]}<br>${lbl}</th>`;
   }).join('');
 
   const seccionesTrabs=trabsFiltrados.map(t=>{
     const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
-    const diasData=t.diasData||{};
 
     // Calcular totales y contar días trabajados de los días seleccionados
     let totalMinSel=0;
     let diasTrabSel=0;
-    const celdasDias=diasSel.map(d=>{
-      const r=diasData[d];
-      if(!r||(! r.amIn&&!r.pmIn&&!r.otIn)){
+    const celdasDias=diasUnificados.map(({d,mes,anio,dt})=>{
+      const ficha=t._fichas.find(f=>f.mes===mes&&f.anio===anio);
+      const r=(ficha?.diasData||{})[String(d)];
+      if(!r||(!r.amIn&&!r.pmIn&&!r.otIn)){
         return `<td style="padding:4px 6px;text-align:center;font-size:9px;color:#aaa;">—</td>`;
       }
       const min=_calcDia(r);
       totalMinSel+=min;
       diasTrabSel++;
       const hhmm=_m2hm(min);
-      const dt=new Date(st.anio,st.mes-1,d);
       const esFinde=dt.getDay()===0||dt.getDay()===6;
-      // Construir bloques horarios presentes
       const bloques=[];
       if(r.amIn&&r.amOut) bloques.push(`${r.amIn}–${r.amOut}`);
       if(r.pmIn&&r.pmOut) bloques.push(`${r.pmIn}–${r.pmOut}`);
@@ -12675,20 +12685,21 @@ function tkExportarPDFDias(diasSel){
     }).join('');
 
     const esJornadaCompleta=jornadaReal>=40;
-    const colorDias=esJornadaCompleta?(diasTrabSel===diasSel.length?'#e83c3c':diasTrabSel>=2?'#f5a623':'#20b86a'):'#888';
+    const colorDias=esJornadaCompleta?(diasTrabSel===diasUnificados.length?'#e83c3c':diasTrabSel>=2?'#f5a623':'#20b86a'):'#888';
     return {diasTrabSel, html:`<tr style="border-bottom:1px solid #eee;">
       <td style="padding:5px 8px;font-weight:700;font-size:10px;white-space:nowrap;">${t.nombre}</td>
       <td style="padding:5px 8px;font-size:9px;color:#888;">${t.depto||'—'}</td>
       <td style="padding:5px 8px;text-align:center;font-size:9px;">${jornadaReal}h</td>
       ${celdasDias}
       <td style="padding:5px 8px;text-align:right;font-weight:800;font-size:11px;color:#4a8ff5;">${_m2hm(totalMinSel)}</td>
-      <td style="padding:5px 8px;text-align:center;font-weight:800;font-size:11px;color:${colorDias};">${diasTrabSel}/${diasSel.length}</td>
+      <td style="padding:5px 8px;text-align:center;font-weight:800;font-size:11px;color:${colorDias};">${diasTrabSel}/${diasUnificados.length}</td>
     </tr>`};
   }).sort((a,b)=>b.diasTrabSel-a.diasTrabSel).map(x=>x.html).join('');
 
   const totalMinGlobal=trabsFiltrados.reduce((s,t)=>{
-    return s+diasSel.reduce((ss,d)=>{
-      const r=(t.diasData||{})[d];
+    return s+diasUnificados.reduce((ss,{d,mes,anio})=>{
+      const ficha=t._fichas.find(f=>f.mes===mes&&f.anio===anio);
+      const r=(ficha?.diasData||{})[String(d)];
       return ss+(r?_calcDia(r):0);
     },0);
   },0);
@@ -12718,7 +12729,7 @@ function tkExportarPDFDias(diasSel){
   </div>
   <div class="metrics">
     <div class="metric"><div class="ml">Trabajadores</div><div class="mv" style="color:#4a8ff5;">${trabsFiltrados.length}</div></div>
-    <div class="metric"><div class="ml">Días consultados</div><div class="mv" style="color:#f5a623;">${diasSel.length}</div></div>
+    <div class="metric"><div class="ml">Días consultados</div><div class="mv" style="color:#f5a623;">${diasUnificados.length}</div></div>
     <div class="metric"><div class="ml">Total horas trabajadas</div><div class="mv" style="color:#20b86a;">${_m2hm(totalMinGlobal)}</div></div>
   </div>
   <table>
@@ -12742,7 +12753,7 @@ function tkExportarPDFDias(diasSel){
   const w=window.open('','_blank');
   w.document.write(html);
   w.document.close();
-  toast(`📅 PDF generado — ${trabsFiltrados.length} trabajadores en ${diasSel.length} día${diasSel.length!==1?'s':''}  ✅`,'ok');
+  toast(`📅 PDF generado — ${trabsFiltrados.length} trabajadores en ${diasUnificados.length} día${diasUnificados.length!==1?'s':''}  ✅`,'ok');
 }
 
 function tkExportarPDFMasivo(){
@@ -12757,6 +12768,8 @@ function _tkModalJornadaPDF(rango){
   </label>`).join('');
   document.getElementById('addTitle').textContent='📄 PDF Masivo — Filtrar por Jornada';
   document.getElementById('addBody').innerHTML=`<div style="display:flex;flex-direction:column;gap:8px;">${opts}</div>`;
+  document.getElementById('addOk').textContent='📄 Generar PDF';
+  document.getElementById('addOk').style.display='';
   document.getElementById('addOk').onclick=()=>{
     const sel=document.querySelector('input[name="jfiltro"]:checked');
     const filtro=sel?sel.value:'';
