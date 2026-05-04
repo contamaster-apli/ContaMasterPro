@@ -12378,83 +12378,143 @@ function tkExportarExcelMasivo(){
 function tkModalRangoMasivo(tipo){
   const st=window._tarj;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-  const numDias=new Date(st.anio,st.mes,0).getDate();
-  const mesLabel=MESES_N[st.mes]+' '+st.anio;
+  // Construir opciones de mes disponibles en tarjetas guardadas
+  const mesesDisp=[...new Set((DB().asistencia||[]).filter(a=>a.esTarjeta).map(a=>a.anio*100+a.mes))].sort();
+  const mesOpts=mesesDisp.map(ym=>{
+    const m=ym%100, y=Math.floor(ym/100);
+    const sel=(m===st.mes&&y===st.anio)?'selected':'';
+    return `<option value="${ym}" ${sel}>${MESES_N[m]} ${y}</option>`;
+  }).join('');
   document.getElementById('addTitle').textContent=(tipo==='pdf'?'📄':'📦')+' Masivo — Rango de Fechas';
   document.getElementById('addBody').innerHTML=`
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <div style="font-size:12px;color:var(--muted);">Mes activo: <b>${mesLabel}</b> · ${numDias} días</div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Desde día:</label>
-        <input class="fi" type="number" id="rango_desde" min="1" max="${numDias}" value="1" style="width:70px;text-align:center;">
-      </div>
-      <div style="display:flex;gap:10px;align-items:center;">
-        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Hasta día:</label>
-        <input class="fi" type="number" id="rango_hasta" min="1" max="${numDias}" value="${numDias}" style="width:70px;text-align:center;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div style="font-size:11px;color:var(--muted);">Define el período de cierre. Puede cruzar meses (ej: 22 Mar → 24 Abr).</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">📅 DESDE</div>
+          <select class="fi" id="rango_mes_desde" style="width:100%;margin-bottom:6px;">${mesOpts}</select>
+          <input class="fi" type="number" id="rango_dia_desde" min="1" max="31" value="1" placeholder="Día" style="width:100%;text-align:center;">
+        </div>
+        <div>
+          <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">📅 HASTA</div>
+          <select class="fi" id="rango_mes_hasta" style="width:100%;margin-bottom:6px;">${mesOpts}</select>
+          <input class="fi" type="number" id="rango_dia_hasta" min="1" max="31" value="${new Date(st.anio,st.mes,0).getDate()}" placeholder="Día" style="width:100%;text-align:center;">
+        </div>
       </div>
       <div style="font-size:10px;color:var(--muted);padding:8px;background:var(--s2);border-radius:6px;">
-        💡 Para cierre mensual tipo 22→24: ingresa el día de inicio y fin del período dentro del mes.
+        💡 Ejemplo cierre: Desde <b>22 Marzo</b> Hasta <b>24 Abril</b> — incluye días 22-31 de Marzo y 1-24 de Abril.
       </div>
     </div>`;
   document.getElementById('addOk').textContent='Continuar →';
   document.getElementById('addOk').onclick=()=>{
-    const desde=Math.max(1,Math.min(numDias,parseInt(document.getElementById('rango_desde')?.value)||1));
-    const hasta=Math.max(desde,Math.min(numDias,parseInt(document.getElementById('rango_hasta')?.value)||numDias));
+    const ymDesde=parseInt(document.getElementById('rango_mes_desde')?.value)||0;
+    const ymHasta=parseInt(document.getElementById('rango_mes_hasta')?.value)||0;
+    const diaDesde=Math.max(1,parseInt(document.getElementById('rango_dia_desde')?.value)||1);
+    const diaHasta=Math.max(1,parseInt(document.getElementById('rango_dia_hasta')?.value)||31);
+    if(!ymDesde||!ymHasta){toast('Selecciona los meses del rango','err');return;}
+    if(ymHasta<ymDesde||(ymHasta===ymDesde&&diaHasta<diaDesde)){toast('La fecha fin debe ser posterior a la fecha inicio','err');return;}
+    const mesDesde=ymDesde%100, anioDesde=Math.floor(ymDesde/100);
+    const mesHasta=ymHasta%100, anioHasta=Math.floor(ymHasta/100);
+    const rango={mesDesde,anioDesde,diaDesde,mesHasta,anioHasta,diaHasta};
     closeModal('addModal');
-    if(tipo==='excel') _tkExportarExcelMasivoConRango(desde,hasta);
-    else _tkModalJornadaPDF(desde,hasta);
+    if(tipo==='excel') _tkExportarExcelMasivoConRango(rango);
+    else _tkModalJornadaPDF(rango);
   };
   document.getElementById('addOk').style.display='';
   openModal('addModal');
 }
 
-function _tkExportarExcelMasivoConRango(desdeDia,hastaDia){
-  const st=window._tarj;
+function _tkExportarExcelMasivoConRango(rango){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
-  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
+  const st=window._tarj;
+  const {mesDesde,anioDesde,diaDesde,mesHasta,anioHasta,diaHasta}=rango||{};
+  const mismoMes=(!rango)||(mesDesde===mesHasta&&anioDesde===anioHasta);
+  const rangoLabel=mismoMes
+    ? (MESES_N[mesDesde||st.mes]+' '+(anioDesde||st.anio))
+    : (''+diaDesde+' '+MESES_N[mesDesde]+' '+anioDesde+' – '+diaHasta+' '+MESES_N[mesHasta]+' '+anioHasta);
+  // Construir segmentos de meses
+  const segmentos=[];
+  if(mismoMes){
+    const m=mesDesde||st.mes,a=anioDesde||st.anio;
+    segmentos.push({mes:m,anio:a,desde:diaDesde||1,hasta:diaHasta||new Date(a,m,0).getDate()});
+  } else {
+    segmentos.push({mes:mesDesde,anio:anioDesde,desde:diaDesde,hasta:new Date(anioDesde,mesDesde,0).getDate()});
+    let m=mesDesde+1,a=anioDesde; if(m>12){m=1;a++;}
+    while(a<anioHasta||(a===anioHasta&&m<mesHasta)){
+      segmentos.push({mes:m,anio:a,desde:1,hasta:new Date(a,m,0).getDate()});
+      m++;if(m>12){m=1;a++;}
+    }
+    segmentos.push({mes:mesHasta,anio:anioHasta,desde:1,hasta:diaHasta});
+  }
+  const todasTarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&segmentos.some(s=>s.mes===a.mes&&s.anio===a.anio));
+  if(!todasTarjetas.length){toast('Sin tarjetas para exportar en ese rango','err');return;}
+  const trabIds=[...new Set(todasTarjetas.map(t=>t.trabajadorId))];
+  const tarjetas=trabIds.map(tid=>{
+    const fichas=todasTarjetas.filter(t=>t.trabajadorId===tid);
+    const primera=fichas[0];
+    const diasRango=[];
+    segmentos.forEach(s=>{
+      const ficha=fichas.find(t=>t.mes===s.mes&&t.anio===s.anio);
+      for(let d=s.desde;d<=s.hasta;d++){
+        const r=(ficha?.diasData||{})[String(d)]||{};
+        const dt=new Date(s.anio,s.mes-1,d);
+        diasRango.push({d,mes:s.mes,anio:s.anio,r,dt,label:d+' '+MESES_N[s.mes]});
+      }
+    });
+    return {...primera,_diasRango:diasRango};
+  });
   if(!tarjetas.length){toast('Sin tarjetas para exportar','err');return;}
 
+  // Calcular totales por trabajador desde _diasRango
+  const trabMap2={};
+  (DB().trabajadores||[]).forEach(t=>trabMap2[t.id]=t.jornada||44);
+  const tarjetasCalcXls=tarjetas.map(t=>{
+    const jornadaReal=trabMap2[t.trabajadorId]||t.jornada||44;
+    const mesesU=[...new Set((t._diasRango||[]).map(x=>x.anio*100+x.mes))];
+    const jornadaMin=mesesU.reduce((s,ym)=>{const m=ym%100,a=Math.floor(ym/100);return s+_tkSemanasDelMes(m,a)*jornadaReal*60;},0);
+    let totalMin=0,diasTrab=0;
+    (t._diasRango||[]).forEach(({r})=>{const m=_calcDia(r);if(m>0){totalMin+=m;diasTrab++;}});
+    const extra=Math.max(0,totalMin-jornadaMin);
+    const desc=Math.max(0,jornadaMin-totalMin);
+    return {...t,jornada:jornadaReal,jornadaMin,totalMin,diasTrab,extra,desc};
+  });
+
   // Hoja 1: Resumen consolidado
-  const totalExtra=tarjetas.reduce((s,t)=>s+t.extra,0);
-  const totalDesc=tarjetas.reduce((s,t)=>s+t.desc,0);
+  const totalExtra=tarjetasCalcXls.reduce((s,t)=>s+t.extra,0);
+  const totalDesc=tarjetasCalcXls.reduce((s,t)=>s+t.desc,0);
   const resumenAoa=[
-    [`RESUMEN ASISTENCIA — ${MESES_N[st.mes]} ${st.anio}`],
+    [`RESUMEN ASISTENCIA — ${rangoLabel}`],
     [`Generado: ${new Date().toLocaleDateString('es-CL')} · Empresa: ${(DB().cfg&&DB().cfg.emp)||''}`],
     [],
     ['Nº','NOMBRE','DEPTO','JORNADA(h)','DÍAS TRAB.','H.TRABAJADAS','H.NORMALES','H.EXTRA','H.DESCONTAR','BALANCE','AUSENCIAS'],
-    ...tarjetas.map(t=>{
+    ...tarjetasCalcXls.map(t=>{
       const bal=t.totalMin-t.jornadaMin;
       return [t.num||'',t.nombre,t.depto||'',t.jornada,t.diasTrab,
         _m2hm(t.totalMin),_m2hm(t.jornadaMin),_m2hm(t.extra),_m2hm(t.desc),
         (bal>=0?'+':'')+_m2hm(bal),t.ausencias||0];
     }),
     [],
-    ['TOTALES','','','',tarjetas.reduce((s,t)=>s+t.diasTrab,0),'','',_m2hm(totalExtra),_m2hm(totalDesc),'','']
+    ['TOTALES','','','',tarjetasCalcXls.reduce((s,t)=>s+t.diasTrab,0),'','',_m2hm(totalExtra),_m2hm(totalDesc),'','']
   ];
 
   // Una hoja por trabajador con su tarjeta detallada
-  const hojasTrabajadores=tarjetas.map(t=>{
-    const diasData=t.diasData||{};
-    const numDias=new Date(t.anio,t.mes,0).getDate();
-    const rangoLabel2=desdeDia===1&&hastaDia===numDias?`${MESES_N[t.mes]} ${t.anio}`:`${MESES_N[t.mes]} ${t.anio} · Días ${desdeDia}–${hastaDia}`;
+  const hojasTrabajadores=tarjetasCalcXls.map(t=>{
     const aoa=[
       [`TARJETA DE CONTROL — ${t.nombre}`],
-      [`${rangoLabel2}  ·  Jornada: ${t.jornada}h/sem  ·  Nº: ${t.num||'—'}  ·  Depto: ${t.depto||'—'}`],
+      [`${rangoLabel}  ·  Jornada: ${t.jornada}h/sem  ·  Nº: ${t.num||'—'}  ·  Depto: ${t.depto||'—'}`],
       [],
       ['DÍA','SEM','AM ENT.','AM SAL.','PM ENT.','PM SAL.','COL.(no imp.)','EXT ENT.','EXT SAL.','TOTAL','ESTADO']
     ];
-    for(let d=desdeDia;d<=hastaDia;d++){
-      const dt=new Date(t.anio,t.mes-1,d);
+    for(const {d,r,dt,label} of (t._diasRango||[])){
       const dw=dt.getDay();
-      const r=diasData[d]||{};
       const mins=_calcDia(r);
       const filled=[r.amIn,r.amOut,r.pmIn,r.pmOut].filter(v=>v&&v.length>=5).length;
       const parcial=filled>0&&filled<4;
       let estado=mins>0?(parcial?'⚠️ INCOMPLETO':'✅ OK'):(dw===0||dw===6?'FDS':'');
       const _ao2=_t2m(r.amOut),_pi2=_t2m(r.pmIn);
       const col2=(_ao2!==null&&_pi2!==null&&_pi2>_ao2)?_m2hm(_pi2-_ao2):'—';
-      aoa.push([d,DIAS_S[dw],r.amIn||'',r.amOut||'',r.pmIn||'',r.pmOut||'',col2,r.otIn||'',r.otOut||'',mins>0?_m2hm(mins):'—',estado]);
+      aoa.push([label,DIAS_S[dw],r.amIn||'',r.amOut||'',r.pmIn||'',r.pmOut||'',col2,r.otIn||'',r.otOut||'',mins>0?_m2hm(mins):'—',estado]);
     }
     const bal=t.totalMin-t.jornadaMin;
     aoa.push([],[' RESUMEN ']);
@@ -12473,8 +12533,8 @@ function _tkExportarExcelMasivoConRango(desdeDia,hastaDia){
     };
   });
 
-  const rangoLabel=desdeDia===1&&hastaDia===new Date(st.anio,st.mes,0).getDate()?MESES_N[st.mes]:`${MESES_N[st.mes]}_D${desdeDia}-${hastaDia}`;
-  modXLSX(`Asistencia_Masiva_${rangoLabel}_${st.anio}`,[
+  const archivoLabel=rangoLabel.replace(/ /g,'_').replace(/–/g,'-');
+  modXLSX(`Asistencia_Masiva_${archivoLabel}`,[
     {name:'📊 Resumen', aoa:resumenAoa, cols:[{wch:5},{wch:28},{wch:16},{wch:10},{wch:10},{wch:12},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10}]},
     ...hojasTrabajadores
   ]);
@@ -12688,7 +12748,7 @@ function tkExportarPDFDias(diasSel){
 function tkExportarPDFMasivo(){
   tkModalRangoMasivo('pdf');
 }
-function _tkModalJornadaPDF(desdeDia,hastaDia){
+function _tkModalJornadaPDF(rango){
   // Modal de selección de jornada antes de generar
   const jornadas=[{v:'',l:'Todas las jornadas'},{v:44,l:'44h — Jornada completa'},{v:42,l:'42h — Jornada completa'},{v:40,l:'40h — Jornada completa'},{v:30,l:'30h — Jornada parcial 3/4'},{v:20,l:'20h — Media jornada'},{v:10,l:'10h — Jornada parcial'}];
   const opts=jornadas.map(j=>`<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border2);background:var(--s2);">
@@ -12701,38 +12761,95 @@ function _tkModalJornadaPDF(desdeDia,hastaDia){
     const sel=document.querySelector('input[name="jfiltro"]:checked');
     const filtro=sel?sel.value:'';
     closeModal('addModal');
-    _tkExportarPDFMasivoFiltrado(filtro===''?null:Number(filtro),desdeDia,hastaDia);
+    _tkExportarPDFMasivoFiltrado(filtro===''?null:Number(filtro),rango);
   };
   openModal('addModal');
 }
 
-function _tkExportarPDFMasivoFiltrado(jornadaFiltro,desdeDia,hastaDia){
-  const st=window._tarj;
-  const numDiasMes=new Date(st.anio,st.mes,0).getDate();
-  if(!desdeDia) desdeDia=1;
-  if(!hastaDia) hastaDia=numDiasMes;
+function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+  const st=window._tarj;
+
+  // Extraer rango — si es mismo mes, usar desdeDia/hastaDia normales
+  const {mesDesde,anioDesde,diaDesde,mesHasta,anioHasta,diaHasta}=rango||{};
+  const mismoMes=(!rango)||(mesDesde===mesHasta&&anioDesde===anioHasta);
+  const rangoLabel=mismoMes
+    ? (MESES_N[mesDesde||st.mes]+' '+(anioDesde||st.anio))
+    : (''+diaDesde+' '+MESES_N[mesDesde]+' '+anioDesde+' – '+diaHasta+' '+MESES_N[mesHasta]+' '+anioHasta);
 
   // Mapa jornada real del trabajador — siempre usar la ficha, no la tarjeta
   const trabMap={};
   (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
 
-  const tarjetasBase=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
-  if(!tarjetasBase.length){toast('Sin tarjetas para exportar','err');return;}
-  const tarjetas=jornadaFiltro?tarjetasBase.filter(t=>(trabMap[t.trabajadorId]||t.jornada||44)===jornadaFiltro):tarjetasBase;
-  if(!tarjetas.length){toast(`Sin tarjetas para jornada ${jornadaFiltro}h`,'warn');return;}
+  // Construir lista de segmentos mes+rango de días a incluir
+  // Ej: 22 Mar → 24 Abr = [{mes:3,anio:2026,desde:22,hasta:31},{mes:4,anio:2026,desde:1,hasta:24}]
+  const segmentos=[];
+  if(mismoMes){
+    const m=mesDesde||st.mes, a=anioDesde||st.anio;
+    const nd=new Date(a,m,0).getDate();
+    segmentos.push({mes:m,anio:a,desde:diaDesde||1,hasta:diaHasta||nd});
+  } else {
+    // Primer mes: desde diaDesde hasta fin de mes
+    segmentos.push({mes:mesDesde,anio:anioDesde,desde:diaDesde,hasta:new Date(anioDesde,mesDesde,0).getDate()});
+    // Meses intermedios completos
+    let m=mesDesde+1, a=anioDesde;
+    if(m>12){m=1;a++;}
+    while(a<anioHasta||(a===anioHasta&&m<mesHasta)){
+      segmentos.push({mes:m,anio:a,desde:1,hasta:new Date(a,m,0).getDate()});
+      m++; if(m>12){m=1;a++;}
+    }
+    // Último mes: desde 1 hasta diaHasta
+    segmentos.push({mes:mesHasta,anio:anioHasta,desde:1,hasta:diaHasta});
+  }
 
-  const filtroLabel=jornadaFiltro?` · Jornada ${jornadaFiltro}h`:'';
-  const rangoLabelPDF=desdeDia===1&&hastaDia===numDiasMes?'':(' · Días '+desdeDia+'–'+hastaDia);
+  // Obtener todos los trabIds únicos con tarjetas en el rango
+  const todasTarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&
+    segmentos.some(s=>s.mes===a.mes&&s.anio===a.anio));
+  if(!todasTarjetas.length){toast('Sin tarjetas para exportar en ese rango','err');return;}
 
-  // Enriquecer cada tarjeta con jornada real y recalcular totales
+  // Agrupar por trabajadorId
+  const trabIds=[...new Set(todasTarjetas.map(t=>t.trabajadorId))];
+  // Filtrar por jornada si aplica
+  const trabIdsFiltrados=jornadaFiltro
+    ? trabIds.filter(id=>(trabMap[id]||44)===jornadaFiltro)
+    : trabIds;
+  if(!trabIdsFiltrados.length){toast('Sin tarjetas para jornada '+jornadaFiltro+'h','warn');return;}
+
+  // Construir objeto trabajador con diasData combinado de todos los segmentos
+  // Clave: "mes-dia" para identificar cada día unívocamente en el reporte
+  const tarjetas=trabIdsFiltrados.map(tid=>{
+    const fichasTrab=todasTarjetas.filter(t=>t.trabajadorId===tid);
+    const primera=fichasTrab[0];
+    // Construir array de días ordenados del rango completo
+    const diasRango=[];
+    segmentos.forEach(s=>{
+      const ficha=fichasTrab.find(t=>t.mes===s.mes&&t.anio===s.anio);
+      for(let d=s.desde;d<=s.hasta;d++){
+        const r=(ficha?.diasData||{})[String(d)]||{};
+        const dt=new Date(s.anio,s.mes-1,d);
+        diasRango.push({d,mes:s.mes,anio:s.anio,r,dt,label:d+' '+MESES_N[s.mes]});
+      }
+    });
+    return {...primera,_diasRango:diasRango,_rangoLabel:rangoLabel};
+  });
+
+  const filtroLabel=jornadaFiltro?' · Jornada '+jornadaFiltro+'h':'';
+  const rangoLabelPDF=' · '+rangoLabel;
+
+  // Enriquecer cada tarjeta con jornada real y recalcular totales desde _diasRango
   const tarjetasCalc=tarjetas.map(t=>{
     const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
-    const jornadaMin=jornadaReal*4*60;
-    const extra=Math.max(0,t.totalMin-jornadaMin);
-    const desc=Math.max(0,jornadaMin-t.totalMin);
-    return {...t, jornada:jornadaReal, jornadaMin, extra, desc};
+    const mesesUnicos=[...new Set((t._diasRango||[]).map(x=>x.anio*100+x.mes))];
+    const jornadaMin=mesesUnicos.reduce((s,ym)=>{
+      const m=ym%100,a=Math.floor(ym/100);
+      return s+_tkSemanasDelMes(m,a)*jornadaReal*60;
+    },0);
+    let totalMin=0,diasTrab=0;
+    (t._diasRango||[]).forEach(({r})=>{const m=_calcDia(r);if(m>0){totalMin+=m;diasTrab++;}});
+    const extra=Math.max(0,totalMin-jornadaMin);
+    const desc=Math.max(0,jornadaMin-totalMin);
+    return {...t,jornada:jornadaReal,jornadaMin,totalMin,diasTrab,extra,desc};
   });
 
   const totalExtra=tarjetasCalc.reduce((s,t)=>s+t.extra,0);
@@ -12759,15 +12876,11 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,desdeDia,hastaDia){
 
   // Una sección por trabajador con tabla de días
   const seccionesTarjetas=tarjetasCalc.map(t=>{
-    const diasData=t.diasData||{};
-    const numDias=new Date(t.anio,t.mes,0).getDate();
     const bal=t.totalMin-t.jornadaMin;
     let filas='';
-    for(let d=desdeDia;d<=hastaDia;d++){
-      const dt=new Date(t.anio,t.mes-1,d);
+    for(const {d,r,dt,label} of (t._diasRango||[])){
       const dw=dt.getDay();
       const esFDS=dw===0||dw===6;
-      const r=diasData[d]||{};
       const mins=_calcDia(r);
       const filled=[r.amIn,r.amOut,r.pmIn,r.pmOut].filter(v=>v&&v.length>=5).length;
       const parcial=filled>0&&filled<4;
