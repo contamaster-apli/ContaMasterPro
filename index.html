@@ -12373,6 +12373,42 @@ function tkPrevisualizarConsolidado(){
 // EXPORTACIÓN MASIVA ASISTENCIA — Excel con hoja por trabajador
 // ════════════════════════════════════════════════════════════════════
 function tkExportarExcelMasivo(){
+  tkModalRangoMasivo('excel');
+}
+function tkModalRangoMasivo(tipo){
+  const st=window._tarj;
+  const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const numDias=new Date(st.anio,st.mes,0).getDate();
+  const mesLabel=MESES_N[st.mes]+' '+st.anio;
+  document.getElementById('addTitle').textContent=(tipo==='pdf'?'📄':'📦')+' Masivo — Rango de Fechas';
+  document.getElementById('addBody').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="font-size:12px;color:var(--muted);">Mes activo: <b>${mesLabel}</b> · ${numDias} días</div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Desde día:</label>
+        <input class="fi" type="number" id="rango_desde" min="1" max="${numDias}" value="1" style="width:70px;text-align:center;">
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <label style="font-size:11px;color:var(--muted);white-space:nowrap;">Hasta día:</label>
+        <input class="fi" type="number" id="rango_hasta" min="1" max="${numDias}" value="${numDias}" style="width:70px;text-align:center;">
+      </div>
+      <div style="font-size:10px;color:var(--muted);padding:8px;background:var(--s2);border-radius:6px;">
+        💡 Para cierre mensual tipo 22→24: ingresa el día de inicio y fin del período dentro del mes.
+      </div>
+    </div>`;
+  document.getElementById('addOk').textContent='Continuar →';
+  document.getElementById('addOk').onclick=()=>{
+    const desde=Math.max(1,Math.min(numDias,parseInt(document.getElementById('rango_desde')?.value)||1));
+    const hasta=Math.max(desde,Math.min(numDias,parseInt(document.getElementById('rango_hasta')?.value)||numDias));
+    closeModal('addModal');
+    if(tipo==='excel') _tkExportarExcelMasivoConRango(desde,hasta);
+    else _tkModalJornadaPDF(desde,hasta);
+  };
+  document.getElementById('addOk').style.display='';
+  openModal('addModal');
+}
+
+function _tkExportarExcelMasivoConRango(desdeDia,hastaDia){
   const st=window._tarj;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
@@ -12401,13 +12437,14 @@ function tkExportarExcelMasivo(){
   const hojasTrabajadores=tarjetas.map(t=>{
     const diasData=t.diasData||{};
     const numDias=new Date(t.anio,t.mes,0).getDate();
+    const rangoLabel2=desdeDia===1&&hastaDia===numDias?`${MESES_N[t.mes]} ${t.anio}`:`${MESES_N[t.mes]} ${t.anio} · Días ${desdeDia}–${hastaDia}`;
     const aoa=[
       [`TARJETA DE CONTROL — ${t.nombre}`],
-      [`${MESES_N[t.mes]} ${t.anio}  ·  Jornada: ${t.jornada}h/sem  ·  Nº: ${t.num||'—'}  ·  Depto: ${t.depto||'—'}`],
+      [`${rangoLabel2}  ·  Jornada: ${t.jornada}h/sem  ·  Nº: ${t.num||'—'}  ·  Depto: ${t.depto||'—'}`],
       [],
       ['DÍA','SEM','AM ENT.','AM SAL.','PM ENT.','PM SAL.','COL.(no imp.)','EXT ENT.','EXT SAL.','TOTAL','ESTADO']
     ];
-    for(let d=1;d<=numDias;d++){
+    for(let d=desdeDia;d<=hastaDia;d++){
       const dt=new Date(t.anio,t.mes-1,d);
       const dw=dt.getDay();
       const r=diasData[d]||{};
@@ -12436,7 +12473,8 @@ function tkExportarExcelMasivo(){
     };
   });
 
-  modXLSX(`Asistencia_Masiva_${MESES_N[st.mes]}_${st.anio}`,[
+  const rangoLabel=desdeDia===1&&hastaDia===new Date(st.anio,st.mes,0).getDate()?MESES_N[st.mes]:`${MESES_N[st.mes]}_D${desdeDia}-${hastaDia}`;
+  modXLSX(`Asistencia_Masiva_${rangoLabel}_${st.anio}`,[
     {name:'📊 Resumen', aoa:resumenAoa, cols:[{wch:5},{wch:28},{wch:16},{wch:10},{wch:10},{wch:12},{wch:12},{wch:10},{wch:12},{wch:10},{wch:10}]},
     ...hojasTrabajadores
   ]);
@@ -12468,6 +12506,14 @@ function tkModalPDFDias(){
   $('addBody').innerHTML=`
     <div style="font-size:11px;color:var(--muted);margin-bottom:10px;">
       Selecciona los días que quieres consultar. El PDF mostrará solo los trabajadores que trabajaron al menos uno de esos días, con el detalle de horas de cada día seleccionado.
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 10px;background:var(--s2);border-radius:8px;border:1px solid var(--border2);flex-wrap:wrap;">
+      <span style="font-size:10px;color:var(--muted);white-space:nowrap;">📅 Rango rápido:</span>
+      <span style="font-size:10px;color:var(--muted);">Desde</span>
+      <input class="fi" type="number" id="dias_desde" min="1" max="${nDias}" value="1" style="width:55px;text-align:center;font-size:11px;padding:3px 6px;">
+      <span style="font-size:10px;color:var(--muted);">Hasta</span>
+      <input class="fi" type="number" id="dias_hasta" min="1" max="${nDias}" value="${nDias}" style="width:55px;text-align:center;font-size:11px;padding:3px 6px;">
+      <button class="btn sm teal" onclick="(function(){const desde=Math.max(1,Math.min(${nDias},parseInt(document.getElementById('dias_desde')?.value)||1));const hasta=Math.max(desde,Math.min(${nDias},parseInt(document.getElementById('dias_hasta')?.value)||${nDias}));document.querySelectorAll('.pdf_dia_chk').forEach(c=>{const d=parseInt(c.value);c.checked=(d>=desde&&d<=hasta);});})()">Aplicar rango</button>
     </div>
     <div style="display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap;">
       <button class="btn sm secondary" onclick="document.querySelectorAll('.pdf_dia_chk').forEach(c=>c.checked=true)">☑ Todos</button>
@@ -12640,6 +12686,9 @@ function tkExportarPDFDias(diasSel){
 }
 
 function tkExportarPDFMasivo(){
+  tkModalRangoMasivo('pdf');
+}
+function _tkModalJornadaPDF(desdeDia,hastaDia){
   // Modal de selección de jornada antes de generar
   const jornadas=[{v:'',l:'Todas las jornadas'},{v:44,l:'44h — Jornada completa'},{v:42,l:'42h — Jornada completa'},{v:40,l:'40h — Jornada completa'},{v:30,l:'30h — Jornada parcial 3/4'},{v:20,l:'20h — Media jornada'},{v:10,l:'10h — Jornada parcial'}];
   const opts=jornadas.map(j=>`<label style="display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:8px;cursor:pointer;border:1px solid var(--border2);background:var(--s2);">
@@ -12652,13 +12701,16 @@ function tkExportarPDFMasivo(){
     const sel=document.querySelector('input[name="jfiltro"]:checked');
     const filtro=sel?sel.value:'';
     closeModal('addModal');
-    _tkExportarPDFMasivoFiltrado(filtro===''?null:Number(filtro));
+    _tkExportarPDFMasivoFiltrado(filtro===''?null:Number(filtro),desdeDia,hastaDia);
   };
   openModal('addModal');
 }
 
-function _tkExportarPDFMasivoFiltrado(jornadaFiltro){
+function _tkExportarPDFMasivoFiltrado(jornadaFiltro,desdeDia,hastaDia){
   const st=window._tarj;
+  const numDiasMes=new Date(st.anio,st.mes,0).getDate();
+  if(!desdeDia) desdeDia=1;
+  if(!hastaDia) hastaDia=numDiasMes;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
 
@@ -12672,6 +12724,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro){
   if(!tarjetas.length){toast(`Sin tarjetas para jornada ${jornadaFiltro}h`,'warn');return;}
 
   const filtroLabel=jornadaFiltro?` · Jornada ${jornadaFiltro}h`:'';
+  const rangoLabelPDF=desdeDia===1&&hastaDia===numDiasMes?'':(' · Días '+desdeDia+'–'+hastaDia);
 
   // Enriquecer cada tarjeta con jornada real y recalcular totales
   const tarjetasCalc=tarjetas.map(t=>{
@@ -12710,7 +12763,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro){
     const numDias=new Date(t.anio,t.mes,0).getDate();
     const bal=t.totalMin-t.jornadaMin;
     let filas='';
-    for(let d=1;d<=numDias;d++){
+    for(let d=desdeDia;d<=hastaDia;d++){
       const dt=new Date(t.anio,t.mes-1,d);
       const dw=dt.getDay();
       const esFDS=dw===0||dw===6;
@@ -12865,7 +12918,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro){
   const win=window.open('','_blank','width=1100,height=750');
   if(win){win.document.write(html);win.document.close();}
   else toast('Permite ventanas emergentes para exportar','warn');
-  toast(`✅ PDF masivo generado · ${tarjetas.length} tarjetas${filtroLabel}`,'ok');
+  toast(`✅ PDF masivo generado · ${tarjetas.length} tarjetas${filtroLabel}${rangoLabelPDF}`,'ok');
 }
 
 // ════════════════════════════════════════════════════════════════════
