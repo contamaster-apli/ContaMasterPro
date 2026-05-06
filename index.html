@@ -21790,28 +21790,25 @@ function _cmpFormulario(tipo, d){
     efConceptos.map(c=>`<option value="${c.id}">${c.nombre}</option>`).join('');
   const sinConceptosEF = efConceptos.length===0;
 
-  // Archivos del archivador del mes actual para los selectores por concepto
+  // Archivos del archivador — TODOS los meses disponibles
   const archMes=(()=>{
     const arch=DB().archivador||{archivos:[]};
-    return arch.archivos
-      .filter(a=>a.mesCarpeta===hoy.slice(0,7)||a.fecha.startsWith(hoy.slice(0,7)))
-      .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+    return arch.archivos.sort((a,b)=>b.fecha.localeCompare(a.fecha));
   })();
   const archOpts=(()=>{
     if(!archMes.length) return '<option value="">— Sin adjunto —</option>';
+    // Agrupar por mes
     const grupos={};
     archMes.forEach(a=>{
-      const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
-      if(!grupos[sem]) grupos[sem]=[];
-      grupos[sem].push(a);
+      const mk=a.mesCarpeta||a.fecha.slice(0,7);
+      if(!grupos[mk]) grupos[mk]=[];
+      grupos[mk].push(a);
     });
-    const [ay,am]=hoy.slice(0,7).split('-').map(Number);
-    const diasMes=new Date(ay,am,0).getDate();
     return '<option value="">— Sin adjunto —</option>'+
-      Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
-        const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
-        return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
-          grupos[ns].map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
+      Object.keys(grupos).sort((a,b)=>b.localeCompare(a)).map(mk=>{
+        const [ay,am]=mk.split('-').map(Number);
+        return `<optgroup label="📅 ${ARCH_MESES[am]||mk} ${ay}">`+
+          grupos[mk].map(a=>`<option value="${a.id}">${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
           `</optgroup>`;
       }).join('');
   })();
@@ -21957,7 +21954,7 @@ function _cmpFormulario(tipo, d){
               }).join('');
             })()}
           </select>
-          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Solo se muestran archivos del mismo mes. Usa Ctrl+clic para seleccionar varios. Si no encuentras el archivo, súbelo primero al Archivador.</div>
+          <div style="font-size:9px;color:var(--muted);margin-top:4px;">Se muestran todos los archivos del Archivador agrupados por mes. Si no encuentras el archivo, súbelo primero al Archivador.</div>
         </div>
       </div>
 
@@ -22456,32 +22453,23 @@ function cmpAdjuntar(idx){
   const arch=DB().archivador||{archivos:[]};
   const mesReg=reg.fecha.slice(0,7);
 
-  // Archivos del mismo mes + los 2 meses anteriores
-  const fecha=new Date(reg.fecha+'T12:00:00');
-  const meses=[mesReg];
-  for(let i=1;i<=2;i++){
-    const d2=new Date(fecha); d2.setMonth(d2.getMonth()-i);
-    meses.push(d2.toISOString().slice(0,7));
-  }
-  const archivos=arch.archivos
-    .filter(a=>meses.some(m=>a.mesCarpeta===m||a.fecha.startsWith(m)))
-    .sort((a,b)=>b.fecha.localeCompare(a.fecha));
+  // Todos los archivos del archivador sin filtro de mes
+  const archivos=arch.archivos.sort((a,b)=>b.fecha.localeCompare(a.fecha));
 
   const archOpts=(selId)=>{
     if(!archivos.length) return '<option value="">— Sin adjunto —</option>';
+    // Agrupar por mes
     const grupos={};
     archivos.forEach(a=>{
-      const sem=Math.ceil(new Date(a.fecha+'T12:00:00').getDate()/7);
-      if(!grupos[sem]) grupos[sem]=[];
-      grupos[sem].push(a);
+      const mk=a.mesCarpeta||a.fecha.slice(0,7);
+      if(!grupos[mk]) grupos[mk]=[];
+      grupos[mk].push(a);
     });
-    const [ay,am]=mesReg.split('-').map(Number);
-    const diasMes=new Date(ay,am,0).getDate();
     return '<option value="">— Sin adjunto —</option>'+
-      Object.keys(grupos).map(Number).sort((a,b)=>b-a).map(ns=>{
-        const ini=(ns-1)*7+1,fin=Math.min(ns*7,diasMes);
-        return `<optgroup label="📅 Semana ${ns} — ${ini} al ${fin} de ${ARCH_MESES[am]}">`+
-          grupos[ns].map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
+      Object.keys(grupos).sort((a,b)=>b.localeCompare(a)).map(mk=>{
+        const [ay,am]=mk.split('-').map(Number);
+        return `<optgroup label="📅 ${ARCH_MESES[am]||mk} ${ay}">`+
+          grupos[mk].map(a=>`<option value="${a.id}" ${selId===a.id?'selected':''}>${esc(a.nombre)} · ${_fmtFechaArch(a.fecha)}</option>`).join('')+
           `</optgroup>`;
       }).join('');
   };
