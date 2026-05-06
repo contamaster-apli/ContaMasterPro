@@ -16551,6 +16551,7 @@ function efImprimirResumen(wk){
 
   // RESUMEN — parte superior (idéntico a RESUMEN_EF.xlsx)
   const resumenFilas=[
+    s.saldoInicial?`<tr><td style="font-weight:700;color:#1a3050">💰 SALDO ANTERIOR (Banco al inicio de semana)</td><td class="r" style="font-weight:700">${f$(fv(s.saldoInicial||0))}</td></tr>`:'',
     ...conceptos.filter(c=>c.tipo==='ing_fijo'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
     ...conceptos.filter(c=>c.tipo==='otro_ing'&&val(c.id)>0).map(c=>`<tr><td>${c.nombre}</td><td class="r">${f$(val(c.id))}</td></tr>`),
     `<tr class="sub green"><td>INGRESOS DE LA SEMANA (${label})</td><td class="r">${f$(totalIng)}</td></tr>`,
