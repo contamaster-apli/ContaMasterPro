@@ -12398,7 +12398,7 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
       </tbody>
     </table>
   </div>
-  \${notaRacha}
+  ${notaRacha}
   <div style="display:flex;gap:8px;margin-top:16px;justify-content:center;">
     <button onclick="window.print()" style="padding:8px 18px;background:#c8a84b;border:none;border-radius:6px;font-weight:700;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>
     <button onclick="window.close()" style="padding:8px 18px;background:#eee;border:1px solid #ccc;border-radius:6px;cursor:pointer;">✕ Cerrar</button>
@@ -13046,9 +13046,23 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
       const mins=_calcDia(r);
       const filled=[r.amIn,r.amOut,r.pmIn,r.pmOut].filter(v=>v&&v.length>=5).length;
       const parcial=filled>0&&filled<4;
-      const rowBg=parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
+      // Calcular racha consecutiva en el rango
+      let _rachaM=0;
+      if(mins>0){
+        const _diasRangoLocal=t._diasRango||[];
+        const idx_d=_diasRangoLocal.findIndex(x=>x.d===d&&x.mes===dt.getMonth()+1);
+        for(let i=idx_d;i>=0;i--){
+          const ri=_diasRangoLocal[i].r;
+          if(ri&&(ri.amIn||ri.pmIn||ri.otIn)) _rachaM++;
+          else break;
+        }
+      }
+      const _limM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dt<=10?2:6;}return 6;})();
+      const _rachaCritM=_rachaM>=_limM, _rachaAdvM=_rachaM===_limM-1&&_limM>1;
+      const rowBg=_rachaCritM?'background:#fff0f0;border-left:3px solid #e83c3c':_rachaAdvM?'background:#fffbea;border-left:3px solid #f5a623':parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
       const totalTxt=mins>0?_m2hm(mins):'—';
-      const totalStyle=parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a':'color:#aaa';
+      const rachaLblM=_rachaCritM?` 🚨${_rachaM}d`:_rachaAdvM?` ⚠️${_rachaM}d`:'';
+      const totalStyle=_rachaCritM?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a':'color:#aaa';
       const _ao3=_t2m(r.amOut),_pi3=_t2m(r.pmIn);
       const col3=(_ao3!==null&&_pi3!==null&&_pi3>_ao3)?_m2hm(_pi3-_ao3):'—';
       filas+=`<tr style="${rowBg}">
@@ -13059,7 +13073,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         <td style="color:#f07d32;font-size:9px">${col3}</td>
         <td style="color:#18b5a0">${r.otIn||'—'}</td>
         <td style="color:#18b5a0">${r.otOut||'—'}</td>
-        <td style="${totalStyle}">${totalTxt}${parcial?' ⚠️':''}</td>
+        <td style="${totalStyle}">${totalTxt}${parcial?' ⚠️':''}${rachaLblM}</td>
       </tr>`;
     }
     return `
@@ -13085,6 +13099,12 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         <div class="res-box"><div class="res-l">HRS DESCONTAR</div><div class="res-v red">-${_m2hm(t.desc)}</div></div>
         <div class="res-box"><div class="res-l">BALANCE FINAL</div><div class="res-v ${bal>=0?'green':'red'}">${bal>=0?'+':''}${_m2hm(bal)}</div></div>
       </div>
+      ${(()=>{
+        let _mrM=0,_mrIniM=0,_rtM=0,_riM=0;
+        (t._diasRango||[]).forEach(({d,r,dt})=>{if(r&&(r.amIn||r.pmIn||r.otIn)){if(_rtM===0)_riM=d;_rtM++;if(_rtM>_mrM){_mrM=_rtM;_mrIniM=_riM;}}else{_rtM=0;}});
+        const _lM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dtt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dtt<=10?2:6;}return 6;})();
+        return _mrM>=_lM?`<div style="margin:8px 0;padding:8px 12px;border-radius:5px;font-size:9px;${_mrM>=_lM?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00'}"><strong>${_mrM>=_lM?'🚨 INFRACCIÓN LEGAL':'⚠️ ADVERTENCIA'}</strong>: ${_mrM} días consecutivos (días ${_mrIniM} al ${_mrIniM+_mrM-1}). ${_mrM>=_lM?'Supera el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h. Requiere descanso compensatorio.':'Próximo día superaría el máximo de '+_lM+' días continuos.'}</div>`:'';
+      })()}
       <div style="margin-top:10px;">
         <div style="font-size:9px;font-weight:700;color:#1a2538;letter-spacing:.5px;margin-bottom:5px;border-bottom:1px solid #1a2538;padding-bottom:3px;">📅 DESGLOSE POR SEMANA — Jornada: ${t.jornada}h/sem</div>
         <table style="width:100%;border-collapse:collapse;font-size:9px;">
