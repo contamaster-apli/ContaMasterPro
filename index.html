@@ -11531,6 +11531,15 @@ function _rConsolidado(){
       <button class="btn sm teal" onclick="tkExportarExcel()">📥 Excel Resumen</button>
       <button class="btn sm cyan" onclick="tkExportarExcelMasivo()" title="Excel con una hoja por cada trabajador">📦 Excel Masivo</button>
       <button class="btn sm orange" onclick="tkExportarPDFConsolidado()">🖨 PDF Resumen</button>
+      <select class="fi" id="infJornadaFiltro" style="width:auto;font-size:10px;padding:4px 8px;" title="Filtrar reporte de infracciones por jornada">
+        <option value="">Todas las jornadas</option>
+        <option value="44">44h</option>
+        <option value="42">42h</option>
+        <option value="30">30h</option>
+        <option value="20">20h</option>
+        <option value="10">10h</option>
+      </select>
+      <button class="btn sm red" onclick="tkExportarPDFInfracciones()" title="Reporte de trabajadores que exceden el límite legal de días consecutivos">🚨 Reporte Infracciones</button>
       <button class="btn sm pink" onclick="tkExportarPDFMasivo()" title="PDF con la tarjeta completa de cada trabajador">📄 PDF Masivo</button>
       <button class="btn sm purple" onclick="tkModalPDFDias()" title="PDF solo de trabajadores que trabajaron días específicos">📅 PDF por Días</button>
     </div>
@@ -12444,6 +12453,133 @@ function tkPrevisualizarTarjeta(){
 }
 
 // ── EXPORTAR PDF CONSOLIDADO ─────────────────────────────────────────
+function tkExportarPDFInfracciones(){
+  const st=window._tarj;
+  const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
+  if(!tarjetas.length){toast('Sin tarjetas para el período','err');return;}
+
+  // Filtro por jornada si se seleccionó
+  const _jFiltro=parseInt(document.getElementById('infJornadaFiltro')?.value||0)||null;
+  const _jFiltroLabel=_jFiltro?` · Jornada ${_jFiltro}h`:'';
+
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+
+  // Calcular racha máxima y rangos de infracción por trabajador
+  const infracciones=[];
+  const tarjetasFiltradas=_jFiltro?tarjetas.filter(t=>(trabMap[t.trabajadorId]||t.jornada||44)===_jFiltro):tarjetas;
+  if(!tarjetasFiltradas.length){toast('Sin tarjetas para jornada '+_jFiltro+'h','warn');return;}
+  tarjetasFiltradas.forEach(t=>{
+    const jornada=trabMap[t.trabajadorId]||t.jornada||44;
+    const diasData=t.diasData||{};
+    const numDias=new Date(t.anio,t.mes,0).getDate();
+
+    // Límite según jornada
+    const limite=(()=>{
+      if(jornada<=10) return 1;
+      if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length; return dt<=10?2:6;}
+      return 6;
+    })();
+
+    // Detectar todas las rachas que alcanzan o superan el límite
+    const rachasDetectadas=[];
+    let racha=0, inicioRacha=0;
+    for(let d=1;d<=numDias;d++){
+      const r=diasData[d];
+      if(r&&(r.amIn||r.pmIn||r.otIn)){
+        if(racha===0) inicioRacha=d;
+        racha++;
+        // Registrar cuando alcanza el límite y cada día siguiente
+        if(racha>=limite){
+          const nivel=racha>limite?'infraccion':'limite';
+          // Solo agregar una entrada por racha, con el rango completo
+          if(racha===limite){
+            rachasDetectadas.push({inicio:inicioRacha,fin:d,dias:racha,nivel});
+          } else {
+            // Actualizar la última racha detectada
+            if(rachasDetectadas.length>0) rachasDetectadas[rachasDetectadas.length-1]={inicio:inicioRacha,fin:d,dias:racha,nivel:'infraccion'};
+          }
+        }
+      } else {
+        racha=0;
+      }
+    }
+
+    if(rachasDetectadas.length>0){
+      infracciones.push({
+        nombre:t.nombre, num:t.num||'—', depto:t.depto||'—',
+        jornada, limite, rachas:rachasDetectadas
+      });
+    }
+  });
+
+  if(!infracciones.length){
+    toast('✅ Sin infracciones ni límites alcanzados en '+MESES_N[st.mes]+' '+st.anio,'ok');
+    return;
+  }
+
+  // Separar infracciones reales de los que están en el límite
+  const soloInfracciones=infracciones.filter(i=>i.rachas.some(r=>r.nivel==='infraccion'));
+  const soloLimite=infracciones.filter(i=>!i.rachas.some(r=>r.nivel==='infraccion'));
+
+  const filaInf=(lista,colorFila)=>lista.map(i=>{
+    const rachasTxt=i.rachas.map(r=>`Días ${r.inicio} al ${r.fin} (${r.dias}d consecutivos)`).join('<br>');
+    return `<tr style="background:${colorFila}">
+      <td style="font-weight:700">${i.num}</td>
+      <td style="font-weight:700">${i.nombre}</td>
+      <td>${i.depto}</td>
+      <td>${i.jornada}h</td>
+      <td style="font-size:10px;">${i.limite} días</td>
+      <td style="font-size:10px;line-height:1.6;">${rachasTxt}</td>
+    </tr>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Reporte Infracciones — ${MESES_N[st.mes]} ${st.anio}</title>
+  <style>
+    body{font-family:'Segoe UI',Arial,sans-serif;padding:20px;color:#111;}
+    h1{font-size:16px;text-align:center;color:#7f1d1d;}
+    h2{font-size:13px;margin:16px 0 8px;padding:6px 10px;border-radius:4px;}
+    .meta{text-align:center;font-size:11px;color:#555;margin-bottom:16px;}
+    table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:16px;}
+    th{background:#1a2538;color:#c8a84b;padding:6px 8px;text-align:left;font-size:10px;}
+    td{padding:6px 8px;border-bottom:1px solid #ddd;vertical-align:top;}
+    .resumen{display:flex;gap:20px;margin-top:16px;padding:10px;background:#f5f5f5;border-radius:6px;font-size:11px;}
+    .ok-box{background:#f0fdf4;border:1px solid #86efac;border-radius:6px;padding:10px;font-size:11px;color:#14532d;margin-top:12px;}
+    @media print{button{display:none!important;}}
+  </style></head><body>
+  <h1>🚨 REPORTE DE INFRACCIONES — DÍAS CONSECUTIVOS</h1>
+  <div class="meta">${MESES_N[st.mes]} ${st.anio}${_jFiltroLabel} &nbsp;·&nbsp; ${tarjetasFiltradas.length} trabajadores analizados</div>
+
+  ${soloInfracciones.length>0?`
+  <h2 style="background:#fecaca;color:#7f1d1d;">🚨 INFRACCIONES LEGALES — Superan el máximo permitido (${soloInfracciones.length} trabajador${soloInfracciones.length>1?'es':''})</h2>
+  <table><thead><tr><th>Nº</th><th>NOMBRE</th><th>DEPTO</th><th>JORNADA</th><th>LÍMITE</th><th>RANGOS DE INFRACCIÓN</th></tr></thead>
+  <tbody>${filaInf(soloInfracciones,'#fee2e2')}</tbody></table>`:''}
+
+  ${soloLimite.length>0?`
+  <h2 style="background:#fde68a;color:#5a3a00;">⚠️ EN EL LÍMITE LEGAL — Requieren descanso al día siguiente (${soloLimite.length} trabajador${soloLimite.length>1?'es':''})</h2>
+  <table><thead><tr><th>Nº</th><th>NOMBRE</th><th>DEPTO</th><th>JORNADA</th><th>LÍMITE</th><th>RANGOS DETECTADOS</th></tr></thead>
+  <tbody>${filaInf(soloLimite,'#fffbea')}</tbody></table>`:''}
+
+  <div class="resumen">
+    <span>👥 Analizados: <b>${tarjetasFiltradas.length}</b></span>
+    <span style="color:#dc2626;">🚨 Con infracción: <b>${soloInfracciones.length}</b></span>
+    <span style="color:#d97706;">⚠️ En el límite: <b>${soloLimite.length}</b></span>
+    <span style="color:#16a34a;">✅ Sin alerta: <b>${tarjetas.length-infracciones.length}</b></span>
+  </div>
+  <div style="margin-top:16px;text-align:center;">
+    <button onclick="window.print()" style="padding:8px 18px;background:#dc2626;color:#fff;border:none;border-radius:6px;font-weight:700;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>
+    <button onclick="window.close()" style="padding:8px 18px;background:#eee;border:1px solid #ccc;border-radius:6px;margin-left:8px;cursor:pointer;">✕ Cerrar</button>
+  </div>
+  <div style="margin-top:10px;font-size:9px;color:#999;text-align:center;">Generado por ContaMaster Pro · ${new Date().toLocaleDateString('es-CL')} · Ley 21.561 — Máximo días consecutivos según jornada</div>
+  </body></html>`;
+
+  const win=window.open('','_blank','width=1000,height=700');
+  if(win){win.document.write(html);win.document.close();}
+  else toast('Permite ventanas emergentes','warn');
+}
+
 function tkExportarPDFConsolidado(){
   const st=window._tarj;
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
