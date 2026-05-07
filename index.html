@@ -10330,8 +10330,8 @@ function editarJornada(id){
   if(!DB().jornadas||!DB().jornadas.length) DB().jornadas=JSON.parse(JSON.stringify(JORNADAS_DEFAULT));
   const j=DB().jornadas.find(x=>x.id===id); if(!j){toast('No encontrada','err');return;}
   const diasOpts=['Lun','Mar','Mié','Jue','Vie','Sáb','Dom'].map(d=>`<label style="display:flex;align-items:center;gap:4px;font-size:10px"><input type="checkbox" class="hor_dia_cb" value="${d}" ${(j.dias||[]).includes(d)?'checked':''}> ${d}</label>`).join('');
-  openModal(`
-    <div class="modal-title">✏️ Editar Jornada</div>
+  $('addTitle').textContent='✏️ Editar Jornada';
+  $('addBody').innerHTML=`
     <div class="fgrid">
       <div class="frow h2">
         <div><div class="fl">NOMBRE</div><input class="fi" id="nj_nombre" value="${j.nombre}"></div>
@@ -10344,11 +10344,11 @@ function editarJornada(id){
       </div>
       <div class="frow"><div class="fl">DÍAS LABORALES</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:5px">${diasOpts}</div></div>
       <div class="frow"><div class="fl">HORAS/SEM CONTRATO</div><input class="fi" type="number" id="nj_hrs" value="${j.horasSem}" max="44"></div>
-    </div>
-    <div class="mbtns">
-      <button class="mbtn ok" onclick="actualizarJornada(${id})">💾 Guardar</button>
-      <button class="mbtn cancel" onclick="closeModal('addModal')">Cancelar</button>
-    </div>`);
+    </div>`;
+  $('addOk').textContent='💾 Guardar';
+  $('addOk').style.display='';
+  $('addOk').onclick=()=>actualizarJornada(id);
+  openModal('addModal');
 }
 
 function actualizarJornada(id){
