@@ -11938,7 +11938,8 @@ function _alertaRachaLegal(diasData, d, mes, anio){
   const jornada = window._tarj ? (_jornadaActual()||44) : 44;
   const limite = _limiteRachaJornada(jornada, diasData);
   const racha = _calcRachaConsecutiva(diasData, d, mes, anio);
-  if(racha >= limite) return 'critica';         // 🚨 En el límite o superado
+  if(racha > limite) return 'critica';          // 🚨 Superado
+  if(racha === limite) return 'limite';         // ⚠️ En el límite exacto
   if(racha === limite - 1 && limite > 1) return 'advertencia'; // ⚠️ A 1 día del límite
   return null;
 }
@@ -12009,7 +12010,7 @@ function tkUpd(d,soloVisual){
   if(row && mins > 0){
     const racha = _calcRachaConsecutiva(window._tarj.diasData, d, window._tarj.mes, window._tarj.anio);
     const _limite = _limiteRachaJornada(_jornadaActual()||44, window._tarj.diasData);
-    const nivelRacha = racha >= _limite ? 'critica' : (racha === _limite-1 && _limite>1) ? 'advertencia' : null;
+    const nivelRacha = racha > _limite ? 'critica' : racha === _limite ? 'limite' : (racha === _limite-1 && _limite>1) ? 'advertencia' : null;
     let alertaEl = document.getElementById(`tk_racha_${d}`);
     if(!alertaEl){
       alertaEl = document.createElement('span');
@@ -12018,15 +12019,22 @@ function tkUpd(d,soloVisual){
       el.parentNode.appendChild(alertaEl);
     }
     if(nivelRacha === 'critica'){
-      alertaEl.textContent = '🚨 '+racha+'d';
-      alertaEl.title = `INFRACCIÓN: ${racha} días consecutivos — Ley máximo 6 días. Descanso obligatorio mañana.`;
+      alertaEl.textContent = '🚨 '+racha+'d INFRACCIÓN';
+      alertaEl.title = `INFRACCIÓN LEGAL: ${racha} días consecutivos — Supera el máximo permitido. Descanso compensatorio requerido.`;
       alertaEl.style.background = 'rgba(240,82,82,.2)';
       alertaEl.style.color = 'var(--red)';
       alertaEl.style.border = '1px solid rgba(240,82,82,.5)';
       row.style.outline = '2px solid rgba(240,82,82,.6)';
+    } else if(nivelRacha === 'limite'){
+      alertaEl.textContent = '⚠️ '+racha+'d LÍMITE';
+      alertaEl.title = `EN EL LÍMITE LEGAL: ${racha} días consecutivos — Debe descansar obligatoriamente el día siguiente.`;
+      alertaEl.style.background = 'rgba(240,82,82,.12)';
+      alertaEl.style.color = 'var(--orange)';
+      alertaEl.style.border = '1px solid rgba(240,130,50,.5)';
+      row.style.outline = '2px solid rgba(240,130,50,.5)';
     } else if(nivelRacha === 'advertencia'){
       alertaEl.textContent = '⚠️ '+racha+'d';
-      alertaEl.title = `ATENCIÓN: ${racha} días consecutivos — El siguiente día trabajado excedería el máximo legal de 6 días.`;
+      alertaEl.title = `ATENCIÓN: ${racha} días consecutivos — El siguiente día trabajado alcanzará el máximo legal. Verificar descanso.`;
       alertaEl.style.background = 'rgba(245,200,66,.15)';
       alertaEl.style.color = 'var(--acc)';
       alertaEl.style.border = '1px solid rgba(245,200,66,.4)';
@@ -12034,6 +12042,7 @@ function tkUpd(d,soloVisual){
       alertaEl.textContent = '';
       alertaEl.style.background = '';
       alertaEl.style.border = '';
+      row.style.outline = '';
     }
   } else {
     const alertaEl = document.getElementById(`tk_racha_${d}`);
@@ -12315,12 +12324,12 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
     let racha=0;
     if(mins>0){ for(let i=d;i>=1;i--){ const ri=diasData[i]; if(ri&&(ri.amIn||ri.pmIn||ri.otIn)) racha++; else break; } }
     const _limPDF=(()=>{if(jornada<=10)return 1;if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return dt<=10?2:6;}return 6;})();
-    const rachaCritica=racha>=_limPDF, rachaAdv=(racha===_limPDF-1&&_limPDF>1);
-    const bgRacha=rachaCritica?'background:#fff0f0;border-left:3px solid #e83c3c;':rachaAdv?'background:#fffbea;border-left:3px solid #f5a623;':'';
-    const bg=parcial?'background:#fff0f0;':bgRacha||( esFDS?'background:#fffbea;':'');
+    const rachaSupP=racha>_limPDF, rachaEnLimP=racha===_limPDF, rachaAdvP=(racha===_limPDF-1&&_limPDF>1);
+    const bgRacha=(rachaSupP||rachaEnLimP)?'background:#fff0f0;border-left:3px solid #e83c3c;':rachaAdvP?'background:#fffbea;border-left:3px solid #f5a623;':'';
+    const bg=parcial?'background:#fff0f0;':bgRacha||(esFDS?'background:#fffbea;':'');
     const totalTxt=mins>0?_m2hm(mins):'—';
-    const totalColor=rachaCritica?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a;':'color:#888;';
-    const rachaLabel=rachaCritica?` 🚨${racha}d`:rachaAdv?` ⚠️${racha}d`:'';
+    const totalColor=(rachaSupP||rachaEnLimP)?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a;':'color:#888;';
+    const rachaLabel=rachaSupP?` 🚨${racha}d`:rachaEnLimP?` ⚠️${racha}d LÍM.`:rachaAdvP?` ⚠️${racha}d`:'';
     const _ao1=_t2m(r.amOut),_pi1=_t2m(r.pmIn);
     const col1=(_ao1!==null&&_pi1!==null&&_pi1>_ao1)?_m2hm(_pi1-_ao1):'—';
     filas+=`<tr style="${bg}">
@@ -12337,7 +12346,19 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
   let maxRacha=0,maxRachaIni=0,_rt=0,_ri=0;
   for(let d=1;d<=numDias;d++){const r=diasData[d];if(r&&(r.amIn||r.pmIn||r.otIn)){if(_rt===0)_ri=d;_rt++;if(_rt>maxRacha){maxRacha=_rt;maxRachaIni=_ri;}}else{_rt=0;}}
   const _limNota=(()=>{if(jornada<=10)return 1;if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return dt<=10?2:6;}return 6;})();
-  const notaRacha=maxRacha>=_limNota?`<div style="margin-top:14px;padding:10px 14px;border-radius:6px;font-size:10px;${maxRacha>=_limNota?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00'}"><strong>${maxRacha>=_limNota?'🚨 INFRACCIÓN LEGAL':'⚠️ ADVERTENCIA'}</strong>: ${maxRacha} días consecutivos (días ${maxRachaIni} al ${maxRachaIni+maxRacha-1}). ${maxRacha>=_limNota?'Supera el máximo legal de '+_limNota+' días continuos para jornada '+jornada+'h (Código del Trabajo). Requiere descanso compensatorio.':'El próximo día trabajado superaría el máximo de '+_limNota+' días continuos para jornada '+jornada+'h.'}</div>`:'';
+  const notaRacha=(()=>{
+    if(maxRacha < _limNota-1) return '';
+    const enLimite = maxRacha === _limNota;
+    const superado = maxRacha > _limNota;
+    const bg = (enLimite||superado) ? 'background:#fff0f0;border:2px solid #e83c3c;color:#c00' : 'background:#fffbea;border:2px solid #f5a623;color:#7a4f00';
+    const icono = superado ? '🚨 INFRACCIÓN LEGAL' : enLimite ? '⚠️ EN EL LÍMITE LEGAL' : '⚠️ ADVERTENCIA';
+    const msg = superado
+      ? 'Supera el máximo legal de '+_limNota+' días continuos para jornada '+jornada+'h (Código del Trabajo). Requiere descanso compensatorio inmediato.'
+      : enLimite
+        ? 'Trabajador en el límite legal de '+_limNota+' días continuos para jornada '+jornada+'h. Debe descansar obligatoriamente el día siguiente.'
+        : 'Trabajador próximo al límite legal. El siguiente día trabajado alcanzará el máximo de '+_limNota+' días continuos para jornada '+jornada+'h. Verificar descanso.';
+    return `<div style="margin-top:14px;padding:10px 14px;border-radius:6px;font-size:10px;${bg}"><strong>${icono}</strong>: ${maxRacha} días consecutivos (días ${maxRachaIni} al ${maxRachaIni+maxRacha-1}). ${msg}</div>`;
+  })();
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Tarjeta ${nombre} — ${MESES_N[mes]} ${anio}</title>
@@ -13058,11 +13079,11 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         }
       }
       const _limM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dt<=10?2:6;}return 6;})();
-      const _rachaCritM=_rachaM>=_limM, _rachaAdvM=_rachaM===_limM-1&&_limM>1;
-      const rowBg=_rachaCritM?'background:#fff0f0;border-left:3px solid #e83c3c':_rachaAdvM?'background:#fffbea;border-left:3px solid #f5a623':parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
+      const _rachaSupM=_rachaM>_limM, _rachaEnLimM=_rachaM===_limM, _rachaAdvM=_rachaM===_limM-1&&_limM>1;
+      const rowBg=(_rachaSupM||_rachaEnLimM)?'background:#fff0f0;border-left:3px solid #e83c3c':_rachaAdvM?'background:#fffbea;border-left:3px solid #f5a623':parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
       const totalTxt=mins>0?_m2hm(mins):'—';
-      const rachaLblM=_rachaCritM?` 🚨${_rachaM}d`:_rachaAdvM?` ⚠️${_rachaM}d`:'';
-      const totalStyle=_rachaCritM?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a':'color:#aaa';
+      const rachaLblM=_rachaSupM?` 🚨${_rachaM}d`:_rachaEnLimM?` ⚠️${_rachaM}d LÍM.`:_rachaAdvM?` ⚠️${_rachaM}d`:'';
+      const totalStyle=(_rachaSupM||_rachaEnLimM)?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a':'color:#aaa';
       const _ao3=_t2m(r.amOut),_pi3=_t2m(r.pmIn);
       const col3=(_ao3!==null&&_pi3!==null&&_pi3>_ao3)?_m2hm(_pi3-_ao3):'—';
       filas+=`<tr style="${rowBg}">
@@ -13103,7 +13124,12 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         let _mrM=0,_mrIniM=0,_rtM=0,_riM=0;
         (t._diasRango||[]).forEach(({d,r,dt})=>{if(r&&(r.amIn||r.pmIn||r.otIn)){if(_rtM===0)_riM=d;_rtM++;if(_rtM>_mrM){_mrM=_rtM;_mrIniM=_riM;}}else{_rtM=0;}});
         const _lM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dtt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dtt<=10?2:6;}return 6;})();
-        return _mrM>=_lM?`<div style="margin:8px 0;padding:8px 12px;border-radius:5px;font-size:9px;${_mrM>=_lM?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00'}"><strong>${_mrM>=_lM?'🚨 INFRACCIÓN LEGAL':'⚠️ ADVERTENCIA'}</strong>: ${_mrM} días consecutivos (días ${_mrIniM} al ${_mrIniM+_mrM-1}). ${_mrM>=_lM?'Supera el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h. Requiere descanso compensatorio.':'Próximo día superaría el máximo de '+_lM+' días continuos.'}</div>`:'';
+        if(_mrM < _lM-1) return '';
+        const _supM=_mrM>_lM, _enLimM=_mrM===_lM;
+        const _bgM=(_supM||_enLimM)?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00';
+        const _icoM=_supM?'🚨 INFRACCIÓN LEGAL':_enLimM?'⚠️ EN EL LÍMITE LEGAL':'⚠️ ADVERTENCIA';
+        const _msgM=_supM?'Supera el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h. Requiere descanso compensatorio inmediato.':_enLimM?'En el límite legal de '+_lM+' días continuos para jornada '+t.jornada+'h. Debe descansar obligatoriamente el día siguiente.':'Próximo al límite. El siguiente día trabajado alcanzará el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h.';
+        return `<div style="margin:8px 0;padding:8px 12px;border-radius:5px;font-size:9px;${_bgM}"><strong>${_icoM}</strong>: ${_mrM} días consecutivos (días ${_mrIniM} al ${_mrIniM+_mrM-1}). ${_msgM}</div>`;
       })()}
       <div style="margin-top:10px;">
         <div style="font-size:9px;font-weight:700;color:#1a2538;letter-spacing:.5px;margin-bottom:5px;border-bottom:1px solid #1a2538;padding-bottom:3px;">📅 DESGLOSE POR SEMANA — Jornada: ${t.jornada}h/sem</div>
