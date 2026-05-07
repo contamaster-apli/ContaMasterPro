@@ -12021,23 +12021,23 @@ function tkUpd(d,soloVisual){
     if(nivelRacha === 'critica'){
       alertaEl.textContent = '🚨 '+racha+'d INFRACCIÓN';
       alertaEl.title = `INFRACCIÓN LEGAL: ${racha} días consecutivos — Supera el máximo permitido. Descanso compensatorio requerido.`;
-      alertaEl.style.background = 'rgba(240,82,82,.2)';
+      alertaEl.style.background = 'rgba(220,38,38,.35)';
       alertaEl.style.color = 'var(--red)';
-      alertaEl.style.border = '1px solid rgba(240,82,82,.5)';
+      alertaEl.style.border = '1px solid rgba(220,38,38,.8)';
       row.style.outline = '2px solid rgba(240,82,82,.6)';
     } else if(nivelRacha === 'limite'){
       alertaEl.textContent = '⚠️ '+racha+'d LÍMITE';
       alertaEl.title = `EN EL LÍMITE LEGAL: ${racha} días consecutivos — Debe descansar obligatoriamente el día siguiente.`;
-      alertaEl.style.background = 'rgba(240,82,82,.12)';
+      alertaEl.style.background = 'rgba(240,120,30,.22)';
       alertaEl.style.color = 'var(--orange)';
-      alertaEl.style.border = '1px solid rgba(240,130,50,.5)';
+      alertaEl.style.border = '1px solid rgba(240,120,30,.7)';
       row.style.outline = '2px solid rgba(240,130,50,.5)';
     } else if(nivelRacha === 'advertencia'){
       alertaEl.textContent = '⚠️ '+racha+'d';
       alertaEl.title = `ATENCIÓN: ${racha} días consecutivos — El siguiente día trabajado alcanzará el máximo legal. Verificar descanso.`;
-      alertaEl.style.background = 'rgba(245,200,66,.15)';
+      alertaEl.style.background = 'rgba(245,170,0,.28)';
       alertaEl.style.color = 'var(--acc)';
-      alertaEl.style.border = '1px solid rgba(245,200,66,.4)';
+      alertaEl.style.border = '1px solid rgba(245,170,0,.6)';
     } else if(alertaEl){
       alertaEl.textContent = '';
       alertaEl.style.background = '';
@@ -12325,7 +12325,7 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
     if(mins>0){ for(let i=d;i>=1;i--){ const ri=diasData[i]; if(ri&&(ri.amIn||ri.pmIn||ri.otIn)) racha++; else break; } }
     const _limPDF=(()=>{if(jornada<=10)return 1;if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return dt<=10?2:6;}return 6;})();
     const rachaSupP=racha>_limPDF, rachaEnLimP=racha===_limPDF, rachaAdvP=(racha===_limPDF-1&&_limPDF>1);
-    const bgRacha=(rachaSupP||rachaEnLimP)?'background:#fff0f0;border-left:3px solid #e83c3c;':rachaAdvP?'background:#fffbea;border-left:3px solid #f5a623;':'';
+    const bgRacha=(rachaSupP||rachaEnLimP)?'background:#fecaca;border-left:4px solid #dc2626;':rachaAdvP?'background:#fde68a;border-left:3px solid #f59e0b;':'';
     const bg=parcial?'background:#fff0f0;':bgRacha||(esFDS?'background:#fffbea;':'');
     const totalTxt=mins>0?_m2hm(mins):'—';
     const totalColor=(rachaSupP||rachaEnLimP)?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a;':'color:#888;';
@@ -12350,7 +12350,7 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
     if(maxRacha < _limNota-1) return '';
     const enLimite = maxRacha === _limNota;
     const superado = maxRacha > _limNota;
-    const bg = (enLimite||superado) ? 'background:#fff0f0;border:2px solid #e83c3c;color:#c00' : 'background:#fffbea;border:2px solid #f5a623;color:#7a4f00';
+    const bg = (enLimite||superado) ? 'background:#fecaca;border:2px solid #dc2626;color:#7f1d1d' : 'background:#fde68a;border:2px solid #d97706;color:#5a3a00';
     const icono = superado ? '🚨 INFRACCIÓN LEGAL' : enLimite ? '⚠️ EN EL LÍMITE LEGAL' : '⚠️ ADVERTENCIA';
     const msg = superado
       ? 'Supera el máximo legal de '+_limNota+' días continuos para jornada '+jornada+'h (Código del Trabajo). Requiere descanso compensatorio inmediato.'
@@ -13080,7 +13080,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
       }
       const _limM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dt<=10?2:6;}return 6;})();
       const _rachaSupM=_rachaM>_limM, _rachaEnLimM=_rachaM===_limM, _rachaAdvM=_rachaM===_limM-1&&_limM>1;
-      const rowBg=(_rachaSupM||_rachaEnLimM)?'background:#fff0f0;border-left:3px solid #e83c3c':_rachaAdvM?'background:#fffbea;border-left:3px solid #f5a623':parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
+      const rowBg=(_rachaSupM||_rachaEnLimM)?'background:#fecaca;border-left:4px solid #dc2626':_rachaAdvM?'background:#fde68a;border-left:3px solid #f59e0b':parcial?'background:#fff0f0':esFDS?'background:#fffbea':'';
       const totalTxt=mins>0?_m2hm(mins):'—';
       const rachaLblM=_rachaSupM?` 🚨${_rachaM}d`:_rachaEnLimM?` ⚠️${_rachaM}d LÍM.`:_rachaAdvM?` ⚠️${_rachaM}d`:'';
       const totalStyle=(_rachaSupM||_rachaEnLimM)?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a':'color:#aaa';
@@ -13126,7 +13126,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
         const _lM=(()=>{if(t.jornada<=10)return 1;if(t.jornada<=20){const _dtt=Object.values(t.diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return _dtt<=10?2:6;}return 6;})();
         if(_mrM < _lM-1) return '';
         const _supM=_mrM>_lM, _enLimM=_mrM===_lM;
-        const _bgM=(_supM||_enLimM)?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00';
+        const _bgM=(_supM||_enLimM)?'background:#fecaca;border:2px solid #dc2626;color:#7f1d1d':'background:#fde68a;border:2px solid #d97706;color:#5a3a00';
         const _icoM=_supM?'🚨 INFRACCIÓN LEGAL':_enLimM?'⚠️ EN EL LÍMITE LEGAL':'⚠️ ADVERTENCIA';
         const _msgM=_supM?'Supera el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h. Requiere descanso compensatorio inmediato.':_enLimM?'En el límite legal de '+_lM+' días continuos para jornada '+t.jornada+'h. Debe descansar obligatoriamente el día siguiente.':'Próximo al límite. El siguiente día trabajado alcanzará el máximo de '+_lM+' días continuos para jornada '+t.jornada+'h.';
         return `<div style="margin:8px 0;padding:8px 12px;border-radius:5px;font-size:9px;${_bgM}"><strong>${_icoM}</strong>: ${_mrM} días consecutivos (días ${_mrIniM} al ${_mrIniM+_mrM-1}). ${_msgM}</div>`;
