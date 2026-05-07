@@ -2532,6 +2532,10 @@ function openAddTrab(id){
       </div>
       <div><div class="fl">Departamento</div><input class="fi" id="f_depto" value="${t.depto||''}"></div>
     </div>
+    <div class="frow h2">
+      <div><div class="fl">Área de trabajo</div><select class="fi" id="f_area"><option value="">Sin área asignada</option><option ${t.area==='Oficina'?'selected':''}>Oficina</option><option ${t.area==='Garita'?'selected':''}>Garita</option><option ${t.area==='Ruta'?'selected':''}>Ruta</option></select></div>
+      <div><div class="fl" style="visibility:hidden">_</div><div style="font-size:9px;color:var(--muted);padding-top:6px">El área permite distribuir descansos garantizando cobertura mínima por zona.</div></div>
+    </div>
     <div class="frow h2"><div><div class="fl">AFP</div><select class="fi" id="f_afp"><option value="">Jubilado/Sin AFP</option>${Object.keys(AFP_TASAS).map(a=>`<option ${t.afp===a?'selected':''}>${a}</option>`).join('')}</select></div><div><div class="fl">Salud</div><select class="fi" id="f_salud"><option ${t.salud==='FONASA'?'selected':''}>FONASA</option><option ${t.salud==='BANMEDICA'?'selected':''}>BANMEDICA</option><option ${t.salud==='COLMENA'?'selected':''}>COLMENA</option><option ${t.salud==='CRUZ BLANCA'?'selected':''}>CRUZ BLANCA</option><option ${t.salud==='CONSALUD'?'selected':''}>CONSALUD</option><option ${t.salud==='VIDA TRES'?'selected':''}>VIDA TRES</option><option ${t.salud==='MASVIDA'?'selected':''}>MASVIDA</option></select></div></div>
     <div class="frow h2"><div><div class="fl">Banco</div><input class="fi" id="f_banco" value="${t.banco||''}" placeholder="Ej: BancoEstado"></div><div><div class="fl">N° Cuenta</div><input class="fi" id="f_cuenta" value="${t.cuenta||''}" placeholder="Número de cuenta"></div></div>
     <div class="frow"><div class="fl">Estado</div><select class="fi" id="f_estado"><option ${!t.estado||t.estado==='Activo'?'selected':''}>Activo</option><option ${t.estado==='Inactivo'?'selected':''}>Inactivo</option></select></div>
@@ -2544,7 +2548,7 @@ function openAddTrab(id){
   $('addOk').onclick=()=>{
     const jornadaSel=document.getElementById('f_jornada')?.value;
     const jornadaVal=jornadaSel==='custom'?fv(document.getElementById('f_jornada_custom')?.value||42):parseInt(jornadaSel)||42;
-    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
+    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
     if(!item.nombre){toast('Ingresa nombre','err');return;}
     if(!validRutToast(item.rut,'Trabajador'))return;
     if(id){const ix=DB().trabajadores.findIndex(x=>x.id===id);if(ix>=0)DB().trabajadores[ix]=item;}
@@ -9021,7 +9025,7 @@ function calcHorasDia(entrada, salida, colacion){
 }
 
 // Generar horario base de un trabajador para el mes (sin lógica grupal)
-function generarHorarioBase(trabajadorId, jornadaId, mes, anio, overrides, offsetDia){
+function generarHorarioBase(trabajadorId, jornadaId, mes, anio, overrides, offsetDia, grupoIdx){
   const jornada = getJornadas().find(j=>j.id===jornadaId);
   if(!jornada) return [];
   // Turno 4x4: generación especial
@@ -9067,7 +9071,8 @@ function generarHorarioBase(trabajadorId, jornadaId, mes, anio, overrides, offse
           if(fdx.getDay()===0) domCount++;
         }
         // Alternar: trabajador par descansa domingos 0,2; impar descansa domingos 1,3
-        const tIdx=typeof trabajadorId==='number'?trabajadorId:0;
+        // Usar grupoIdx si viene del grupo, si no usar trabajadorId para compatibilidad
+        const tIdx=(typeof grupoIdx==='number')?grupoIdx:(typeof trabajadorId==='number'?trabajadorId:0);
         const descansa=(tIdx%2===0)?(domCount%2===0):(domCount%2===1);
         if(descansa){ tipo='descanso'; nota='Descanso dominical'; }
         else { tipo='trabajo'; nota='Domingo trabajado (jornada 6x1)'; }
@@ -9746,7 +9751,30 @@ function distribuirTurnosGrupo(trabajadoresIds, jornadaId, mes, anio){
     return bases4x4;
   }
 
-  const bases=trabajadoresIds.map(id=>generarHorarioBase(id,jornadaId,mes,anio,[]));
+  // FIX1 (E1): pasar índice del trabajador en el grupo para escalonar descansos
+  const bases=trabajadoresIds.map((id,i)=>generarHorarioBase(id,jornadaId,mes,anio,[],0,i));
+
+  // FIX2 (E1): helper racha consecutiva compatible con formato {fecha,tipo}
+  function _rachaGrupo(diasArr, fechaRef){
+    let racha=0;
+    const dt0=new Date(fechaRef+'T12:00:00');
+    for(let k=1;k<=6;k++){
+      const dt=new Date(dt0); dt.setDate(dt0.getDate()-k);
+      const f=`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+      const r=diasArr.find(x=>x.fecha===f);
+      if(r&&r.tipo==='trabajo') racha++; else break;
+    }
+    return racha;
+  }
+
+  // ETAPA 2: construir mapa de área por trabajador para respetar cobertura mínima por zona
+  const areaMap={};
+  trabajadoresIds.forEach(id=>{
+    const t=DB().trabajadores.find(x=>x.id===id);
+    areaMap[id]=(t&&t.area&&t.area.trim())?t.area.trim():'';
+  });
+  // Obtener áreas distintas con al menos 2 trabajadores (si área vacía → sin restricción de área)
+  const areasUsadas=[...new Set(Object.values(areaMap).filter(Boolean))];
 
   if(n>=2){
     // Para cada día: si más de 1 descansa (no domingo salvo 6x1, no festivo) → forzar al que más días libres tenga que trabaje
@@ -9755,19 +9783,53 @@ function distribuirTurnosGrupo(trabajadoresIds, jornadaId, mes, anio){
       const dt=new Date(fecha+'T12:00:00');
       if((jornada.tipo!=='6x1'&&dt.getDay()===0)||festivos.includes(fecha)) continue;
       const descansando=bases.reduce((acc,b,i)=>{const x=b.find(x=>x.fecha===fecha);if(x&&x.tipo==='descanso'&&x.diaSem!=='Dom'&&!x.festivo)acc.push(i);return acc;},[]);
-      // Máximo 1 puede descansar por vez (si solo hay 2 trabajadores, ninguno puede descansar el mismo día)
-      const maxDescanso=n>=3?Math.floor(n/3):0; // con 2 trab: 0 pueden descansar juntos; con 3: 1; con 4: 1...
+      const maxDescanso=n>=3?Math.floor(n/3):0;
       if(descansando.length>maxDescanso){
-        // Mantener al primero (menos descansos acumulados) descansando, forzar los demás a trabajar
         const acum=bases.map((b,i)=>({i,cnt:b.filter(x=>x.tipo==='descanso'&&x.diaSem!=='Dom'&&!x.festivo).length}));
         const ordenados=descansando.map(i=>acum[i]).sort((a,b)=>a.cnt-b.cnt);
-        // El que tiene menos descansos se queda descansando; los demás trabajan
         const quedan=ordenados.slice(1);
         quedan.forEach(({i})=>{
           const diaObj=bases[i].find(x=>x.fecha===fecha);
-          if(diaObj){diaObj.tipo='trabajo';diaObj.entrada=jornada.entrada;diaObj.salida=jornada.salida;diaObj.colacion=jornada.colacion;diaObj.nota='Turno ajustado (cobertura grupal)';}
+          if(!diaObj) return;
+          // FIX2 (E1): verificar racha antes de forzar — si está en límite legal (6 días), buscar otro
+          const racha=_rachaGrupo(bases[i], fecha);
+          if(racha>=6){
+            const alternativo=bases.findIndex((b,alt)=>{
+              if(alt===i) return false;
+              const dAlt=b.find(x=>x.fecha===fecha);
+              if(!dAlt||dAlt.tipo==='trabajo') return false;
+              return _rachaGrupo(b, fecha)<6;
+            });
+            if(alternativo>=0){
+              const dAlt=bases[alternativo].find(x=>x.fecha===fecha);
+              if(dAlt){dAlt.tipo='trabajo';dAlt.entrada=jornada.entrada;dAlt.salida=jornada.salida;dAlt.colacion=jornada.colacion;dAlt.nota='Turno ajustado (cobertura grupal)';}
+            }
+            // Si no hay alternativo sin infringir → dejar descanso (COBERTURA lo gestiona)
+          } else {
+            diaObj.tipo='trabajo';diaObj.entrada=jornada.entrada;diaObj.salida=jornada.salida;diaObj.colacion=jornada.colacion;diaObj.nota='Turno ajustado (cobertura grupal)';
+          }
         });
       }
+
+      // ETAPA 2: verificar cobertura mínima por área — cada área debe tener al menos 1 trabajando
+      areasUsadas.forEach(area=>{
+        const idxArea=trabajadoresIds.map((id,i)=>({id,i})).filter(({id})=>areaMap[id]===area).map(({i})=>i);
+        if(idxArea.length<2) return; // área con 1 solo → sin restricción
+        const trabajandoArea=idxArea.filter(i=>{const x=bases[i].find(x=>x.fecha===fecha);return x&&x.tipo==='trabajo';});
+        if(trabajandoArea.length>0) return; // ya hay cobertura en esta área
+        // Nadie trabaja en esta área ese día → forzar al del área con menos descansos y sin infringir racha
+        const candidatos=idxArea
+          .map(i=>({i,racha:_rachaGrupo(bases[i],fecha),cnt:bases[i].filter(x=>x.tipo==='descanso'&&x.diaSem!=='Dom'&&!x.festivo).length}))
+          .filter(c=>c.racha<6)
+          .sort((a,b)=>a.cnt-b.cnt);
+        if(candidatos.length>0){
+          const mejor=candidatos[0];
+          const diaObj=bases[mejor.i].find(x=>x.fecha===fecha);
+          if(diaObj&&diaObj.tipo==='descanso'&&diaObj.diaSem!=='Dom'&&!diaObj.festivo){
+            diaObj.tipo='trabajo';diaObj.entrada=jornada.entrada;diaObj.salida=jornada.salida;diaObj.colacion=jornada.colacion;diaObj.nota=`Turno ajustado (cobertura área ${area})`;
+          }
+        }
+      });
     }
     // Re-ajustar 44h después de los cambios
     bases.forEach(b=>ajustar44h(b,jornada,minsSemanaCL));
