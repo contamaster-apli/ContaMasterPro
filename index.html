@@ -11907,6 +11907,42 @@ function _tkDiaUpd(changedId){
   if(!isNaN(d)) tkUpd(d);
 }
 
+// ── Calcula días consecutivos trabajados hasta el día d (inclusive) ──
+function _calcRachaConsecutiva(diasData, d, mes, anio){
+  let racha = 0;
+  for(let i = d; i >= 1; i--){
+    const r = diasData[i];
+    if(r && (r.amIn || r.pmIn || r.otIn)) racha++;
+    else break;
+  }
+  return racha;
+}
+
+// ── Límite máximo de días consecutivos según jornada ──
+function _limiteRachaJornada(jornada, diasData){
+  // 10h = 1 día/sem → máx 1 día consecutivo
+  if(jornada <= 10) return 1;
+  // 20h: detectar modalidad automáticamente según promedio días/semana
+  if(jornada <= 20){
+    const diasTrab = Object.values(diasData||{}).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;
+    // Si trabaja promedio ≤ 2.5 días/semana (≤10 días en el mes) → modalidad 2 días → límite 2
+    return diasTrab <= 10 ? 2 : 6;
+  }
+  // 30h = 5 días/sem → igual que jornada completa → límite 6
+  // 42h, 44h → límite 6
+  return 6;
+}
+
+// ── Verifica si el día d excede racha legal según jornada ──
+function _alertaRachaLegal(diasData, d, mes, anio){
+  const jornada = window._tarj ? (_jornadaActual()||44) : 44;
+  const limite = _limiteRachaJornada(jornada, diasData);
+  const racha = _calcRachaConsecutiva(diasData, d, mes, anio);
+  if(racha >= limite) return 'critica';         // 🚨 En el límite o superado
+  if(racha === limite - 1 && limite > 1) return 'advertencia'; // ⚠️ A 1 día del límite
+  return null;
+}
+
 function tkUpd(d,soloVisual){
   if(!window._tarj.diasData) window._tarj.diasData={};
   let r;
@@ -11969,6 +12005,41 @@ function tkUpd(d,soloVisual){
       row.style.outline='';
     }
   }
+  // ── Alerta de días consecutivos según jornada ──
+  if(row && mins > 0){
+    const racha = _calcRachaConsecutiva(window._tarj.diasData, d, window._tarj.mes, window._tarj.anio);
+    const _limite = _limiteRachaJornada(_jornadaActual()||44, window._tarj.diasData);
+    const nivelRacha = racha >= _limite ? 'critica' : (racha === _limite-1 && _limite>1) ? 'advertencia' : null;
+    let alertaEl = document.getElementById(`tk_racha_${d}`);
+    if(!alertaEl){
+      alertaEl = document.createElement('span');
+      alertaEl.id = `tk_racha_${d}`;
+      alertaEl.style.cssText = 'font-size:9px;font-weight:700;padding:1px 5px;border-radius:3px;margin-left:4px;';
+      el.parentNode.appendChild(alertaEl);
+    }
+    if(nivelRacha === 'critica'){
+      alertaEl.textContent = '🚨 '+racha+'d';
+      alertaEl.title = `INFRACCIÓN: ${racha} días consecutivos — Ley máximo 6 días. Descanso obligatorio mañana.`;
+      alertaEl.style.background = 'rgba(240,82,82,.2)';
+      alertaEl.style.color = 'var(--red)';
+      alertaEl.style.border = '1px solid rgba(240,82,82,.5)';
+      row.style.outline = '2px solid rgba(240,82,82,.6)';
+    } else if(nivelRacha === 'advertencia'){
+      alertaEl.textContent = '⚠️ '+racha+'d';
+      alertaEl.title = `ATENCIÓN: ${racha} días consecutivos — El siguiente día trabajado excedería el máximo legal de 6 días.`;
+      alertaEl.style.background = 'rgba(245,200,66,.15)';
+      alertaEl.style.color = 'var(--acc)';
+      alertaEl.style.border = '1px solid rgba(245,200,66,.4)';
+    } else if(alertaEl){
+      alertaEl.textContent = '';
+      alertaEl.style.background = '';
+      alertaEl.style.border = '';
+    }
+  } else {
+    const alertaEl = document.getElementById(`tk_racha_${d}`);
+    if(alertaEl){ alertaEl.textContent=''; alertaEl.style.background=''; alertaEl.style.border=''; }
+  }
+
   // Actualizar resumen sin re-render completo
   const {totalMin,diasTrab,extra,desc,jornadaMin}=_resumenTarjeta(window._tarj.diasData,window._tarj.mes,window._tarj.anio,jornada);
 }
@@ -12240,9 +12311,16 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
     const mins=_calcDia(r);
     const filled=[r.amIn,r.amOut,r.pmIn,r.pmOut].filter(v=>v&&v.length>=5).length;
     const parcial=filled>0&&filled<4;
-    const bg=parcial?'background:#fff0f0;':esFDS?'background:#fffbea;':'';
+    // Calcular racha consecutiva hasta este día con límite según jornada
+    let racha=0;
+    if(mins>0){ for(let i=d;i>=1;i--){ const ri=diasData[i]; if(ri&&(ri.amIn||ri.pmIn||ri.otIn)) racha++; else break; } }
+    const _limPDF=(()=>{if(jornada<=10)return 1;if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return dt<=10?2:6;}return 6;})();
+    const rachaCritica=racha>=_limPDF, rachaAdv=(racha===_limPDF-1&&_limPDF>1);
+    const bgRacha=rachaCritica?'background:#fff0f0;border-left:3px solid #e83c3c;':rachaAdv?'background:#fffbea;border-left:3px solid #f5a623;':'';
+    const bg=parcial?'background:#fff0f0;':bgRacha||( esFDS?'background:#fffbea;':'');
     const totalTxt=mins>0?_m2hm(mins):'—';
-    const totalColor=parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a;':'color:#888;';
+    const totalColor=rachaCritica?'color:#e83c3c;font-weight:700':parcial?'color:#e83c3c;font-weight:700':mins>0?'color:#20b86a;':'color:#888;';
+    const rachaLabel=rachaCritica?` 🚨${racha}d`:rachaAdv?` ⚠️${racha}d`:'';
     const _ao1=_t2m(r.amOut),_pi1=_t2m(r.pmIn);
     const col1=(_ao1!==null&&_pi1!==null&&_pi1>_ao1)?_m2hm(_pi1-_ao1):'—';
     filas+=`<tr style="${bg}">
@@ -12252,9 +12330,15 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
       <td>${r.pmIn||'—'}</td><td>${r.pmOut||'—'}</td>
       <td style="color:#f07d32;font-size:10px;">${col1}</td>
       <td style="color:#18b5a0;">${r.otIn||'—'}</td><td style="color:#18b5a0;">${r.otOut||'—'}</td>
-      <td style="${totalColor}">${totalTxt}${parcial?' ⚠️':''}</td>
+      <td style="${totalColor}">${totalTxt}${parcial?' ⚠️':''}${rachaLabel}</td>
     </tr>`;
   }
+  // Detectar racha máxima para nota al pie
+  let maxRacha=0,maxRachaIni=0,_rt=0,_ri=0;
+  for(let d=1;d<=numDias;d++){const r=diasData[d];if(r&&(r.amIn||r.pmIn||r.otIn)){if(_rt===0)_ri=d;_rt++;if(_rt>maxRacha){maxRacha=_rt;maxRachaIni=_ri;}}else{_rt=0;}}
+  const _limNota=(()=>{if(jornada<=10)return 1;if(jornada<=20){const dt=Object.values(diasData).filter(r=>r&&(r.amIn||r.pmIn||r.otIn)).length;return dt<=10?2:6;}return 6;})();
+  const notaRacha=maxRacha>=_limNota?`<div style="margin-top:14px;padding:10px 14px;border-radius:6px;font-size:10px;${maxRacha>=_limNota?'background:#fff0f0;border:2px solid #e83c3c;color:#c00':'background:#fffbea;border:2px solid #f5a623;color:#7a4f00'}"><strong>${maxRacha>=_limNota?'🚨 INFRACCIÓN LEGAL':'⚠️ ADVERTENCIA'}</strong>: ${maxRacha} días consecutivos (días ${maxRachaIni} al ${maxRachaIni+maxRacha-1}). ${maxRacha>=_limNota?'Supera el máximo legal de '+_limNota+' días continuos para jornada '+jornada+'h (Código del Trabajo). Requiere descanso compensatorio.':'El próximo día trabajado superaría el máximo de '+_limNota+' días continuos para jornada '+jornada+'h.'}</div>`:'';
+
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
   <title>Tarjeta ${nombre} — ${MESES_N[mes]} ${anio}</title>
   <style>
@@ -12314,6 +12398,7 @@ function _tkHtmlTarjeta(nombre, num, depto, mes, anio, jornada, diasData){
       </tbody>
     </table>
   </div>
+  \${notaRacha}
   <div style="display:flex;gap:8px;margin-top:16px;justify-content:center;">
     <button onclick="window.print()" style="padding:8px 18px;background:#c8a84b;border:none;border-radius:6px;font-weight:700;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>
     <button onclick="window.close()" style="padding:8px 18px;background:#eee;border:1px solid #ccc;border-radius:6px;cursor:pointer;">✕ Cerrar</button>
