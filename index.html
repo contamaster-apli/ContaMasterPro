@@ -471,6 +471,7 @@ textarea.fi{resize:vertical;min-height:50px;}
     <button id="navLeft" onclick="scrollNav(-200)" style="flex-shrink:0;width:30px;height:100%;min-height:36px;background:var(--s2);border:none;border-right:1px solid var(--border2);cursor:pointer;font-size:16px;color:var(--muted);display:none;align-items:center;justify-content:center;padding:0;">◀</button>
   <div class="nav" id="nav" style="flex:1;min-width:0;">
     <button class="ntab active" id="tab-dash" onclick="go('dash')">📊 RESUMEN</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(155,92,245,.15);color:var(--purple);border:1px solid var(--purple);">👥 RRHH</span>
     <button class="ntab" id="tab-liq" onclick="go('liq')">🧾 LIQUIDACIÓN</button>
     <button class="ntab" id="tab-trab" onclick="go('trab')">👥 TRABAJADORES</button>
     <button class="ntab" id="tab-asist" onclick="go('asist')" style="border-color:var(--cyan);color:var(--cyan);">🕐 ASISTENCIA</button>
@@ -480,43 +481,49 @@ textarea.fi{resize:vertical;min-height:50px;}
     <button class="ntab" id="tab-ausencias" onclick="go('ausencias')" style="border-color:var(--orange);color:var(--orange);">🩺 AUSENCIAS</button>
     <button class="ntab" id="tab-previred" onclick="go('previred')" style="border-color:var(--teal);color:var(--teal);">📤 PREVIRED</button>
     <button class="ntab" id="tab-libroRemu" onclick="go('libroRemu')" style="border-color:var(--orange);color:var(--orange);">📑 LIBRO REMU.</button>
-    <button class="ntab" id="tab-compras" onclick="go('compras')">🛒 COMPRAS</button>
-    <button class="ntab" id="tab-ventas" onclick="go('ventas')">💰 VENTAS</button>
-    <button class="ntab" id="tab-honorarios" onclick="go('honorarios')">📋 HONORARIOS</button>
-    <button class="ntab" id="tab-bhe" onclick="go('bhe')" style="border-color:var(--pink);color:var(--pink);">🧾 BHE PROPIAS</button>
     <button class="ntab" id="tab-creditos" onclick="go('creditos')" style="border-color:var(--orange);color:var(--orange);">💳 CRÉDITOS</button>
+    <button class="ntab" id="tab-certRemu" onclick="go('certRemu')" style="border-color:var(--green);color:var(--green);">📜 CERT. REMU.</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(245,158,11,.15);color:var(--orange);border:1px solid var(--orange);">📑 TRIBUTARIO</span>
     <button class="ntab" id="tab-f29" onclick="go('f29')" style="border-color:var(--orange);color:var(--orange);">📑 F-29 / IVA</button>
     <button class="ntab" id="tab-f22" onclick="go('f22')" style="border-color:var(--purple);color:var(--purple);">📑 F-22 / RENTA</button>
     <button class="ntab" id="tab-f2121" onclick="go('f2121')" style="border-color:var(--cyan);color:var(--cyan);">📋 F-2121</button>
     <button class="ntab" id="tab-dj" onclick="go('dj')" style="border-color:var(--pink);color:var(--pink);">📋 DJs SII</button>
-    <button class="ntab" id="tab-actfijo" onclick="go('actfijo')" style="border-color:var(--teal);color:var(--teal);">🏗 ACTIVO FIJO</button>
+    <button class="ntab" id="tab-bhe" onclick="go('bhe')" style="border-color:var(--pink);color:var(--pink);">🧾 BHE PROPIAS</button>
+    <button class="ntab" id="tab-reg14a" onclick="go('reg14a')" style="border-color:var(--purple);color:var(--purple);">📋 REG. 14A</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(74,143,245,.15);color:var(--blue);border:1px solid var(--blue);">📒 CONTABILIDAD</span>
     <button class="ntab" id="tab-contab" onclick="go('contab')" style="border-color:var(--blue);color:var(--blue);">📒 CONTABILIDAD</button>
     <button class="ntab" id="tab-diario" onclick="go('diario')" style="border-color:var(--acc);color:var(--acc);">📔 LIBRO DIARIO</button>
     <button class="ntab" id="tab-mayor" onclick="go('mayor')" style="border-color:var(--cyan);color:var(--cyan);">📖 LIBRO MAYOR</button>
     <button class="ntab" id="tab-balance" onclick="go('balance')" style="border-color:var(--green);color:var(--green);">⚖️ BALANCE</button>
     <button class="ntab" id="tab-librocaja14d" onclick="go('librocaja14d')" style="border-color:var(--orange);color:var(--orange);">📒 CAJA 14D</button>
-    <button class="ntab" id="tab-obra" onclick="go('obra')" style="border-color:var(--teal);color:var(--teal);">🏗 OBRA/PROYECTOS</button>
-    <button class="ntab" id="tab-tesoreria" onclick="go('tesoreria')" style="border-color:var(--cyan);color:var(--cyan);">🏦 TESORERÍA</button>
-    <button class="ntab" id="tab-comprobantes" onclick="go('comprobantes')" style="border-color:var(--green);color:var(--green);">🧾 COMPROBANTES</button>
+    <button class="ntab" id="tab-concilia" onclick="go('concilia')">🔄 CONCILIACIÓN</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid var(--green);">🛒 COMERCIAL</span>
+    <button class="ntab" id="tab-compras" onclick="go('compras')">🛒 COMPRAS</button>
+    <button class="ntab" id="tab-ventas" onclick="go('ventas')">💰 VENTAS</button>
+    <button class="ntab" id="tab-honorarios" onclick="go('honorarios')">📋 HONORARIOS</button>
+    <button class="ntab" id="tab-proveedores" onclick="go('proveedores')">🏢 PROVEEDORES</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(6,182,212,.15);color:var(--cyan);border:1px solid var(--cyan);">💧 FINANZAS</span>
     <button class="ntab" id="tab-estfin" onclick="go('estfin')" style="border-color:var(--teal);color:var(--teal);">📋 EST. FINANCIERO</button>
     <button class="ntab" id="tab-estfinm" onclick="go('estfinm')" style="border-color:var(--teal);color:var(--teal);">📆 EST. FIN. MENSUAL</button>
     <button class="ntab" id="tab-flujo" onclick="go('flujo')" style="border-color:var(--cyan);color:var(--cyan);">💧 FLUJO DE CAJA</button>
-    <button class="ntab" id="tab-cuentasfijas" onclick="go('cuentasfijas')" style="border-color:var(--orange);color:var(--orange);">🏦 CTAS. FIJAS</button>
-    <button class="ntab" id="tab-cajachica" onclick="go('cajachica')" style="border-color:var(--purple);color:var(--purple);">💼 CAJA CHICA</button>
-    <button class="ntab" id="tab-fondos" onclick="go('fondos')" style="border-color:var(--orange);color:var(--orange);">📂 FONDOS X RENDIR</button>
-    <button class="ntab" id="tab-leasing" onclick="go('leasing')" style="border-color:var(--purple);color:var(--purple);">🏢 LEASING</button>
-    <button class="ntab" id="tab-informe" onclick="go('informe')" style="border-color:var(--green);color:var(--green);">📊 INFORME MENSUAL</button>
-    <button class="ntab" id="tab-diesel" onclick="go('diesel')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">⛽ DIESEL</button>
-    <button class="ntab" id="tab-concilia" onclick="go('concilia')">🔄 CONCILIACIÓN</button>
+    <button class="ntab" id="tab-tesoreria" onclick="go('tesoreria')" style="border-color:var(--cyan);color:var(--cyan);">🏦 TESORERÍA</button>
     <button class="ntab" id="tab-caja" onclick="go('caja')">💵 CAJA/BANCOS</button>
     <button class="ntab" id="tab-retiros" onclick="go('retiros')" style="border-color:var(--purple);color:var(--purple);">🏦 RETIROS/MULTAS</button>
-    <button class="ntab" id="tab-proveedores" onclick="go('proveedores')">🏢 PROVEEDORES</button>
-    <button class="ntab" id="tab-conv" onclick="go('conv')">🔢 CONVERSORES</button>
-    <button class="ntab" id="tab-notas" onclick="go('notas')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">📝 NOTAS</button>
+    <button class="ntab" id="tab-leasing" onclick="go('leasing')" style="border-color:var(--purple);color:var(--purple);">🏢 LEASING</button>
+    <button class="ntab" id="tab-informe" onclick="go('informe')" style="border-color:var(--green);color:var(--green);">📊 INFORME MENSUAL</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(20,184,166,.15);color:var(--teal);border:1px solid var(--teal);">🏗 GESTIÓN</span>
+    <button class="ntab" id="tab-actfijo" onclick="go('actfijo')" style="border-color:var(--teal);color:var(--teal);">🏗 ACTIVO FIJO</button>
+    <button class="ntab" id="tab-obra" onclick="go('obra')" style="border-color:var(--teal);color:var(--teal);">🏗 OBRA/PROYECTOS</button>
+    <button class="ntab" id="tab-diesel" onclick="go('diesel')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">⛽ DIESEL</button>
+    <button class="ntab" id="tab-fondos" onclick="go('fondos')" style="border-color:var(--orange);color:var(--orange);">📂 FONDOS X RENDIR</button>
+    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border2);">🗂 OFICINA</span>
+    <button class="ntab" id="tab-cajachica" onclick="go('cajachica')" style="border-color:var(--purple);color:var(--purple);">💼 CAJA CHICA</button>
+    <button class="ntab" id="tab-comprobantes" onclick="go('comprobantes')" style="border-color:var(--green);color:var(--green);">🧾 COMPROBANTES</button>
+    <button class="ntab" id="tab-cuentasfijas" onclick="go('cuentasfijas')" style="border-color:var(--orange);color:var(--orange);">🏦 CTAS. FIJAS</button>
     <button class="ntab" id="tab-archivador" onclick="go('archivador')" style="border-color:var(--teal);color:var(--teal);">📁 ARCHIVADOR</button>
+    <button class="ntab" id="tab-notas" onclick="go('notas')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">📝 NOTAS</button>
     <button class="ntab" id="tab-auditoria" onclick="go('auditoria')" style="border-color:var(--orange);color:var(--orange);">🔍 AUDITORÍA</button>
-    <button class="ntab" id="tab-reg14a" onclick="go('reg14a')" style="border-color:var(--purple);color:var(--purple);">📋 REG. 14A</button>
-    <button class="ntab" id="tab-certRemu" onclick="go('certRemu')" style="border-color:var(--green);color:var(--green);">📜 CERT. REMU.</button>
+    <button class="ntab" id="tab-conv" onclick="go('conv')">🔢 CONVERSORES</button>
   </div>
     <button id="navRight" onclick="scrollNav(200)" style="flex-shrink:0;width:30px;height:100%;min-height:36px;background:var(--s2);border:none;border-left:1px solid var(--border2);cursor:pointer;font-size:16px;color:var(--muted);display:none;align-items:center;justify-content:center;padding:0;">▶</button>
   </div>
