@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#060a10">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -1131,6 +1132,8 @@ async function load(){
           if(!emp.recordatorios)emp.recordatorios=[];
           if(!emp.comprobantes)emp.comprobantes={conceptosIng:[],conceptosEgr:[],registros:[]};
           if(!emp.finiquitos)emp.finiquitos=[];
+          if(!emp.contratosDoc)emp.contratosDoc=[];
+          if(!emp.plantillasContrato)emp.plantillasContrato=[];
         });
       }
     }catch(e){}
@@ -1705,6 +1708,7 @@ function renderTrab(){
   const sub = (window._trab||{}).sub || 'lista';
   const subtabs = [
     {id:'lista',     lbl:'👥 Lista'},
+    {id:'contratos',  lbl:'📄 Contratos'},
     {id:'jornadas',  lbl:'⚡ Asignar Jornadas'},
     {id:'importar',  lbl:'📥 Importar Excel'},
     {id:'plantilla', lbl:'📋 Plantilla'},
@@ -1712,6 +1716,7 @@ function renderTrab(){
   const nav = `<div class="sec-nav">${subtabs.map(t=>`<button class="sec-nav-btn${sub===t.id?' active':''}" onclick="window._trab.sub='${t.id}';go('trab')">${t.lbl}</button>`).join('')}</div>`;
   let body = '';
   if(sub==='lista')        body = _rTrabListaGT();
+  else if(sub==='contratos') body = _rTrabContratos();
   else if(sub==='jornadas') body = _rTrabJornadas();
   else if(sub==='importar') body = _rTrabImportarGT();
   else                     body = _rTrabPlantilla();
@@ -1765,11 +1770,692 @@ function _rTrabListaGT(){
           <button class="abt edit" onclick="editTrab(${t.id})">✏️</button>
           <button class="abt ok" title="Ver liquidaciones" onclick="window._finiqTab='individual';const f=DB().trabajadores.findIndex(x=>x.id===${t.id});go('liq');setTimeout(()=>{if($('liq_trab'))$('liq_trab').value=f;},200);" style="font-size:10px;">🧾</button>
           <button class="abt ok" title="Crear finiquito" onclick="window._finiqTab='individual';window._finiqEditId=null;go('finiq');setTimeout(()=>{if($('fin_trab')){$('fin_trab').value=${t.id};autoFinTrab();}},200);" style="font-size:10px;background:var(--orange2);color:var(--orange);">📄</button>
+          <button class="abt ok" title="Contratos" onclick="window._trab.sub='contratos';window._trabContFiltro=${t.id};go('trab')" style="font-size:10px;background:var(--teal2);color:var(--teal);">📄</button>
           <button class="abt del" onclick="if(confirm('¿Eliminar trabajador?')){DB().trabajadores=DB().trabajadores.filter(x=>x.id!==${t.id});saveDB();go('trab');}">🗑</button>
         </div>
       </div>`).join('') : `<div class="empty"><div class="ei">${filtro==='inactivos'?'🚫':'👥'}</div><div class="et">${filtro==='inactivos'?'No hay trabajadores inactivos.':'Sin trabajadores. Usa <b>+ Agregar</b> o <b>📥 Importar Excel</b>.'}</div></div>`}
     </div>
   </div>`;
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ║         MÓDULO CONTRATOS DE TRABAJO — Normativa CL            ║
+// ══════════════════════════════════════════════════════════════════
+
+// Plantillas base de cláusulas por tipo de contrato (Art. CT Chile)
+const CLAUSULAS_BASE = {
+  'Indefinido': [
+    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, representada por {representante}, en adelante "El Empleador", y don/doña {nombre_trabajador}, RUT {rut_trabajador}, en adelante "El Trabajador", se celebra el siguiente contrato de trabajo.'},
+    {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador dentro del giro de la empresa, de conformidad con lo establecido en el Reglamento Interno.'},
+    {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}, o en cualquier otro lugar que El Empleador determine dentro de la misma ciudad, conforme a las necesidades operativas de la empresa.'},
+    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación no imputables a la jornada. A partir del año 2028 la jornada máxima será de 40 horas semanales conforme a la Ley 21.561.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de ${sueldo_base} brutos (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Dicha remuneración incluye la gratificación legal, si correspondiere, conforme al Art. 50 CT.'},
+    {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones y pagos correspondientes a AFP {afp}, sistema de salud {salud}, AFC y demás descuentos legales conforme a la normativa vigente.'},
+    {id:'c7', titulo:'Duración del contrato (Art. 159 N°1 CT)', editable:true, texto:'El presente contrato tendrá duración indefinida, iniciándose la relación laboral el {fecha_inicio}.'},
+    {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El presente contrato podrá terminar por las causales establecidas en los artículos 159, 160 y 161 del Código del Trabajo, con las formalidades y plazos que la ley establece, incluyendo el pago de indemnizaciones que correspondan.'},
+    {id:'c9', titulo:'Reglamento interno y normas (Art. 153 CT)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de Orden, Higiene y Seguridad de la empresa, así como las normas de prevención de riesgos laborales y las disposiciones del Código del Trabajo.'},
+    {id:'c10', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman el presente contrato en dos ejemplares del mismo tenor, quedando uno en poder de cada parte.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador\n{nombre_empresa}                                   {nombre_trabajador}\nRUT: {rut_empresa}                                 RUT: {rut_trabajador}'}
+  ],
+  'Plazo fijo': [
+    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, representada por {representante}, en adelante "El Empleador", y don/doña {nombre_trabajador}, RUT {rut_trabajador}, en adelante "El Trabajador", se celebra el siguiente contrato de trabajo a plazo fijo.'},
+    {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador.'},
+    {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}.'},
+    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de ${sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
+    {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones correspondientes a AFP {afp}, sistema de salud {salud} y demás descuentos legales.'},
+    {id:'c7', titulo:'Duración y plazo (Art. 159 N°4 CT)', editable:true, texto:'El presente contrato tendrá una duración desde el {fecha_inicio} hasta el {fecha_termino}. Si el Trabajador continúa prestando servicios con conocimiento del Empleador una vez vencido el plazo, el contrato se transformará en indefinido conforme al Art. 159 N°4 CT. El plazo no podrá exceder de 1 año (2 años para gerentes y personas con título profesional o técnico).'},
+    {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El contrato terminará al vencimiento del plazo pactado o por las causales de los artículos 159, 160 y 161 del Código del Trabajo.'},
+    {id:'c9', titulo:'Reglamento interno (Art. 153 CT)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de la empresa.'},
+    {id:'c10', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman en dos ejemplares.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador\n{nombre_empresa}                                   {nombre_trabajador}\nRUT: {rut_empresa}                                 RUT: {rut_trabajador}'}
+  ],
+  'Por obra': [
+    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, y don/doña {nombre_trabajador}, RUT {rut_trabajador}, se celebra contrato de trabajo por obra o faena.'},
+    {id:'c2', titulo:'Obra o faena (Art. 10 N°3 — Art. 159 N°5 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo} para la ejecución de la siguiente obra o faena específica: [DESCRIBIR OBRA O FAENA]. El contrato terminará al concluir la obra o faena encomendada.'},
+    {id:'c3', titulo:'Lugar de trabajo', editable:true, texto:'Los servicios se prestarán en {direccion_empresa} o en el lugar donde se ejecute la obra o faena.'},
+    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT)', editable:true, texto:'La jornada será de {horas_semana} horas semanales en horario de {hora_entrada} a {hora_salida}.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará remuneración mensual de ${sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
+    {id:'c6', titulo:'Previsión y salud', editable:true, texto:'Se efectuarán retenciones a AFP {afp} y salud {salud} conforme a la ley.'},
+    {id:'c7', titulo:'Término (Art. 159 N°5 CT)', editable:true, texto:'El contrato termina al concluir la obra o faena. El empleador deberá comunicar el término con 30 días de anticipación o pagar indemnización sustitutiva.'},
+    {id:'c8', titulo:'Reglamento interno', editable:true, texto:'El Trabajador acepta cumplir el Reglamento Interno de la empresa.'},
+    {id:'c9', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman en dos ejemplares.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador'}
+  ]
+};
+
+// ── Vista principal de contratos ──
+function _rTrabContratos(){
+  const db = DB();
+  const trabs = db.trabajadores||[];
+  const contratos = db.contratosDoc||[];
+  const filtroTrab = window._trabContFiltro||'todos';
+  const hoy = new Date();
+  const hoyStr = hoy.toISOString().slice(0,10);
+
+  // Alertas automáticas: contratos plazo fijo próximos a vencer
+  const alertas = contratos.filter(c=>{
+    if(c.tipo!=='Plazo fijo'||c.estado==='Terminado') return false;
+    const ft = c.fechaTermino;
+    if(!ft) return false;
+    const dias = Math.ceil((new Date(ft)-hoy)/(1000*60*60*24));
+    return dias>=0 && dias<=60;
+  });
+
+  const alertasHTML = alertas.length ? `
+    <div style="background:var(--orange2);border:1px solid var(--orange);border-radius:8px;padding:10px 14px;margin-bottom:10px;">
+      <div style="font-size:10px;font-weight:800;color:var(--orange);margin-bottom:6px;">⚠️ CONTRATOS POR VENCER (próximos 60 días)</div>
+      ${alertas.map(c=>{
+        const t=trabs.find(x=>x.id===c.trabajadorId);
+        const dias=Math.ceil((new Date(c.fechaTermino)-hoy)/(1000*60*60*24));
+        const color=dias<=15?'var(--red)':dias<=30?'var(--orange)':'var(--yellow)';
+        return `<div style="font-size:10px;padding:3px 0;border-bottom:1px solid var(--border);">
+          <span style="color:${color};font-weight:700;">🔴 ${dias} días</span> — 
+          <b>${esc(t?t.nombre:'?')}</b> · Contrato ${c.tipo} · Vence: ${c.fechaTermino}
+          <button class="btn sm" style="margin-left:8px;font-size:8px;" onclick="abrirEditorContrato('${c.id}')">Ver</button>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  // Filtro por trabajador
+  const trabsFiltro = filtroTrab==='todos' ? trabs : trabs.filter(t=>t.id===filtroTrab);
+  const contratosFiltrados = filtroTrab==='todos' ? contratos : contratos.filter(c=>c.trabajadorId===filtroTrab);
+
+  const trabSelect = `<select style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:10px;color:var(--txt);" onchange="window._trabContFiltro=this.value==='todos'?'todos':+this.value;go('trab')">
+    <option value="todos" ${filtroTrab==='todos'?'selected':''}>👥 Todos los trabajadores</option>
+    ${trabs.map(t=>`<option value="${t.id}" ${filtroTrab===t.id?'selected':''}>${esc(t.nombre)}</option>`).join('')}
+  </select>`;
+
+  const listaContratos = contratosFiltrados.length ? contratosFiltrados.map(c=>{
+    const t = trabs.find(x=>x.id===c.trabajadorId);
+    const dias = c.fechaTermino ? Math.ceil((new Date(c.fechaTermino)-hoy)/(1000*60*60*24)) : null;
+    const estadoColor = c.estado==='Vigente'?'var(--green)':c.estado==='Terminado'?'var(--muted)':'var(--orange)';
+    let venceTag='';
+    if(dias!==null&&c.estado!=='Terminado'){
+      const vc=dias<=0?'var(--red)':dias<=15?'var(--red)':dias<=30?'var(--orange)':'var(--yellow)';
+      venceTag=dias<=0?`<span style="color:var(--red);font-size:8px;font-weight:700;"> 🔴 VENCIDO</span>`
+        :`<span style="color:${vc};font-size:8px;font-weight:700;"> ⚠️ Vence en ${dias}d</span>`;
+    }
+    return `<div style="background:var(--s2);border:1px solid var(--border);border-radius:9px;padding:10px;margin-bottom:7px;display:flex;gap:10px;align-items:flex-start;">
+      <div style="font-size:22px;padding-top:2px;">📄</div>
+      <div style="flex:1;">
+        <div style="font-size:11px;font-weight:800;">${esc(t?t.nombre:'?')} ${venceTag}</div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px;">
+          <span style="color:${estadoColor};font-weight:700;">${c.estado||'Vigente'}</span> · 
+          ${c.tipo} · Desde: ${c.fechaInicio||'—'} ${c.fechaTermino?'· Hasta: '+c.fechaTermino:''}<br>
+          ${c.anexos&&c.anexos.length?`📎 ${c.anexos.length} anexo(s) · `:''}
+          Creado: ${(c.creado||'').slice(0,10)}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;">
+        <button class="abt edit" title="Editar contrato" onclick="abrirEditorContrato('${c.id}')">✏️</button>
+        <button class="abt ok" title="Agregar anexo" onclick="abrirAnexoContrato('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📎</button>
+        <button class="abt ok" title="Imprimir/PDF" onclick="imprimirContrato('${c.id}')" style="background:var(--blue2);color:var(--blue);font-size:10px;">🖨️</button>
+        <button class="abt ok" title="Descargar Word" onclick="descargarContratoWord('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📝</button>
+        <button class="abt del" title="Eliminar" onclick="if(confirm('¿Eliminar contrato?')){DB().contratosDoc=DB().contratosDoc.filter(x=>x.id!=='${c.id}');saveDB();go('trab');}">🗑</button>
+      </div>
+    </div>`;
+  }).join('') : `<div class="empty"><div class="ei">📄</div><div class="et">Sin contratos registrados. Usa <b>+ Nuevo Contrato</b>.</div></div>`;
+
+  return `<div class="card">
+    <div class="card-hdr">
+      <div class="ci" style="background:var(--teal2);font-size:18px;">📄</div>
+      <div style="flex:1;">
+        <div class="ct">Contratos de Trabajo</div>
+        <div class="cs">${contratos.length} contrato(s) · Normativa Código del Trabajo Chile</div>
+      </div>
+      <button class="btn primary sm" onclick="abrirNuevoContrato()">+ Nuevo Contrato</button>
+      <button class="btn success sm" onclick="abrirGestorPlantillas()">📂 Plantilla Propia</button>
+    </div>
+    <div style="padding:10px 13px;background:var(--s3);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
+      <span style="font-size:9px;color:var(--muted);">FILTRAR:</span>
+      ${trabSelect}
+      <button class="btn sm secondary" onclick="window._trabContFiltro='todos';go('trab')">Todos</button>
+    </div>
+    <div class="card-body">
+      ${alertasHTML}
+      ${listaContratos}
+    </div>
+  </div>`;
+}
+
+// ── Abrir nuevo contrato ──
+// ── Sugerir tipo de contrato según datos del trabajador ──
+function _sugerirTipoContrato(t){
+  if(!t) return 'Indefinido';
+  const hrs=+(t.jornada)||44;
+  const cargo=(t.cargo||'').toLowerCase();
+  const contrato=(t.contrato||'').toLowerCase();
+  if(contrato.includes('obra')||contrato.includes('faena')) return 'Por obra';
+  if(contrato.includes('plazo')||contrato.includes('fijo')) return 'Plazo fijo';
+  if((cargo.includes('gerente')||cargo.includes('administrador')||cargo.includes('jefe'))&&hrs>=40) return 'Art. 22 (excluido jornada)';
+  if(hrs<=20) return 'Jornada parcial 20h (Art. 40 bis)';
+  if(hrs<=30) return 'Jornada parcial 30h (Art. 40 bis)';
+  return 'Indefinido';
+}
+const TIPOS_CONTRATO_DT=[
+  {v:'Indefinido',l:'Indefinido — Art. 159 N°1 CT'},
+  {v:'Plazo fijo',l:'Plazo Fijo — Art. 159 N°4 CT'},
+  {v:'Por obra',l:'Por Obra o Faena — Art. 159 N°5 CT'},
+  {v:'Jornada parcial 20h (Art. 40 bis)',l:'Jornada Parcial 20h — Art. 40 bis CT'},
+  {v:'Jornada parcial 30h (Art. 40 bis)',l:'Jornada Parcial 30h — Art. 40 bis CT'},
+  {v:'Art. 22 (excluido jornada)',l:'Excluido Jornada — Art. 22 CT'},
+];
+function abrirNuevoContrato(trabajadorId){
+  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo')||[];
+  const hoy=new Date().toISOString().slice(0,10);
+  const trabsChk=trabs.map(t=>{
+    const sug=_sugerirTipoContrato(t);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
+      <input type="checkbox" id="nc_chk_${t.id}" value="${t.id}" ${trabajadorId===t.id||(!trabajadorId&&trabs.length===1)?'checked':''} style="accent-color:var(--acc);">
+      <label for="nc_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
+      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
+      <span style="font-size:8px;color:var(--acc);font-weight:700;">→ ${sug}</span>
+    </div>`;
+  }).join('');
+  const tipoOpts=TIPOS_CONTRATO_DT.map(x=>`<option value="${x.v}">${x.l}</option>`).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:var(--blue2);border:1px solid var(--blue);border-radius:7px;padding:8px 10px;font-size:9px;color:var(--blue);">
+        💡 El sistema sugiere el tipo según cargo, jornada y contrato registrado. Puedes cambiarlo antes de generar.
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">TRABAJADORES</div>
+        <div style="display:flex;gap:6px;margin-bottom:4px;">
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
+        </div>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Tipo de contrato *</div><select class="fi" id="nc_tipo" onchange="_ncActualizarTipo()">${tipoOpts}</select></div>
+        <div><div class="fl">Jornada semanal</div>
+          <select class="fi" id="nc_hrs">
+            <option value="44">44h — Jornada completa</option><option value="42">42h</option>
+            <option value="40">40h</option><option value="30">30h — Parcial 3/4</option>
+            <option value="20">20h — Media jornada</option><option value="10">10h — Parcial mínima</option>
+          </select></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Fecha inicio *</div><input class="fi" type="date" id="nc_fi" value="${hoy}"></div>
+        <div id="nc_ft_wrap"><div class="fl">Fecha término (plazo fijo)</div><input class="fi" type="date" id="nc_ft"></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Ciudad</div><input class="fi" id="nc_ciudad" value="Linares"></div>
+        <div><div class="fl">Forma de pago</div>
+          <select class="fi" id="nc_fpago"><option>depósito en cuenta bancaria</option><option>cheque</option><option>efectivo</option></select></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Representante legal</div><input class="fi" id="nc_rep" placeholder="Nombre representante legal"></div>
+        <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" placeholder="RUT empresa"></div>
+      </div>
+      <div><div class="fl">Dirección empresa</div><input class="fi" id="nc_dir" placeholder="Dirección del lugar de trabajo"></div>
+    </div>`;
+  $('addTitle').textContent='📄 Nuevo Contrato de Trabajo';
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cancelar</button>
+    <button class="btn primary" onclick="guardarNuevoContrato()">Crear Contrato(s) →</button>`;
+  openModal('addModal');
+  _ncActualizarTipo();
+}
+function _ncActualizarTipo(){
+  const tipo=($('nc_tipo')||{}).value||'Indefinido';
+  const ftWrap=$('nc_ft_wrap');
+  if(ftWrap) ftWrap.style.opacity=tipo==='Plazo fijo'?'1':'0.4';
+}
+
+// ── Guardar nuevo contrato ──
+function guardarNuevoContrato(){
+  const chks=[...document.querySelectorAll('[id^=nc_chk_]')].filter(x=>x.checked).map(x=>+x.value);
+  const tipo=($('nc_tipo')||{}).value||'Indefinido';
+  const hrs=($('nc_hrs')||{}).value||'44';
+  const fi=($('nc_fi')||{}).value||'';
+  const ft=($('nc_ft')||{}).value||'';
+  const ciudad=($('nc_ciudad')||{}).value||'';
+  const rep=($('nc_rep')||{}).value||'';
+  const rute=($('nc_rute')||{}).value||'';
+  const dir=($('nc_dir')||{}).value||'';
+  const fpago=($('nc_fpago')||{}).value||'depósito en cuenta bancaria';
+  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
+  if(!fi){alert('Ingresa la fecha de inicio.');return;}
+  if(tipo==='Plazo fijo'&&!ft){alert('Ingresa fecha de término para contrato a plazo fijo.');return;}
+  if(!DB().contratosDoc) DB().contratosDoc=[];
+  const emp=DB();
+  const horarios={44:{e:'08:00',s:'18:00',c:'60'},42:{e:'08:00',s:'17:48',c:'60'},40:{e:'08:00',s:'17:36',c:'60'},30:{e:'08:00',s:'14:00',c:'30'},20:{e:'08:00',s:'13:00',c:'0'},10:{e:'08:00',s:'10:00',c:'0'}};
+  const h=horarios[hrs]||horarios[44];
+  const tipoBase=tipo.includes('Plazo')?'Plazo fijo':tipo.includes('obra')||tipo.includes('Faena')?'Por obra':'Indefinido';
+  let creados=0;
+  chks.forEach((trabId,idx)=>{
+    const t=DB().trabajadores.find(x=>x.id===trabId)||{};
+    const clausulas=(CLAUSULAS_BASE[tipoBase]||CLAUSULAS_BASE['Indefinido']).map(cl=>({
+      ...cl,
+      texto:cl.texto
+        .replace(/{nombre_trabajador}/g,t.nombre||'').replace(/{rut_trabajador}/g,t.rut||'')
+        .replace(/{cargo}/g,t.cargo||'').replace(/{sueldo_base}/g,t.sb?fmt(t.sb):'')
+        .replace(/{afp}/g,t.afp||'').replace(/{salud}/g,t.salud||'')
+        .replace(/{horas_semana}/g,hrs).replace(/{fecha_inicio}/g,fi)
+        .replace(/{fecha_termino}/g,ft||'_______________').replace(/{ciudad}/g,ciudad)
+        .replace(/{nombre_empresa}/g,emp.nombre||'').replace(/{rut_empresa}/g,rute)
+        .replace(/{representante}/g,rep).replace(/{direccion_empresa}/g,dir)
+        .replace(/{forma_pago}/g,fpago).replace(/{dia_inicio}/g,'lunes')
+        .replace(/{dia_fin}/g,'sábado').replace(/{hora_entrada}/g,h.e)
+        .replace(/{hora_salida}/g,h.s).replace(/{colacion}/g,h.c)
+        .replace(/{fnac}/g,t.fnac||'').replace(/{nac}/g,t.nac||'')
+        .replace(/{ecivil}/g,t.ecivil||'').replace(/{dir_trab}/g,t.dir||'')
+        .replace(/{email}/g,t.email||'').replace(/{tel}/g,t.tel||'')
+    }));
+    DB().contratosDoc.push({id:'ct'+Date.now()+idx,trabajadorId:trabId,tipo,fechaInicio:fi,fechaTermino:ft||null,estado:'Vigente',clausulas,anexos:[],creado:new Date().toISOString(),modificado:new Date().toISOString()});
+    creados++;
+  });
+  saveDB();
+  closeModal('addModal');
+  window._trab.sub='contratos';
+  go('trab');
+  if(creados>1) setTimeout(()=>toast(`✅ ${creados} contratos generados`,'ok'),200);
+}
+
+// ── Editor de contrato (cláusulas) ──
+function abrirEditorContrato(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c){ alert('Contrato no encontrado.'); return; }
+  const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
+  const clausulasHTML=c.clausulas.map((cl,i)=>`
+    <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+        <div style="font-size:10px;font-weight:800;color:var(--acc);">${i+1}. ${esc(cl.titulo)}</div>
+        <div style="display:flex;gap:4px;">
+          ${cl.editable?`<button class="btn sm secondary" style="font-size:8px;" onclick="_ecMoverClausula('${contratoId}',${i},-1)">▲</button>
+          <button class="btn sm secondary" style="font-size:8px;" onclick="_ecMoverClausula('${contratoId}',${i},1)">▼</button>
+          <button class="btn sm err" style="font-size:8px;" onclick="_ecEliminarClausula('${contratoId}',${i})">🗑</button>`:'<span style="font-size:8px;color:var(--muted);">Fija</span>'}
+        </div>
+      </div>
+      ${cl.editable
+        ?`<textarea style="width:100%;min-height:80px;background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:6px;font-size:9px;color:var(--txt);resize:vertical;" id="cl_txt_${i}">${esc(cl.texto)}</textarea>`
+        :`<div style="font-size:9px;color:var(--muted);white-space:pre-wrap;">${esc(cl.texto)}</div>`
+      }
+    </div>`).join('');
+  const body=`
+    <div style="max-height:60vh;overflow-y:auto;padding-right:4px;">
+      <div style="margin-bottom:10px;padding:8px;background:var(--s3);border-radius:8px;font-size:9px;">
+        <b>${esc(t.nombre)}</b> · ${c.tipo} · Desde: ${c.fechaInicio} ${c.fechaTermino?'· Hasta: '+c.fechaTermino:''}<br>
+        <select style="margin-top:6px;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:9px;color:var(--txt);" id="ec_estado">
+          <option ${c.estado==='Vigente'?'selected':''}>Vigente</option>
+          <option ${c.estado==='Terminado'?'selected':''}>Terminado</option>
+          <option ${c.estado==='Borrador'?'selected':''}>Borrador</option>
+        </select>
+        ${c.fechaTermino?`<input type="date" value="${c.fechaTermino}" id="ec_ft" style="margin-left:8px;background:var(--s2);border:1px solid var(--border);border-radius:4px;padding:3px 6px;font-size:9px;color:var(--txt);">`:''} 
+      </div>
+      ${clausulasHTML}
+      <button class="btn sm success" style="width:100%;margin-top:4px;" onclick="_ecAgregarClausula('${contratoId}')">+ Agregar cláusula</button>
+    </div>`;
+  $('addTitle').textContent=`✏️ Editar Contrato — ${esc(t.nombre)}`;
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`
+    <button class="btn secondary" onclick="closeModal('addModal')">Cancelar</button>
+    <button class="btn primary" onclick="guardarEditorContrato('${contratoId}')">💾 Guardar cambios</button>`;
+  openModal('addModal');
+}
+
+// ── Guardar edición de contrato ──
+function guardarEditorContrato(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return;
+  c.estado=($('ec_estado')||{}).value||c.estado;
+  if($('ec_ft')) c.fechaTermino=$('ec_ft').value||c.fechaTermino;
+  c.clausulas.forEach((cl,i)=>{
+    const ta=$('cl_txt_'+i);
+    if(ta&&cl.editable) cl.texto=ta.value;
+  });
+  c.modificado=new Date().toISOString();
+  saveDB();
+  closeModal('addModal');
+  go('trab');
+}
+
+// ── Mover cláusula arriba/abajo ──
+function _ecMoverClausula(contratoId, idx, dir){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return;
+  const nuevo=idx+dir;
+  if(nuevo<0||nuevo>=c.clausulas.length) return;
+  [c.clausulas[idx],c.clausulas[nuevo]]=[c.clausulas[nuevo],c.clausulas[idx]];
+  saveDB();
+  abrirEditorContrato(contratoId);
+}
+
+// ── Eliminar cláusula ──
+function _ecEliminarClausula(contratoId, idx){
+  if(!confirm('¿Eliminar esta cláusula?')) return;
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return;
+  c.clausulas.splice(idx,1);
+  saveDB();
+  abrirEditorContrato(contratoId);
+}
+
+// ── Agregar cláusula personalizada ──
+function _ecAgregarClausula(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return;
+  const titulo=prompt('Título de la nueva cláusula:');
+  if(!titulo) return;
+  // Insertar antes de la cláusula de firmas (última)
+  const posFirmas=c.clausulas.length-1;
+  c.clausulas.splice(posFirmas,0,{
+    id:'cc'+Date.now(), titulo, editable:true, texto:'[Redacte el contenido de esta cláusula]'
+  });
+  saveDB();
+  abrirEditorContrato(contratoId);
+}
+
+// ── Agregar anexo al contrato ──
+function abrirAnexoContrato(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c){ alert('Contrato no encontrado.'); return; }
+  const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="font-size:9px;color:var(--muted);">Anexo al contrato de <b>${esc(t.nombre)}</b> (${c.tipo})</div>
+      <div><div class="fl">Tipo de anexo</div>
+        <select class="fi" id="anx_tipo">
+          <option>Cambio de sueldo</option>
+          <option>Cambio de cargo</option>
+          <option>Cambio de jornada</option>
+          <option>Cambio de funciones</option>
+          <option>Prórroga de contrato</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div><div class="fl">Fecha del anexo</div><input class="fi" type="date" id="anx_fecha" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div><div class="fl">Descripción del cambio</div>
+        <textarea class="fi" id="anx_desc" style="min-height:80px;resize:vertical;" placeholder="Ej: Se modifica el sueldo base de $X a $Y a contar del..."></textarea>
+      </div>
+    </div>`;
+  $('addTitle').textContent='📎 Agregar Anexo';
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`
+    <button class="btn secondary" onclick="closeModal('addModal')">Cancelar</button>
+    <button class="btn primary" onclick="guardarAnexo('${contratoId}')">💾 Guardar Anexo</button>`;
+  openModal('addModal');
+}
+
+// ── Guardar anexo ──
+function guardarAnexo(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return;
+  const tipo=($('anx_tipo')||{}).value||'';
+  const fecha=($('anx_fecha')||{}).value||'';
+  const desc=($('anx_desc')||{}).value||'';
+  if(!fecha||!desc){ alert('Completa fecha y descripción.'); return; }
+  if(!c.anexos) c.anexos=[];
+  c.anexos.push({id:'anx'+Date.now(), tipo, fecha, desc, creado:new Date().toISOString()});
+  c.modificado=new Date().toISOString();
+  saveDB();
+  closeModal('addModal');
+  go('trab');
+}
+
+// ── Imprimir / PDF del contrato ──
+function _htmlContrato(contratoId,autoprint){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c) return null;
+  const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
+  const emp=DB();
+  const clausulasHTML=c.clausulas.map((cl,i)=>`
+    <div style="margin-bottom:20px;page-break-inside:avoid;">
+      <div style="font-size:11pt;font-weight:bold;margin-bottom:6px;text-decoration:underline;">${i+1}. ${cl.titulo.toUpperCase()}</div>
+      <div style="font-size:10pt;line-height:1.8;white-space:pre-wrap;text-align:justify;">${cl.texto}</div>
+    </div>`).join('');
+  const anexosHTML=c.anexos&&c.anexos.length?`
+    <div style="margin-top:30px;border-top:2px solid #333;padding-top:16px;">
+      <div style="font-size:13pt;font-weight:bold;margin-bottom:12px;text-align:center;">ANEXOS AL CONTRATO</div>
+      ${c.anexos.map((a,i)=>`
+        <div style="margin-bottom:14px;padding:12px;border:1px solid #999;">
+          <div style="font-weight:bold;font-size:10pt;">ANEXO N°${i+1} — ${a.tipo} — ${a.fecha}</div>
+          <div style="font-size:10pt;margin-top:8px;white-space:pre-wrap;">${a.desc}</div>
+        </div>`).join('')}
+    </div>`:'';
+  const printScript=autoprint?'<script>window.onload=()=>window.print();<\/script>':'';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Contrato — ${t.nombre||''}</title>
+    <style>body{font-family:'Times New Roman',serif;font-size:11pt;color:#111;max-width:780px;margin:30px auto;padding:30px;}
+    @media print{body{margin:15mm;padding:0;max-width:100%;}}
+    h1{font-size:15pt;text-align:center;font-weight:bold;margin-bottom:4px;}
+    .header{text-align:center;margin-bottom:28px;border-bottom:2px solid #111;padding-bottom:14px;}
+    .nota-dt{font-size:8pt;color:#777;border:1px solid #ccc;padding:6px 10px;margin-bottom:20px;}</style>
+    </head><body>
+    <div class="header">
+      <h1>CONTRATO INDIVIDUAL DE TRABAJO</h1>
+      <div style="font-size:12pt;font-weight:bold;">${c.tipo.toUpperCase()}</div>
+      <div style="font-size:10pt;margin-top:6px;">${esc(emp.nombre||'')} — RUT: ${esc(emp.cfg&&emp.cfg.rut||'')}</div>
+      <div style="font-size:9pt;color:#555;">Inicio: ${c.fechaInicio||'—'} ${c.fechaTermino?' | Término: '+c.fechaTermino:''} | Estado: ${c.estado||'Vigente'}</div>
+    </div>
+    <div class="nota-dt">Documento conforme al Art. 10 Código del Trabajo de Chile y Ley 21.561. Se extiende en dos ejemplares de igual valor.</div>
+    ${clausulasHTML}${anexosHTML}${printScript}
+    </body></html>`;
+}
+function imprimirContrato(contratoId){
+  const html=_htmlContrato(contratoId,true);
+  if(!html){alert('Contrato no encontrado.');return;}
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+}
+function descargarContratoWord(contratoId){
+  const c=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!c){alert('Contrato no encontrado.');return;}
+  const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
+  const html=_htmlContrato(contratoId,false);
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Contrato</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2cm;}p{line-height:1.8;text-align:justify;}</style></head><body>${html.replace(/<script[\s\S]*?<\/script>/gi,'')}</body></html>`;
+  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`Contrato_${(t.nombre||'trabajador').replace(/\s+/g,'_')}.doc`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ║    MÓDULO PLANTILLAS PROPIAS DE CONTRATO (Word/PDF usuario)   ║
+// ══════════════════════════════════════════════════════════════════
+const VARS_PLANTILLA=[
+  ['{{nombre}}','Nombre completo del trabajador'],
+  ['{{rut}}','RUT del trabajador'],
+  ['{{cargo}}','Cargo del trabajador'],
+  ['{{sueldo}}','Sueldo base formateado'],
+  ['{{afp}}','AFP del trabajador'],
+  ['{{salud}}','Sistema de salud'],
+  ['{{fecha_inicio}}','Fecha de inicio del contrato'],
+  ['{{fecha_termino}}','Fecha de término (plazo fijo)'],
+  ['{{jornada}}','Horas semanales de jornada'],
+  ['{{empresa}}','Nombre de la empresa'],
+  ['{{rut_empresa}}','RUT de la empresa'],
+  ['{{direccion}}','Dirección de la empresa'],
+  ['{{ciudad}}','Ciudad'],
+  ['{{representante}}','Representante legal'],
+  ['{{banco}}','Banco del trabajador'],
+  ['{{cuenta}}','Número de cuenta'],
+  ['{{depto}}','Departamento'],
+  ['{{fnac}}','Fecha de nacimiento'],
+  ['{{nac}}','Nacionalidad'],
+  ['{{ecivil}}','Estado civil'],
+  ['{{dir_trab}}','Dirección particular del trabajador'],
+  ['{{email}}','Correo electrónico'],
+  ['{{tel}}','Teléfono'],
+];
+function abrirGestorPlantillas(){
+  const plantillas=DB().plantillasContrato||[];
+  const lista=plantillas.length?plantillas.map(p=>`
+    <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+      <div style="font-size:18px;">${p.tipo==='pdf'?'📕':'📘'}</div>
+      <div style="flex:1;"><div style="font-size:11px;font-weight:800;">${esc(p.nombre)}</div>
+      <div style="font-size:9px;color:var(--muted);">${(p.creado||'').slice(0,10)} · ${p.tipo.toUpperCase()}</div></div>
+      <button class="btn sm primary" style="font-size:9px;" onclick="closeModal('addModal');usarPlantilla('${p.id}')">📋 Usar</button>
+      <button class="btn sm err" style="font-size:9px;" onclick="eliminarPlantilla('${p.id}')">🗑</button>
+    </div>`).join('')
+    :'<div style="text-align:center;padding:16px;color:var(--muted);font-size:10px;">Sin plantillas guardadas.</div>';
+  const varsHTML=VARS_PLANTILLA.map(([v,d])=>`
+    <div style="display:flex;gap:6px;padding:2px 0;border-bottom:1px solid var(--border);">
+      <code style="font-size:9px;color:var(--acc);min-width:130px;">${v}</code>
+      <span style="font-size:9px;color:var(--muted);">${d}</span></div>`).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="background:var(--teal2);border:1px solid var(--teal);border-radius:7px;padding:9px 12px;font-size:9px;color:var(--teal);">
+        💡 Sube tu propio contrato en Word (.docx). El sistema reemplazará las variables como <code>{{nombre}}</code>, <code>{{rut}}</code>, etc. con los datos de cada trabajador.
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">VARIABLES DISPONIBLES EN TU PLANTILLA</div>
+        <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px;max-height:150px;overflow-y:auto;">${varsHTML}</div>
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">SUBIR NUEVA PLANTILLA</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <div style="flex:1;"><div class="fl">Nombre de la plantilla</div>
+            <input class="fi" id="plt_nombre" placeholder="Ej: Contrato Indefinido Transportista"></div>
+          <div><input type="file" id="plt_file" accept=".docx,.pdf" style="display:none;" onchange="_pltArchivo(this)">
+            <button class="btn success" onclick="$('plt_file').click()">📎 Seleccionar (.docx / .pdf)</button></div>
+        </div>
+        <div id="plt_prev" style="margin-top:5px;font-size:9px;color:var(--muted);min-height:16px;"></div>
+        <button class="btn primary" style="margin-top:6px;width:100%;" onclick="subirPlantilla()">⬆️ Guardar plantilla</button>
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">MIS PLANTILLAS</div>${lista}</div>
+    </div>`;
+  $('addTitle').textContent='📂 Plantillas Propias de Contrato';
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cerrar</button>`;
+  openModal('addModal');
+}
+function _pltArchivo(input){
+  const file=input.files[0]; if(!file) return;
+  const prev=$('plt_prev');
+  if(prev) prev.textContent=`✅ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  if(!$('plt_nombre').value) $('plt_nombre').value=file.name.replace(/\.(docx|pdf)$/i,'');
+}
+function subirPlantilla(){
+  const nombre=($('plt_nombre')||{}).value?.trim();
+  const fileInput=$('plt_file');
+  const file=fileInput?.files[0];
+  if(!nombre){alert('Ingresa un nombre para la plantilla.');return;}
+  if(!file){alert('Selecciona un archivo .docx o .pdf.');return;}
+  const tipo=file.name.toLowerCase().endsWith('.pdf')?'pdf':'docx';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    if(!DB().plantillasContrato) DB().plantillasContrato=[];
+    DB().plantillasContrato.push({id:'plt'+Date.now(),nombre,tipo,base64:e.target.result,creado:new Date().toISOString()});
+    saveDB(); abrirGestorPlantillas();
+  };
+  reader.readAsDataURL(file);
+}
+function eliminarPlantilla(id){
+  if(!confirm('¿Eliminar esta plantilla?')) return;
+  DB().plantillasContrato=(DB().plantillasContrato||[]).filter(p=>p.id!==id);
+  saveDB(); abrirGestorPlantillas();
+}
+function usarPlantilla(plantillaId){
+  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
+  if(!plt){alert('Plantilla no encontrada.');return;}
+  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo');
+  const hoy=new Date().toISOString().slice(0,10);
+  const trabsChk=trabs.map(t=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
+      <input type="checkbox" id="up_chk_${t.id}" value="${t.id}" style="accent-color:var(--acc);">
+      <label for="up_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
+      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
+    </div>`).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:9px;">
+        📋 Plantilla: <b>${esc(plt.nombre)}</b> (${plt.tipo.toUpperCase()})
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">SELECCIONA TRABAJADORES</div>
+        <div style="display:flex;gap:6px;margin-bottom:4px;">
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
+        </div>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Fecha inicio</div><input class="fi" type="date" id="up_fi" value="${hoy}"></div>
+        <div><div class="fl">Fecha término (si aplica)</div><input class="fi" type="date" id="up_ft"></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Ciudad</div><input class="fi" id="up_ciudad" value="Linares"></div>
+        <div><div class="fl">Representante legal</div><input class="fi" id="up_rep" placeholder="Nombre representante"></div>
+      </div>
+      <div style="font-size:9px;color:var(--muted);">ℹ️ Se genera un .doc por trabajador con sus datos completados. Si son varios, también se genera un Excel resumen.</div>
+    </div>`;
+  $('addTitle').textContent=`📋 Usar: ${esc(plt.nombre)}`;
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="abrirGestorPlantillas()">← Volver</button>
+    <button class="btn primary" onclick="generarDesPlantilla('${plantillaId}')">⚙️ Generar Contrato(s)</button>`;
+  openModal('addModal');
+}
+function generarDesPlantilla(plantillaId){
+  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
+  if(!plt){alert('Plantilla no encontrada.');return;}
+  const chks=[...document.querySelectorAll('[id^=up_chk_]')].filter(x=>x.checked).map(x=>+x.value);
+  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
+  const fi=($('up_fi')||{}).value||'';
+  const ft=($('up_ft')||{}).value||'';
+  const ciudad=($('up_ciudad')||{}).value||'';
+  const rep=($('up_rep')||{}).value||'';
+  const emp=DB();
+  const trabs=chks.map(id=>emp.trabajadores.find(t=>t.id===id)).filter(Boolean);
+  function reemplazar(txt,t){
+    return txt
+      .replace(/\{\{nombre\}\}/g,t.nombre||'').replace(/\{\{rut\}\}/g,t.rut||'')
+      .replace(/\{\{cargo\}\}/g,t.cargo||'').replace(/\{\{sueldo\}\}/g,t.sb?fmt(t.sb):'')
+      .replace(/\{\{afp\}\}/g,t.afp||'').replace(/\{\{salud\}\}/g,t.salud||'')
+      .replace(/\{\{fecha_inicio\}\}/g,fi).replace(/\{\{fecha_termino\}\}/g,ft||'_______________')
+      .replace(/\{\{jornada\}\}/g,t.jornada||44).replace(/\{\{empresa\}\}/g,emp.nombre||'')
+      .replace(/\{\{rut_empresa\}\}/g,emp.cfg&&emp.cfg.rut||'')
+      .replace(/\{\{direccion\}\}/g,emp.cfg&&emp.cfg.dir||'')
+      .replace(/\{\{ciudad\}\}/g,ciudad).replace(/\{\{representante\}\}/g,rep||emp.cfg&&emp.cfg.rep||'')
+      .replace(/\{\{banco\}\}/g,t.banco||'').replace(/\{\{cuenta\}\}/g,t.cuenta||'')
+      .replace(/\{\{depto\}\}/g,t.depto||'').replace(/\{\{fnac\}\}/g,t.fnac||'')
+      .replace(/\{\{nac\}\}/g,t.nac||'').replace(/\{\{ecivil\}\}/g,t.ecivil||'')
+      .replace(/\{\{dir_trab\}\}/g,t.dir||'').replace(/\{\{email\}\}/g,t.email||'')
+      .replace(/\{\{tel\}\}/g,t.tel||'');
+  }
+  if(plt.tipo==='docx'){
+    if(typeof mammoth==='undefined'){alert('Librería mammoth no disponible. Verifica conexión a internet.');return;}
+    const base64Data=plt.base64.split(',')[1];
+    const binary=atob(base64Data);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    mammoth.extractRawText({arrayBuffer:bytes.buffer}).then(result=>{
+      const textoBase=result.value;
+      closeModal('addModal');
+      trabs.forEach((t,i)=>{
+        setTimeout(()=>{
+          const textoFinal=reemplazar(textoBase,t);
+          _descargarComoWord(textoFinal,`Contrato_${(t.nombre||'').replace(/\s+/g,'_')}`);
+        },i*400);
+      });
+      if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
+    }).catch(err=>alert('Error al leer Word: '+err.message));
+  } else {
+    closeModal('addModal');
+    trabs.forEach((t,i)=>{
+      setTimeout(()=>{
+        const texto=`CONTRATO DE TRABAJO\nPlantilla: ${plt.nombre}\n\nTrabajador: ${t.nombre||''}\nRUT: ${t.rut||''}\nFecha Nac: ${t.fnac||''}\nNacionalidad: ${t.nac||''}\nEstado Civil: ${t.ecivil||''}\nDirección: ${t.dir||''}\nTeléfono: ${t.tel||''}\nCorreo: ${t.email||''}\nCargo: ${t.cargo||''}\nSueldo: ${t.sb?fmt(t.sb):''}\nAFP: ${t.afp||''}\nSalud: ${t.salud||''}\nJornada: ${t.jornada||44}h/sem\nFecha inicio: ${fi}\n${ft?'Fecha término: '+ft+'\n':''}\nEmpresa: ${emp.nombre||''}\nCiudad: ${ciudad}\nRepresentante: ${rep||''}`;
+        _descargarComoWord(texto,`Datos_${(t.nombre||'').replace(/\s+/g,'_')}`);
+      },i*400);
+    });
+    if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
+  }
+}
+function _descargarComoWord(texto,nombreArchivo){
+  const htmlContenido=texto.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('');
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${nombreArchivo}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2.5cm;line-height:1.8;}p{margin:0 0 6pt 0;text-align:justify;}</style></head><body>${htmlContenido}</body></html>`;
+  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nombreArchivo+'.doc';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+function _generarExcelResumen(trabs,fi,ft,nombrePlantilla){
+  const datos=trabs.map(t=>({'Nombre':t.nombre||'','RUT':t.rut||'','Cargo':t.cargo||'','Fecha Nac':t.fnac||'','Nacionalidad':t.nac||'','Estado Civil':t.ecivil||'','Dirección':t.dir||'','Teléfono':t.tel||'','Correo':t.email||'','Sueldo Base':t.sb||0,'AFP':t.afp||'','Salud':t.salud||'','Jornada h/sem':t.jornada||44,'Fecha Inicio':fi,'Fecha Término':ft||'Indefinido','Plantilla':nombrePlantilla,'Generado':new Date().toLocaleDateString('es-CL')}));
+  const ws=XLSX.utils.json_to_sheet(datos);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Contratos');
+  XLSX.writeFile(wb,`Resumen_Contratos_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── Sub-vista: Importar Excel ── (100% reactiva, sin getElementById en lógica)
@@ -2513,6 +3199,9 @@ function openAddTrab(id){
   $('addBody').innerHTML=`
     <div class="frow h2"><div><div class="fl">Nombre completo</div><input class="fi" id="f_nombre" value="${t.nombre||''}"></div><div><div class="fl">RUT</div><input class="fi" id="f_rut" value="${t.rut||''}" placeholder="XX.XXX.XXX-X"></div></div>
     <div class="frow h2"><div><div class="fl">Cargo</div><input class="fi" id="f_cargo" value="${t.cargo||''}"></div><div><div class="fl">Fecha ingreso</div><input class="fi" type="date" id="f_fi" value="${t.fi||''}"></div></div>
+    <div class="frow h2"><div><div class="fl">Fecha de nacimiento</div><input class="fi" type="date" id="f_fnac" value="${t.fnac||''}"></div><div><div class="fl">Nacionalidad</div><input class="fi" id="f_nac" value="${t.nac||''}" placeholder="Ej: Chilena"></div></div>
+    <div class="frow h2"><div><div class="fl">Estado civil</div><select class="fi" id="f_ecivil"><option ${t.ecivil==='Soltero/a'?'selected':''}>Soltero/a</option><option ${t.ecivil==='Casado/a'?'selected':''}>Casado/a</option><option ${t.ecivil==='Divorciado/a'?'selected':''}>Divorciado/a</option><option ${t.ecivil==='Viudo/a'?'selected':''}>Viudo/a</option><option ${t.ecivil==='Conviviente civil'?'selected':''}>Conviviente civil</option></select></div><div><div class="fl">Dirección particular</div><input class="fi" id="f_dir" value="${t.dir||''}" placeholder="Calle, número, comuna"></div></div>
+    <div class="frow h2"><div><div class="fl">Correo electrónico</div><input class="fi" type="email" id="f_email" value="${t.email||''}" placeholder="correo@ejemplo.com"></div><div><div class="fl">Teléfono</div><input class="fi" id="f_tel" value="${t.tel||''}" placeholder="+56 9 XXXX XXXX"></div></div>
     <div class="frow h2"><div><div class="fl">Sueldo base</div><input class="fi" type="number" id="f_sb" value="${t.sb||''}"></div><div><div class="fl">Tipo contrato</div><select class="fi" id="f_contrato"><option ${t.contrato==='Indefinido'?'selected':''}>Indefinido</option><option ${t.contrato==='Plazo fijo'?'selected':''}>Plazo fijo</option><option ${t.contrato==='Por obra'?'selected':''}>Por obra</option></select></div></div>
     <div class="frow h2">
       <div><div class="fl">🕐 Jornada semanal (hrs/sem)</div>
@@ -2548,7 +3237,7 @@ function openAddTrab(id){
   $('addOk').onclick=()=>{
     const jornadaSel=document.getElementById('f_jornada')?.value;
     const jornadaVal=jornadaSel==='custom'?fv(document.getElementById('f_jornada_custom')?.value||42):parseInt(jornadaSel)||42;
-    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
+    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),fnac:f$('fnac'),nac:f$('nac'),ecivil:f$('ecivil'),dir:f$('dir'),email:f$('email'),tel:f$('tel'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
     if(!item.nombre){toast('Ingresa nombre','err');return;}
     if(!validRutToast(item.rut,'Trabajador'))return;
     if(id){const ix=DB().trabajadores.findIndex(x=>x.id===id);if(ix>=0)DB().trabajadores[ix]=item;}
@@ -9070,6 +9759,7 @@ function generarHorarioBase(trabajadorId, jornadaId, mes, anio, overrides, offse
           const fdx=new Date(`${anio}-${String(mes).padStart(2,'0')}-${String(dd).padStart(2,'0')}T12:00:00`);
           if(fdx.getDay()===0) domCount++;
         }
+        // Alternar: trabajador par descansa domingos 0,2; impar descansa domingos 1,3
         // Usar grupoIdx si viene del grupo, si no usar trabajadorId para compatibilidad
         const tIdx=(typeof grupoIdx==='number')?grupoIdx:(typeof trabajadorId==='number'?trabajadorId:0);
         const descansa=(tIdx%2===0)?(domCount%2===0):(domCount%2===1);
@@ -9078,15 +9768,6 @@ function generarHorarioBase(trabajadorId, jornadaId, mes, anio, overrides, offse
       }
       else if(esFestivo){ tipo='descanso'; nota='Festivo: '+FESTIVOS_CL[fecha]; }
       else if(esSabado && jornada.sabado){ entrada=jornada.sabado.entrada; salida=jornada.sabado.salida; colacion=jornada.sabado.colacion||0; }
-      else {
-        // DÍA LIBRE SEMANAL OBLIGATORIO (el "1" de 6x1):
-        // Cada trabajador descansa un día fijo distinto por semana según su posición en el grupo.
-        // grupoIdx 0→Lun, 1→Mar, 2→Mié, 3→Jue, 4→Vie, 5→Sáb
-        // Garantiza máx 6 días consecutivos y cobertura todos los días.
-        const tIdx=(typeof grupoIdx==='number')?grupoIdx:(typeof trabajadorId==='number'?trabajadorId:0);
-        const diaSemLibre=(tIdx%6)+1; // 1=Lun,2=Mar,3=Mié,4=Jue,5=Vie,6=Sáb
-        if(dt.getDay()===diaSemLibre){ tipo='descanso'; nota='Descanso semanal (6x1)'; }
-      }
     } else if(jornada.tipo==='administrativa'){
       if(esDomingo){ tipo='descanso'; nota='Descanso dominical'; }
       else if(esFestivo){ tipo='descanso'; nota='Festivo: '+FESTIVOS_CL[fecha]; }
