@@ -1249,14 +1249,14 @@ function activarDemo(){
 
   // ── Trabajadores ficticios ──
   const trabajadores = [
-    {id:1,nombre:'Carlos Andrés Soto Lobos',rut:'12.345.678-9',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2019-03-01',fnac:'1985-06-15',nac:'Chilena',ecivil:'Casado/a',dir:'Los Aromos 234, Linares',email:'csoto@transportesdemo.cl',tel:'+56 9 8123 4567',sb:650000,contrato:'Indefinido',afp:'Habitat',salud:'FONASA',banco:'BancoEstado',cuenta:'12345678',estado:'Activo',obs:'',jornada:44},
-    {id:2,nombre:'Fernando Ormeño Ormeño',rut:'13.456.789-0',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2020-01-15',fnac:'1988-09-22',nac:'Chilena',ecivil:'Soltero/a',dir:'Av. Brasil 567, Linares',email:'formeno@transportesdemo.cl',tel:'+56 9 8234 5678',sb:650000,contrato:'Indefinido',afp:'Capital',salud:'FONASA',banco:'Santander',cuenta:'23456789',estado:'Activo',obs:'',jornada:44},
-    {id:3,nombre:'Marianne Valbuena Urdaneta',rut:'14.567.890-1',cargo:'Inspectora',depto:'Operaciones',area:'Garita',fi:'2021-05-01',fnac:'1990-03-08',nac:'Venezolana',ecivil:'Casado/a',dir:'Calle Yerbas Buenas 89, Linares',email:'mvalbuena@transportesdemo.cl',tel:'+56 9 8345 6789',sb:580000,contrato:'Indefinido',afp:'Modelo',salud:'FONASA',banco:'BancoEstado',cuenta:'34567890',estado:'Activo',obs:'',jornada:44},
-    {id:4,nombre:'Robinson Cea Mariscal',rut:'15.678.901-2',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2018-08-01',fnac:'1982-11-30',nac:'Chilena',ecivil:'Divorciado/a',dir:'Av. Valentín Letelier 123, Linares',email:'rcea@transportesdemo.cl',tel:'+56 9 8456 7890',sb:670000,contrato:'Indefinido',afp:'ProVida',salud:'COLMENA',banco:'Chile',cuenta:'45678901',estado:'Activo',obs:'',jornada:44},
-    {id:5,nombre:'Yasna Karina Rivera Rivera',rut:'16.789.012-3',cargo:'Administrativa',depto:'Administración',area:'Oficina',fi:'2020-09-01',fnac:'1992-07-14',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Pinos 456, Linares',email:'yrivera@transportesdemo.cl',tel:'+56 9 8567 8901',sb:720000,contrato:'Indefinido',afp:'Cuprum',salud:'BANMEDICA',banco:'BancoEstado',cuenta:'56789012',estado:'Activo',obs:'',jornada:44},
-    {id:6,nombre:'Jorge Arellano Marchant',rut:'17.890.123-4',cargo:'Jefe de Operaciones',depto:'Administración',area:'Oficina',fi:'2017-02-01',fnac:'1978-04-25',nac:'Chilena',ecivil:'Casado/a',dir:'Av. Uno Sur 789, Linares',email:'jarellano@transportesdemo.cl',tel:'+56 9 8678 9012',sb:1200000,contrato:'Indefinido',afp:'Habitat',salud:'CONSALUD',banco:'Chile',cuenta:'67890123',estado:'Activo',obs:'',jornada:44},
-    {id:7,nombre:'Raúl Vera Castillo',rut:'18.901.234-5',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2022-03-15',fnac:'1995-12-10',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Boldos 321, Linares',email:'rvera@transportesdemo.cl',tel:'+56 9 8789 0123',sb:630000,contrato:'Plazo fijo',afp:'Uno',salud:'FONASA',banco:'BancoEstado',cuenta:'78901234',estado:'Activo',obs:'Contrato plazo fijo hasta dic 2026',jornada:44},
-    {id:8,nombre:'Mauricio Peralta Martínez',rut:'19.012.345-6',cargo:'Mecánico',depto:'Mantención',area:'Garita',fi:'2019-11-01',fnac:'1980-08-18',nac:'Chilena',ecivil:'Casado/a',dir:'El Roble 654, Linares',email:'mperalta@transportesdemo.cl',tel:'+56 9 8890 1234',sb:750000,contrato:'Indefinido',afp:'PlanVital',salud:'MASVIDA',banco:'Santander',cuenta:'89012345',estado:'Activo',obs:'',jornada:44},
+    {id:1,nombre:'Pedro Alejandro Muñoz Vera',rut:'12.345.678-9',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2019-03-01',fnac:'1985-06-15',nac:'Chilena',ecivil:'Casado/a',dir:'Los Aromos 234, Linares',email:'pmuñoz@transportesdemo.cl',tel:'+56 9 8123 4567',sb:650000,contrato:'Indefinido',afp:'Habitat',salud:'FONASA',banco:'BancoEstado',cuenta:'12345678',estado:'Activo',obs:'',jornada:44},
+    {id:2,nombre:'Roberto Ignacio Campos Silva',rut:'13.456.789-0',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2020-01-15',fnac:'1988-09-22',nac:'Chilena',ecivil:'Soltero/a',dir:'Av. Brasil 567, Linares',email:'rcampos@transportesdemo.cl',tel:'+56 9 8234 5678',sb:650000,contrato:'Indefinido',afp:'Capital',salud:'FONASA',banco:'Santander',cuenta:'23456789',estado:'Activo',obs:'',jornada:44},
+    {id:3,nombre:'Ana María Sepúlveda Lagos',rut:'14.567.890-1',cargo:'Inspectora',depto:'Operaciones',area:'Garita',fi:'2021-05-01',fnac:'1990-03-08',nac:'Venezolana',ecivil:'Casado/a',dir:'Calle Yerbas Buenas 89, Linares',email:'asepulveda@transportesdemo.cl',tel:'+56 9 8345 6789',sb:580000,contrato:'Indefinido',afp:'Modelo',salud:'FONASA',banco:'BancoEstado',cuenta:'34567890',estado:'Activo',obs:'',jornada:44},
+    {id:4,nombre:'Diego Hernán Contreras Pinto',rut:'15.678.901-2',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2018-08-01',fnac:'1982-11-30',nac:'Chilena',ecivil:'Divorciado/a',dir:'Av. Valentín Letelier 123, Linares',email:'dcontreras@transportesdemo.cl',tel:'+56 9 8456 7890',sb:670000,contrato:'Indefinido',afp:'ProVida',salud:'COLMENA',banco:'Chile',cuenta:'45678901',estado:'Activo',obs:'',jornada:44},
+    {id:5,nombre:'Valentina Andrea Morales Díaz',rut:'16.789.012-3',cargo:'Administrativa',depto:'Administración',area:'Oficina',fi:'2020-09-01',fnac:'1992-07-14',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Pinos 456, Linares',email:'vmorales@transportesdemo.cl',tel:'+56 9 8567 8901',sb:720000,contrato:'Indefinido',afp:'Cuprum',salud:'BANMEDICA',banco:'BancoEstado',cuenta:'56789012',estado:'Activo',obs:'',jornada:44},
+    {id:6,nombre:'Francisco Javier Reyes Núñez',rut:'17.890.123-4',cargo:'Jefe de Operaciones',depto:'Administración',area:'Oficina',fi:'2017-02-01',fnac:'1978-04-25',nac:'Chilena',ecivil:'Casado/a',dir:'Av. Uno Sur 789, Linares',email:'freyes@transportesdemo.cl',tel:'+56 9 8678 9012',sb:1200000,contrato:'Indefinido',afp:'Habitat',salud:'CONSALUD',banco:'Chile',cuenta:'67890123',estado:'Activo',obs:'',jornada:44},
+    {id:7,nombre:'Cecilia Paz Gutiérrez Vidal',rut:'18.901.234-5',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2022-03-15',fnac:'1995-12-10',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Boldos 321, Linares',email:'cgutierrez@transportesdemo.cl',tel:'+56 9 8789 0123',sb:630000,contrato:'Plazo fijo',afp:'Uno',salud:'FONASA',banco:'BancoEstado',cuenta:'78901234',estado:'Activo',obs:'Contrato plazo fijo hasta dic 2026',jornada:44},
+    {id:8,nombre:'Luis Eduardo Vargas Espinoza',rut:'19.012.345-6',cargo:'Mecánico',depto:'Mantención',area:'Garita',fi:'2019-11-01',fnac:'1980-08-18',nac:'Chilena',ecivil:'Casado/a',dir:'El Roble 654, Linares',email:'lvargas@transportesdemo.cl',tel:'+56 9 8890 1234',sb:750000,contrato:'Indefinido',afp:'PlanVital',salud:'MASVIDA',banco:'Santander',cuenta:'89012345',estado:'Activo',obs:'',jornada:44},
   ];
 
   // ── Liquidaciones ficticias (3 meses) ──
@@ -1344,21 +1344,21 @@ function activarDemo(){
 
   // ── Vacaciones ──
   const vacaciones = [
-    {id:1,trabajadorId:3,nombre:'Marianne Valbuena Urdaneta',fechaInicio:fIso(anio,mes,10),fechaFin:fIso(anio,mes,24),dias:10,tipo:'legal',estado:'aprobada',obs:'Vacaciones anuales'},
-    {id:2,trabajadorId:5,nombre:'Yasna Karina Rivera Rivera',fechaInicio:fIso(anio,mes+1,3),fechaFin:fIso(anio,mes+1,17),dias:10,tipo:'legal',estado:'pendiente',obs:'Vacaciones programadas'},
+    {id:1,trabajadorId:3,nombre:'Ana María Sepúlveda Lagos',fechaInicio:fIso(anio,mes,10),fechaFin:fIso(anio,mes,24),dias:10,tipo:'legal',estado:'aprobada',obs:'Vacaciones anuales'},
+    {id:2,trabajadorId:5,nombre:'Valentina Andrea Morales Díaz',fechaInicio:fIso(anio,mes+1,3),fechaFin:fIso(anio,mes+1,17),dias:10,tipo:'legal',estado:'pendiente',obs:'Vacaciones programadas'},
   ];
 
   // ── Ausencias ──
   const ausencias = [
-    {id:1,trabajadorId:4,nombre:'Robinson Cea Mariscal',fecha:fIso(anio,mes,7),tipo:'Licencia médica',dias:3,obs:'Licencia médica código 1 — gripe'},
-    {id:2,trabajadorId:7,nombre:'Raúl Vera Castillo',fecha:fIso(anio,mes,14),tipo:'Permiso sin goce',dias:1,obs:'Trámites personales'},
+    {id:1,trabajadorId:4,nombre:'Diego Hernán Contreras Pinto',fecha:fIso(anio,mes,7),tipo:'Licencia médica',dias:3,obs:'Licencia médica código 1 — gripe'},
+    {id:2,trabajadorId:7,nombre:'Cecilia Paz Gutiérrez Vidal',fecha:fIso(anio,mes,14),tipo:'Permiso sin goce',dias:1,obs:'Trámites personales'},
   ];
 
   // ── Notas ──
   const notas = [
     {id:1,titulo:'Renovación SOAP buses',contenido:'Recordar renovar SOAP de ambos buses antes del 30 del mes. Copec ofrece descuento corporativo.',color:'orange',fijada:true,creada:fIso(anio,mes,1)},
     {id:2,titulo:'Reunión con Municipalidad',contenido:'Reunión programada para revisar contrato transporte escolar próximo año. Preparar propuesta económica.',color:'blue',fijada:false,creada:fIso(anio,mes,5)},
-    {id:3,titulo:'Mantención preventiva BUS-002',contenido:'Bus patente BCDF-35 requiere cambio de aceite y revisión de frenos. Coordinar con Mauricio Peralta.',color:'red',fijada:true,creada:fIso(anio,mes,10)},
+    {id:3,titulo:'Mantención preventiva BUS-002',contenido:'Bus patente BCDF-35 requiere cambio de aceite y revisión de frenos. Coordinar con Luis Eduardo Vargas.',color:'red',fijada:true,creada:fIso(anio,mes,10)},
   ];
 
   // ── Horarios ──
@@ -1382,8 +1382,8 @@ function activarDemo(){
 
   // ── Créditos trabajadores ──
   const creditos = [
-    {id:1,trabajadorId:1,nombre:'Carlos Andrés Soto Lobos',monto:500000,cuotas:10,pagadas:3,fechaOtorg:fIso(anio-1,mes,1),obs:'Préstamo personal',activo:true},
-    {id:2,trabajadorId:4,nombre:'Robinson Cea Mariscal',monto:300000,cuotas:6,pagadas:1,fechaOtorg:fIso(anio,mes-1,15),obs:'Anticipo vacaciones',activo:true},
+    {id:1,trabajadorId:1,nombre:'Pedro Alejandro Muñoz Vera',monto:500000,cuotas:10,pagadas:3,fechaOtorg:fIso(anio-1,mes,1),obs:'Préstamo personal',activo:true},
+    {id:2,trabajadorId:4,nombre:'Diego Hernán Contreras Pinto',monto:300000,cuotas:6,pagadas:1,fechaOtorg:fIso(anio,mes-1,15),obs:'Anticipo vacaciones',activo:true},
   ];
 
   // ── Construir empresa Demo completa ──
@@ -1400,7 +1400,7 @@ function activarDemo(){
     dir:'Av. Valentín Letelier 456, Linares, Maule',
     tel:'+56 73 212345',
     email:'admin@transportesdemo.cl',
-    rep:'Jorge Arellano Marchant',
+    rep:'Francisco Javier Reyes Núñez',
     reprut:'17.890.123-4',
     cont:'Yasna Rivera Rivera',
     contrut:'16.789.012-3',
