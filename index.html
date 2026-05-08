@@ -1467,15 +1467,22 @@ function _actualizarBtnDemo(enDemo){
     btn.style.borderColor = '#eab308';
     btn.style.color = '#eab308';
     btn.onclick = ()=>{
+      // Overlay que cierra al hacer clic fuera
+      const ov = document.createElement('div');
+      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;';
       const m = document.createElement('div');
       m.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:20px;z-index:9999;min-width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+      const cerrar=()=>{ov.remove();m.remove();};
+      ov.onclick=cerrar;
       m.innerHTML=`<div style="font-size:14px;font-weight:800;color:var(--acc);margin-bottom:12px;">🎯 MODO DEMO</div>
         <div style="font-size:10px;color:var(--muted);margin-bottom:14px;">Empresa: <b>Transportes Demo SpA</b></div>
         <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn secondary" onclick="this.closest('div[style]').remove();salirDemo()">↩️ Volver a mi empresa real</button>
-          <button class="btn err" onclick="this.closest('div[style]').remove();eliminarDemo()">🗑 Eliminar Demo</button>
-          <button class="btn secondary" onclick="this.closest('div[style]').remove()">✕ Cancelar</button>
+          <button class="btn secondary" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove());salirDemo()">↩️ Volver a mi empresa real</button>
+          <button class="btn err" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove());eliminarDemo()">🗑 Eliminar Demo</button>
+          <button class="btn secondary" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove())">✕ Cancelar</button>
         </div>`;
+      ov.dataset.demoov='1'; m.dataset.demoov='1';
+      document.body.appendChild(ov);
       document.body.appendChild(m);
     };
   } else {
