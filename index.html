@@ -10,6 +10,7 @@
 <meta name="theme-color" content="#060a10">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -625,6 +626,18 @@ textarea.fi{resize:vertical;min-height:50px;}
           </select>
         </div>
       </div>
+      <div class="frow h2">
+        <div><div class="fl">SIS — Seguro Invalidez y Sobrevivencia (%)</div>
+          <input class="fi" type="number" id="ne_sis" step="0.01" min="0" max="5" placeholder="1.49" value="1.49"
+            style="font-family:monospace;">
+          <div style="font-size:9px;color:var(--muted);margin-top:2px;">Tasa cargo empleador. Por defecto 1.49% (SIS 2024). Ajusta si tu empresa tiene tasa diferenciada.</div>
+        </div>
+        <div><div class="fl">AFC Trabajador — Contrato Indefinido (%)</div>
+          <input class="fi" type="number" id="ne_afc" step="0.01" min="0" max="5" placeholder="0.6" value="0.6"
+            style="font-family:monospace;">
+          <div style="font-size:9px;color:var(--muted);margin-top:2px;">Descuento cargo trabajador. 0.6% indefinido, 0% plazo fijo (Ley 19.728).</div>
+        </div>
+      </div>
     </div>
     <div class="mbtns">
       <button class="mbtn cancel" onclick="closeModal('nuevaEmpresaModal')">Cancelar</button>
@@ -1140,6 +1153,7 @@ async function load(){
           if(!emp.comprobantes)emp.comprobantes={conceptosIng:[],conceptosEgr:[],registros:[]};
           if(!emp.finiquitos)emp.finiquitos=[];
           if(!emp.contratosDoc)emp.contratosDoc=[];
+          if(!emp.plantillasContrato)emp.plantillasContrato=[];
         });
       }
     }catch(e){}
@@ -1320,12 +1334,18 @@ function activarDemo(){
   ];
 
   // ── Asientos contables ficticios ──
+  // Asientos en formato compatible con módulo Contabilidad (ctaDebe/ctaHaber planos)
   const asientos = [
-    {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',glosa:'Boleta arriendos buses enero',debe:[{cuenta:'1101',nombre:'Caja',monto:3808000}],haber:[{cuenta:'4101',nombre:'Ingresos por servicios',monto:3200000},{cuenta:'2201',nombre:'IVA Débito Fiscal',monto:608000}],total:3808000},
-    {id:2,fecha:fIso(anio,mes,3),tipo:'egreso',glosa:'Pago combustible Copec',debe:[{cuenta:'5101',nombre:'Gasto combustible',monto:1850000},{cuenta:'1102',nombre:'IVA Crédito Fiscal',monto:351500}],haber:[{cuenta:'1101',nombre:'Caja',monto:2201500}],total:2201500},
-    {id:3,fecha:fIso(anio,mes,28),tipo:'egreso',glosa:'Pago remuneraciones personal',debe:[{cuenta:'5201',nombre:'Gasto remuneraciones',monto:5850000}],haber:[{cuenta:'1101',nombre:'Caja',monto:5850000}],total:5850000},
-    {id:4,fecha:fIso(anio,mes,5),tipo:'ingreso',glosa:'Cobro servicio transporte escolar',debe:[{cuenta:'1101',nombre:'Caja',monto:2142000}],haber:[{cuenta:'4101',nombre:'Ingresos por servicios',monto:1800000},{cuenta:'2201',nombre:'IVA Débito Fiscal',monto:342000}],total:2142000},
-    {id:5,fecha:fIso(anio,mes,8),tipo:'egreso',glosa:'Pago seguro flota',debe:[{cuenta:'5301',nombre:'Gasto seguros',monto:980000},{cuenta:'1102',nombre:'IVA Crédito Fiscal',monto:186200}],haber:[{cuenta:'1101',nombre:'Caja',monto:1166200}],total:1166200},
+    {id:1,folio:1,fecha:fIso(anio,mes,1),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Boleta arriendos buses enero',ctaDebe:'Caja (1101)',debe:3808000,ctaHaber:'Ingresos por servicios (4101)',haber:3200000,cc:''},
+    {id:2,folio:2,fecha:fIso(anio,mes,3),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago combustible Copec',ctaDebe:'Gasto combustible (5101)',debe:1850000,ctaHaber:'Caja (1101)',haber:2201500,cc:''},
+    {id:3,folio:3,fecha:fIso(anio,mes,5),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Cobro servicio transporte escolar',ctaDebe:'Caja (1101)',debe:2142000,ctaHaber:'Ingresos por servicios (4101)',haber:1800000,cc:''},
+    {id:4,folio:4,fecha:fIso(anio,mes,8),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago seguro flota',ctaDebe:'Gasto seguros (5301)',debe:1166200,ctaHaber:'Caja (1101)',haber:1166200,cc:''},
+    {id:5,folio:5,fecha:fIso(anio,mes,15),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago arriendo oficina',ctaDebe:'Gasto arriendo (5401)',debe:350000,ctaHaber:'Caja (1101)',haber:350000,cc:'ADM'},
+    {id:6,folio:6,fecha:fIso(anio,mes,18),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Cobro transporte Constructora Maulina',ctaDebe:'Cuentas por cobrar (1201)',debe:3332000,ctaHaber:'Ingresos por servicios (4101)',haber:2800000,cc:'OB-001'},
+    {id:7,folio:7,fecha:fIso(anio,mes,22),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Compra repuestos bus',ctaDebe:'Gasto mantención (5102)',debe:499800,ctaHaber:'Caja (1101)',haber:499800,cc:''},
+    {id:8,folio:8,fecha:fIso(anio,mes,28),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago remuneraciones personal',ctaDebe:'Gasto remuneraciones (5201)',debe:5850000,ctaHaber:'Caja (1101)',haber:5850000,cc:''},
+    {id:9,folio:9,fecha:fIso(anio,mes,28),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Depreciación mensual buses',ctaDebe:'Depreciación acumulada (1502)',debe:291667,ctaHaber:'Gasto depreciación (5501)',haber:291667,cc:''},
+    {id:10,folio:10,fecha:fIso(anio,mes,30),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago IVA mes anterior',ctaDebe:'IVA Débito Fiscal (2201)',debe:950000,ctaHaber:'Caja (1101)',haber:950000,cc:''},
   ];
 
   // ── Caja chica ──
@@ -1856,6 +1876,8 @@ function guardarEmpresa(){
     utm:parseFloat($('ne_utm')?.value)||68500,
     smm:parseFloat($('ne_smm')?.value)||510114,
     mutual:$('ne_mutual')?.value||'0.0093',
+    sis:+(($('ne_sis')?.value)||1.49)/100,
+    afcTrab:+(($('ne_afc')?.value)||0.6)/100,
     ccaf:$('ne_ccaf')?.value||''
   };
   if(_editEmpIdx>=0){
@@ -2010,8 +2032,8 @@ function render(t){
     case 'honorarios': mc.innerHTML=renderHonorarios();break;
     case 'bhe': mc.innerHTML=renderBHEPropias();break;
     case 'creditos': mc.innerHTML=renderCreditos();break;
-    case 'f29': mc.innerHTML=renderF29();setTimeout(()=>showF29Tab('iva',document.querySelector('#f29Tabs .tab-btn')),60);break;
-    case 'f22': mc.innerHTML=renderF22();setTimeout(()=>showF22Tab('resultados',document.querySelector('#mc .tab-btn')),60);break;
+    case 'f29': mc.innerHTML=renderF29();setTimeout(()=>showF29Tab('info',document.querySelector('#f29Tabs .tab-btn')),60);break;
+    case 'f22': mc.innerHTML=renderF22();setTimeout(()=>showF22Tab('anverso',document.querySelector('#mc .tab-btn')),60);break;
     case 'f2121': mc.innerHTML=renderF2121();break;
     case 'dj': mc.innerHTML=renderDJ();break;
     case 'actfijo': mc.innerHTML=renderActFijo();break;
@@ -2371,7 +2393,9 @@ function _rTrabContratos(){
   const db = DB();
   const trabs = db.trabajadores||[];
   const contratos = db.contratosDoc||[];
-  const filtroTrab = window._trabContFiltro||'todos';
+  // FIX: normalizar filtroTrab como número o 'todos'
+  const filtroRaw = window._trabContFiltro;
+  const filtroTrab = (!filtroRaw||filtroRaw==='todos') ? 'todos' : +filtroRaw;
   const hoy = new Date();
   const hoyStr = hoy.toISOString().slice(0,10);
 
@@ -2400,12 +2424,12 @@ function _rTrabContratos(){
     </div>` : '';
 
   // Filtro por trabajador
-  const trabsFiltro = filtroTrab==='todos' ? trabs : trabs.filter(t=>t.id===filtroTrab);
-  const contratosFiltrados = filtroTrab==='todos' ? contratos : contratos.filter(c=>c.trabajadorId===filtroTrab);
+  const trabsFiltro = filtroTrab==='todos' ? trabs : trabs.filter(t=>+t.id===+filtroTrab);
+  const contratosFiltrados = filtroTrab==='todos' ? contratos : contratos.filter(c=>+c.trabajadorId===+filtroTrab);
 
   const trabSelect = `<select style="background:var(--s2);border:1px solid var(--border);border-radius:6px;padding:5px 8px;font-size:10px;color:var(--txt);" onchange="window._trabContFiltro=this.value==='todos'?'todos':+this.value;go('trab')">
     <option value="todos" ${filtroTrab==='todos'?'selected':''}>👥 Todos los trabajadores</option>
-    ${trabs.map(t=>`<option value="${t.id}" ${filtroTrab===t.id?'selected':''}>${esc(t.nombre)}</option>`).join('')}
+    ${trabs.map(t=>`<option value="${t.id}" ${+filtroTrab===+t.id?'selected':''}>${esc(t.nombre)}</option>`).join('')}
   </select>`;
 
   const listaContratos = contratosFiltrados.length ? contratosFiltrados.map(c=>{
@@ -2433,6 +2457,7 @@ function _rTrabContratos(){
         <button class="abt edit" title="Editar contrato" onclick="abrirEditorContrato('${c.id}')">✏️</button>
         <button class="abt ok" title="Agregar anexo" onclick="abrirAnexoContrato('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📎</button>
         <button class="abt ok" title="Imprimir/PDF" onclick="imprimirContrato('${c.id}')" style="background:var(--blue2);color:var(--blue);font-size:10px;">🖨️</button>
+        <button class="abt ok" title="Descargar Word" onclick="descargarContratoWord('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📝</button>
         <button class="abt del" title="Eliminar" onclick="if(confirm('¿Eliminar contrato?')){DB().contratosDoc=DB().contratosDoc.filter(x=>x.id!=='${c.id}');saveDB();go('trab');}">🗑</button>
       </div>
     </div>`;
@@ -2446,6 +2471,7 @@ function _rTrabContratos(){
         <div class="cs">${contratos.length} contrato(s) · Normativa Código del Trabajo Chile</div>
       </div>
       <button class="btn primary sm" onclick="abrirNuevoContrato()">+ Nuevo Contrato</button>
+      <button class="btn success sm" onclick="abrirGestorPlantillas()">📂 Plantilla Propia</button>
     </div>
     <div style="padding:10px 13px;background:var(--s3);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
       <span style="font-size:9px;color:var(--muted);">FILTRAR:</span>
@@ -2459,55 +2485,97 @@ function _rTrabContratos(){
   </div>`;
 }
 
+// ── Sugerir tipo de contrato según datos del trabajador ──
+function _sugerirTipoContrato(t){
+  if(!t) return 'Indefinido';
+  const hrs=+(t.jornada)||44;
+  const cargo=(t.cargo||'').toLowerCase();
+  const contrato=(t.contrato||'').toLowerCase();
+  if(contrato.includes('obra')||contrato.includes('faena')) return 'Por obra';
+  if(contrato.includes('plazo')||contrato.includes('fijo')) return 'Plazo fijo';
+  if((cargo.includes('gerente')||cargo.includes('administrador')||cargo.includes('jefe'))&&hrs>=40) return 'Art. 22 (excluido jornada)';
+  if(hrs<=20) return 'Jornada parcial 20h (Art. 40 bis)';
+  if(hrs<=30) return 'Jornada parcial 30h (Art. 40 bis)';
+  return 'Indefinido';
+}
+const TIPOS_CONTRATO_DT=[
+  {v:'Indefinido',l:'Indefinido — Art. 159 N°1 CT'},
+  {v:'Plazo fijo',l:'Plazo Fijo — Art. 159 N°4 CT'},
+  {v:'Por obra',l:'Por Obra o Faena — Art. 159 N°5 CT'},
+  {v:'Jornada parcial 20h (Art. 40 bis)',l:'Jornada Parcial 20h — Art. 40 bis CT'},
+  {v:'Jornada parcial 30h (Art. 40 bis)',l:'Jornada Parcial 30h — Art. 40 bis CT'},
+  {v:'Art. 22 (excluido jornada)',l:'Excluido Jornada — Art. 22 CT'},
+];
+
 // ── Abrir nuevo contrato ──
 function abrirNuevoContrato(trabajadorId){
-  const trabs=DB().trabajadores||[];
-  const empresa=DB().nombre||'';
-  const trabOpts=trabs.map(t=>`<option value="${t.id}" ${trabajadorId===t.id?'selected':''}>${esc(t.nombre)}</option>`).join('');
+  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo')||[];
+  const hoy=new Date().toISOString().slice(0,10);
+  const trabsChk=trabs.map(t=>{
+    const sug=_sugerirTipoContrato(t);
+    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
+      <input type="checkbox" id="nc_chk_${t.id}" value="${t.id}" ${trabajadorId===t.id||(!trabajadorId&&trabs.length===1)?'checked':''} style="accent-color:var(--acc);">
+      <label for="nc_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
+      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
+      <span style="font-size:8px;color:var(--acc);font-weight:700;">→ ${sug}</span>
+    </div>`;
+  }).join('');
+  const tipoOpts=TIPOS_CONTRATO_DT.map(x=>`<option value="${x.v}">${x.l}</option>`).join('');
   const body=`
     <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:var(--blue2);border:1px solid var(--blue);border-radius:7px;padding:8px 10px;font-size:9px;color:var(--blue);">
+        💡 El sistema sugiere el tipo según cargo, jornada y contrato registrado. Puedes cambiarlo antes de generar.
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">TRABAJADORES</div>
+        <div style="display:flex;gap:6px;margin-bottom:4px;">
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
+        </div>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
+      </div>
       <div class="frow h2">
-        <div><div class="fl">Trabajador *</div>
-          <select class="fi" id="nc_trab" onchange="_ncActualizarTipo()">${trabOpts}</select></div>
-        <div><div class="fl">Tipo de contrato *</div>
-          <select class="fi" id="nc_tipo" onchange="_ncActualizarTipo()">
-            <option>Indefinido</option><option>Plazo fijo</option><option>Por obra</option>
+        <div><div class="fl">Tipo de contrato *</div><select class="fi" id="nc_tipo" onchange="_ncActualizarTipo()">${tipoOpts}</select></div>
+        <div><div class="fl">Jornada semanal</div>
+          <select class="fi" id="nc_hrs">
+            <option value="44">44h — Jornada completa</option><option value="42">42h</option>
+            <option value="40">40h</option><option value="30">30h — Parcial 3/4</option>
+            <option value="20">20h — Media jornada</option><option value="10">10h — Parcial mínima</option>
           </select></div>
       </div>
       <div class="frow h2">
-        <div><div class="fl">Fecha inicio *</div><input class="fi" type="date" id="nc_fi"></div>
-        <div><div class="fl">Fecha término (solo plazo fijo)</div><input class="fi" type="date" id="nc_ft"></div>
+        <div><div class="fl">Fecha inicio *</div><input class="fi" type="date" id="nc_fi" value="${hoy}"></div>
+        <div id="nc_ft_wrap"><div class="fl">Fecha término (plazo fijo)</div><input class="fi" type="date" id="nc_ft"></div>
       </div>
-      <div><div class="fl">Ciudad</div><input class="fi" id="nc_ciudad" value="Linares" placeholder="Ciudad donde se firma"></div>
-      <div><div class="fl">Representante legal empleador</div><input class="fi" id="nc_rep" placeholder="Nombre representante legal"></div>
-      <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" placeholder="RUT empresa"></div>
+      <div class="frow h2">
+        <div><div class="fl">Ciudad</div><input class="fi" id="nc_ciudad" value="Linares"></div>
+        <div><div class="fl">Forma de pago</div>
+          <select class="fi" id="nc_fpago"><option>depósito en cuenta bancaria</option><option>cheque</option><option>efectivo</option></select></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Representante legal</div><input class="fi" id="nc_rep" placeholder="Nombre representante legal"></div>
+        <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" placeholder="RUT empresa"></div>
+      </div>
       <div><div class="fl">Dirección empresa</div><input class="fi" id="nc_dir" placeholder="Dirección del lugar de trabajo"></div>
-      <div><div class="fl">Forma de pago</div>
-        <select class="fi" id="nc_fpago">
-          <option>depósito en cuenta bancaria</option>
-          <option>cheque</option>
-          <option>efectivo</option>
-        </select>
-      </div>
     </div>`;
   $('addTitle').textContent='📄 Nuevo Contrato de Trabajo';
   $('addBody').innerHTML=body;
   $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cancelar</button>
-    <button class="btn primary" onclick="guardarNuevoContrato()">Crear Contrato →</button>`;
+    <button class="btn primary" onclick="guardarNuevoContrato()">Crear Contrato(s) →</button>`;
   openModal('addModal');
+  _ncActualizarTipo();
 }
-
-// ── Actualizar tipo en formulario nuevo contrato ──
 function _ncActualizarTipo(){
   const tipo=($('nc_tipo')||{}).value||'Indefinido';
-  const ftDiv=$('nc_ft')?$('nc_ft').parentElement:null;
-  if(ftDiv) ftDiv.style.opacity=tipo==='Plazo fijo'?'1':'0.4';
+  const ftWrap=$('nc_ft_wrap');
+  if(ftWrap) ftWrap.style.opacity=tipo==='Plazo fijo'?'1':'0.4';
 }
 
 // ── Guardar nuevo contrato ──
 function guardarNuevoContrato(){
-  const trabId=+($('nc_trab')||{}).value;
+  const chks=[...document.querySelectorAll('[id^=nc_chk_]')].filter(x=>x.checked).map(x=>+x.value);
   const tipo=($('nc_tipo')||{}).value||'Indefinido';
+  const hrs=($('nc_hrs')||{}).value||'44';
   const fi=($('nc_fi')||{}).value||'';
   const ft=($('nc_ft')||{}).value||'';
   const ciudad=($('nc_ciudad')||{}).value||'';
@@ -2515,53 +2583,42 @@ function guardarNuevoContrato(){
   const rute=($('nc_rute')||{}).value||'';
   const dir=($('nc_dir')||{}).value||'';
   const fpago=($('nc_fpago')||{}).value||'depósito en cuenta bancaria';
-  if(!trabId||!fi){ alert('Completa trabajador y fecha de inicio.'); return; }
-  if(tipo==='Plazo fijo'&&!ft){ alert('Ingresa fecha de término para contrato a plazo fijo.'); return; }
-  const t=DB().trabajadores.find(x=>x.id===trabId)||{};
-  const emp=DB();
-  // Prellenar cláusulas con datos del trabajador
-  const clausulas=(CLAUSULAS_BASE[tipo]||CLAUSULAS_BASE['Indefinido']).map(cl=>({
-    ...cl,
-    texto: cl.texto
-      .replace(/{nombre_trabajador}/g, t.nombre||'')
-      .replace(/{rut_trabajador}/g, t.rut||'')
-      .replace(/{cargo}/g, t.cargo||'')
-      .replace(/{sueldo_base}/g, t.sb?fmt(t.sb):'')
-      .replace(/{afp}/g, t.afp||'')
-      .replace(/{salud}/g, t.salud||'')
-      .replace(/{horas_semana}/g, t.jornada||44)
-      .replace(/{fecha_inicio}/g, fi)
-      .replace(/{fecha_termino}/g, ft||'_______________')
-      .replace(/{ciudad}/g, ciudad)
-      .replace(/{nombre_empresa}/g, emp.nombre||'')
-      .replace(/{rut_empresa}/g, rute)
-      .replace(/{representante}/g, rep)
-      .replace(/{direccion_empresa}/g, dir)
-      .replace(/{forma_pago}/g, fpago)
-      .replace(/{dia_inicio}/g, 'lunes')
-      .replace(/{dia_fin}/g, 'sábado')
-      .replace(/{hora_entrada}/g, '08:00')
-      .replace(/{hora_salida}/g, '18:00')
-      .replace(/{colacion}/g, '30')
-  }));
-  const nuevo={
-    id:'ct'+Date.now(),
-    trabajadorId:trabId,
-    tipo,
-    fechaInicio:fi,
-    fechaTermino:ft||null,
-    estado:'Vigente',
-    clausulas,
-    anexos:[],
-    creado:new Date().toISOString(),
-    modificado:new Date().toISOString()
-  };
+  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
+  if(!fi){alert('Ingresa la fecha de inicio.');return;}
+  if(tipo==='Plazo fijo'&&!ft){alert('Ingresa fecha de término.');return;}
   if(!DB().contratosDoc) DB().contratosDoc=[];
-  DB().contratosDoc.push(nuevo);
+  const emp=DB();
+  const horarios={44:{e:'08:00',s:'18:00',c:'60'},42:{e:'08:00',s:'17:48',c:'60'},40:{e:'08:00',s:'17:36',c:'60'},30:{e:'08:00',s:'14:00',c:'30'},20:{e:'08:00',s:'13:00',c:'0'},10:{e:'08:00',s:'10:00',c:'0'}};
+  const h=horarios[hrs]||horarios[44];
+  const tipoBase=tipo.includes('Plazo')?'Plazo fijo':tipo.includes('obra')||tipo.includes('Faena')?'Por obra':'Indefinido';
+  let creados=0;
+  chks.forEach((trabId,idx)=>{
+    const t=DB().trabajadores.find(x=>x.id===trabId)||{};
+    const clausulas=(CLAUSULAS_BASE[tipoBase]||CLAUSULAS_BASE['Indefinido']).map(cl=>({
+      ...cl,
+      texto:cl.texto
+        .replace(/{nombre_trabajador}/g,t.nombre||'').replace(/{rut_trabajador}/g,t.rut||'')
+        .replace(/{cargo}/g,t.cargo||'').replace(/{sueldo_base}/g,t.sb?fmt(t.sb):'')
+        .replace(/{afp}/g,t.afp||'').replace(/{salud}/g,t.salud||'')
+        .replace(/{horas_semana}/g,hrs).replace(/{fecha_inicio}/g,fi)
+        .replace(/{fecha_termino}/g,ft||'_______________').replace(/{ciudad}/g,ciudad)
+        .replace(/{nombre_empresa}/g,emp.nombre||'').replace(/{rut_empresa}/g,rute)
+        .replace(/{representante}/g,rep).replace(/{direccion_empresa}/g,dir)
+        .replace(/{forma_pago}/g,fpago).replace(/{dia_inicio}/g,'lunes')
+        .replace(/{dia_fin}/g,'sábado').replace(/{hora_entrada}/g,h.e)
+        .replace(/{hora_salida}/g,h.s).replace(/{colacion}/g,h.c)
+        .replace(/{fnac}/g,t.fnac||'').replace(/{nac}/g,t.nac||'')
+        .replace(/{ecivil}/g,t.ecivil||'').replace(/{dir_trab}/g,t.dir||'')
+        .replace(/{email}/g,t.email||'').replace(/{tel}/g,t.tel||'')
+    }));
+    DB().contratosDoc.push({id:'ct'+Date.now()+idx,trabajadorId:trabId,tipo,fechaInicio:fi,fechaTermino:ft||null,estado:'Vigente',clausulas,anexos:[],creado:new Date().toISOString(),modificado:new Date().toISOString()});
+    creados++;
+  });
   saveDB();
   closeModal('addModal');
   window._trab.sub='contratos';
   go('trab');
+  if(creados>1) setTimeout(()=>toast(`✅ ${creados} contratos generados`,'ok'),200);
 }
 
 // ── Editor de contrato (cláusulas) ──
@@ -2706,47 +2763,246 @@ function guardarAnexo(contratoId){
 }
 
 // ── Imprimir / PDF del contrato ──
-function imprimirContrato(contratoId){
+function _htmlContrato(contratoId,autoprint){
   const c=DB().contratosDoc.find(x=>x.id===contratoId);
-  if(!c){ alert('Contrato no encontrado.'); return; }
+  if(!c) return null;
   const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
   const emp=DB();
   const clausulasHTML=c.clausulas.map((cl,i)=>`
-    <div style="margin-bottom:18px;">
-      <div style="font-size:11pt;font-weight:bold;margin-bottom:6px;">${i+1}. ${cl.titulo}</div>
-      <div style="font-size:10pt;line-height:1.7;white-space:pre-wrap;">${cl.texto}</div>
+    <div style="margin-bottom:20px;page-break-inside:avoid;">
+      <div style="font-size:11pt;font-weight:bold;margin-bottom:6px;text-decoration:underline;">${i+1}. ${cl.titulo.toUpperCase()}</div>
+      <div style="font-size:10pt;line-height:1.8;white-space:pre-wrap;text-align:justify;">${cl.texto}</div>
     </div>`).join('');
   const anexosHTML=c.anexos&&c.anexos.length?`
     <div style="margin-top:30px;border-top:2px solid #333;padding-top:16px;">
-      <div style="font-size:13pt;font-weight:bold;margin-bottom:12px;">ANEXOS AL CONTRATO</div>
+      <div style="font-size:13pt;font-weight:bold;margin-bottom:12px;text-align:center;">ANEXOS AL CONTRATO</div>
       ${c.anexos.map((a,i)=>`
-        <div style="margin-bottom:14px;padding:10px;border:1px solid #ccc;border-radius:4px;">
-          <div style="font-weight:bold;font-size:10pt;">Anexo N°${i+1} — ${a.tipo} — ${a.fecha}</div>
-          <div style="font-size:10pt;margin-top:6px;white-space:pre-wrap;">${a.desc}</div>
+        <div style="margin-bottom:14px;padding:12px;border:1px solid #999;">
+          <div style="font-weight:bold;font-size:10pt;">ANEXO N°${i+1} — ${a.tipo} — ${a.fecha}</div>
+          <div style="font-size:10pt;margin-top:8px;white-space:pre-wrap;">${a.desc}</div>
         </div>`).join('')}
-    </div>`:'' ;
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Contrato — ${t.nombre}</title>
-    <style>
-      body{font-family:'Times New Roman',serif;font-size:11pt;color:#111;max-width:750px;margin:30px auto;padding:20px;}
-      h1{font-size:14pt;text-align:center;margin-bottom:4px;}
-      h2{font-size:12pt;text-align:center;color:#444;margin-bottom:20px;}
-      .header{text-align:center;margin-bottom:24px;border-bottom:2px solid #333;padding-bottom:12px;}
-      @media print{body{margin:10px;}}
-    </style></head><body>
+    </div>`:'';
+  const printScript=autoprint?'<script>window.onload=()=>window.print();<\/script>':'';
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Contrato — ${t.nombre||''}</title>
+    <style>body{font-family:'Times New Roman',serif;font-size:11pt;color:#111;max-width:780px;margin:30px auto;padding:30px;}
+    @media print{body{margin:15mm;padding:0;max-width:100%;}}
+    .header{text-align:center;margin-bottom:28px;border-bottom:2px solid #111;padding-bottom:14px;}
+    .nota-dt{font-size:8pt;color:#777;border:1px solid #ccc;padding:6px 10px;margin-bottom:20px;}</style>
+    </head><body>
     <div class="header">
-      <h1>CONTRATO DE TRABAJO</h1>
-      <h2>${c.tipo.toUpperCase()}</h2>
-      <div style="font-size:10pt;">${esc(emp.nombre||'')} · RUT Empresa: ${esc(emp.rut||'')}</div>
-      <div style="font-size:9pt;color:#666;">Fecha: ${c.fechaInicio} ${c.fechaTermino?'| Término: '+c.fechaTermino:''} | Estado: ${c.estado}</div>
+      <div style="font-size:15pt;font-weight:bold;">CONTRATO INDIVIDUAL DE TRABAJO</div>
+      <div style="font-size:12pt;font-weight:bold;margin-top:4px;">${c.tipo.toUpperCase()}</div>
+      <div style="font-size:10pt;margin-top:6px;">${esc(emp.nombre||'')} — RUT: ${esc(emp.cfg&&emp.cfg.rut||emp.rut||'')}</div>
+      <div style="font-size:9pt;color:#555;">Inicio: ${c.fechaInicio||'—'} ${c.fechaTermino?' | Término: '+c.fechaTermino:''} | Estado: ${c.estado||'Vigente'}</div>
     </div>
-    ${clausulasHTML}
-    ${anexosHTML}
-    <script>window.onload=()=>window.print();<\/script>
+    <div class="nota-dt">Documento conforme al Art. 10 Código del Trabajo de Chile y Ley 21.561. Se extiende en dos ejemplares de igual valor.</div>
+    ${clausulasHTML}${anexosHTML}${printScript}
     </body></html>`;
+}
+function imprimirContrato(contratoId){
+  const html=_htmlContrato(contratoId,true);
+  if(!html){alert('Contrato no encontrado.');return;}
   const w=window.open('','_blank');
-  w.document.write(html);
-  w.document.close();
+  w.document.write(html); w.document.close();
+}
+function descargarContratoWord(contratoId){
+  const ct=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!ct){alert('Contrato no encontrado.');return;}
+  const t=DB().trabajadores.find(x=>x.id===ct.trabajadorId)||{};
+  const html=_htmlContrato(contratoId,false);
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Contrato</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2cm;}p{line-height:1.8;text-align:justify;}</style></head><body>${html.replace(/<script[\s\S]*?<\/script>/gi,'')}</body></html>`;
+  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=`Contrato_${(t.nombre||'trabajador').replace(/\s+/g,'_')}.doc`;
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+
+
+// ══════════════════════════════════════════════════════════════════
+// ║    MÓDULO PLANTILLAS PROPIAS DE CONTRATO (Word/PDF usuario)   ║
+// ══════════════════════════════════════════════════════════════════
+const VARS_PLANTILLA=[
+  ['{{nombre}}','Nombre completo del trabajador'],['{{rut}}','RUT del trabajador'],
+  ['{{cargo}}','Cargo del trabajador'],['{{sueldo}}','Sueldo base formateado'],
+  ['{{afp}}','AFP del trabajador'],['{{salud}}','Sistema de salud'],
+  ['{{fecha_inicio}}','Fecha de inicio del contrato'],['{{fecha_termino}}','Fecha de término'],
+  ['{{jornada}}','Horas semanales de jornada'],['{{empresa}}','Nombre de la empresa'],
+  ['{{rut_empresa}}','RUT de la empresa'],['{{direccion}}','Dirección de la empresa'],
+  ['{{ciudad}}','Ciudad'],['{{representante}}','Representante legal'],
+  ['{{banco}}','Banco del trabajador'],['{{cuenta}}','Número de cuenta'],
+  ['{{depto}}','Departamento'],['{{fnac}}','Fecha de nacimiento'],
+  ['{{nac}}','Nacionalidad'],['{{ecivil}}','Estado civil'],
+  ['{{dir_trab}}','Dirección particular del trabajador'],
+  ['{{email}}','Correo electrónico'],['{{tel}}','Teléfono'],
+];
+function abrirGestorPlantillas(){
+  const plantillas=DB().plantillasContrato||[];
+  const lista=plantillas.length?plantillas.map(p=>`
+    <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
+      <div style="font-size:18px;">${p.tipo==='pdf'?'📕':'📘'}</div>
+      <div style="flex:1;"><div style="font-size:11px;font-weight:800;">${esc(p.nombre)}</div>
+      <div style="font-size:9px;color:var(--muted);">${(p.creado||'').slice(0,10)} · ${p.tipo.toUpperCase()}</div></div>
+      <button class="btn sm primary" style="font-size:9px;" onclick="closeModal('addModal');usarPlantilla('${p.id}')">📋 Usar</button>
+      <button class="btn sm err" style="font-size:9px;" onclick="eliminarPlantilla('${p.id}')">🗑</button>
+    </div>`).join('')
+    :'<div style="text-align:center;padding:16px;color:var(--muted);font-size:10px;">Sin plantillas guardadas.</div>';
+  const varsHTML=VARS_PLANTILLA.map(([v,d])=>`
+    <div style="display:flex;gap:6px;padding:2px 0;border-bottom:1px solid var(--border);">
+      <code style="font-size:9px;color:var(--acc);min-width:130px;">${v}</code>
+      <span style="font-size:9px;color:var(--muted);">${d}</span></div>`).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="background:var(--teal2);border:1px solid var(--teal);border-radius:7px;padding:9px 12px;font-size:9px;color:var(--teal);">
+        💡 Sube tu propio contrato en Word (.docx). El sistema reemplazará las variables como <code>{{nombre}}</code>, <code>{{rut}}</code>, etc.
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">VARIABLES DISPONIBLES</div>
+        <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px;max-height:150px;overflow-y:auto;">${varsHTML}</div>
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">SUBIR NUEVA PLANTILLA</div>
+        <div style="display:flex;gap:8px;align-items:flex-end;">
+          <div style="flex:1;"><div class="fl">Nombre de la plantilla</div>
+            <input class="fi" id="plt_nombre" placeholder="Ej: Contrato Indefinido Transportista"></div>
+          <div><input type="file" id="plt_file" accept=".docx,.pdf" style="display:none;" onchange="_pltArchivo(this)">
+            <button class="btn success" onclick="$('plt_file').click()">📎 Seleccionar (.docx / .pdf)</button></div>
+        </div>
+        <div id="plt_prev" style="margin-top:5px;font-size:9px;color:var(--muted);min-height:16px;"></div>
+        <button class="btn primary" style="margin-top:6px;width:100%;" onclick="subirPlantilla()">⬆️ Guardar plantilla</button>
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">MIS PLANTILLAS</div>${lista}</div>
+    </div>`;
+  $('addTitle').textContent='📂 Plantillas Propias de Contrato';
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cerrar</button>`;
+  openModal('addModal');
+}
+function _pltArchivo(input){
+  const file=input.files[0]; if(!file) return;
+  const prev=$('plt_prev');
+  if(prev) prev.textContent=`✅ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+  if(!$('plt_nombre').value) $('plt_nombre').value=file.name.replace(/\.(docx|pdf)$/i,'');
+}
+function subirPlantilla(){
+  const nombre=($('plt_nombre')||{}).value?.trim();
+  const file=$('plt_file')?.files[0];
+  if(!nombre){alert('Ingresa un nombre.');return;}
+  if(!file){alert('Selecciona un archivo .docx o .pdf.');return;}
+  const tipo=file.name.toLowerCase().endsWith('.pdf')?'pdf':'docx';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    if(!DB().plantillasContrato) DB().plantillasContrato=[];
+    DB().plantillasContrato.push({id:'plt'+Date.now(),nombre,tipo,base64:e.target.result,creado:new Date().toISOString()});
+    saveDB(); abrirGestorPlantillas();
+  };
+  reader.readAsDataURL(file);
+}
+function eliminarPlantilla(id){
+  if(!confirm('¿Eliminar esta plantilla?')) return;
+  DB().plantillasContrato=(DB().plantillasContrato||[]).filter(p=>p.id!==id);
+  saveDB(); abrirGestorPlantillas();
+}
+function usarPlantilla(plantillaId){
+  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
+  if(!plt){alert('Plantilla no encontrada.');return;}
+  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo');
+  const hoy=new Date().toISOString().slice(0,10);
+  const trabsChk=trabs.map(t=>`
+    <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
+      <input type="checkbox" id="up_chk_${t.id}" value="${t.id}" style="accent-color:var(--acc);">
+      <label for="up_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
+      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
+    </div>`).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:9px;">
+        📋 Plantilla: <b>${esc(plt.nombre)}</b> (${plt.tipo.toUpperCase()})
+      </div>
+      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">SELECCIONA TRABAJADORES</div>
+        <div style="display:flex;gap:6px;margin-bottom:4px;">
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
+          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
+        </div>
+        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Fecha inicio</div><input class="fi" type="date" id="up_fi" value="${hoy}"></div>
+        <div><div class="fl">Fecha término (si aplica)</div><input class="fi" type="date" id="up_ft"></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Ciudad</div><input class="fi" id="up_ciudad" value="Linares"></div>
+        <div><div class="fl">Representante legal</div><input class="fi" id="up_rep" placeholder="Nombre representante"></div>
+      </div>
+      <div style="font-size:9px;color:var(--muted);">ℹ️ Se genera un .doc por trabajador. Si son varios, también se genera un Excel resumen.</div>
+    </div>`;
+  $('addTitle').textContent=`📋 Usar: ${esc(plt.nombre)}`;
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="abrirGestorPlantillas()">← Volver</button>
+    <button class="btn primary" onclick="generarDesPlantilla('${plantillaId}')">⚙️ Generar Contrato(s)</button>`;
+  openModal('addModal');
+}
+function generarDesPlantilla(plantillaId){
+  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
+  if(!plt){alert('Plantilla no encontrada.');return;}
+  const chks=[...document.querySelectorAll('[id^=up_chk_]')].filter(x=>x.checked).map(x=>+x.value);
+  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
+  const fi=($('up_fi')||{}).value||'';
+  const ft=($('up_ft')||{}).value||'';
+  const ciudad=($('up_ciudad')||{}).value||'';
+  const rep=($('up_rep')||{}).value||'';
+  const emp=DB();
+  const trabs=chks.map(id=>emp.trabajadores.find(t=>t.id===id)).filter(Boolean);
+  function reemplazar(txt,t){
+    return txt
+      .replace(/\{\{nombre\}\}/g,t.nombre||'').replace(/\{\{rut\}\}/g,t.rut||'')
+      .replace(/\{\{cargo\}\}/g,t.cargo||'').replace(/\{\{sueldo\}\}/g,t.sb?fmt(t.sb):'')
+      .replace(/\{\{afp\}\}/g,t.afp||'').replace(/\{\{salud\}\}/g,t.salud||'')
+      .replace(/\{\{fecha_inicio\}\}/g,fi).replace(/\{\{fecha_termino\}\}/g,ft||'_______________')
+      .replace(/\{\{jornada\}\}/g,t.jornada||44).replace(/\{\{empresa\}\}/g,emp.nombre||'')
+      .replace(/\{\{rut_empresa\}\}/g,emp.cfg&&emp.cfg.rut||'')
+      .replace(/\{\{direccion\}\}/g,emp.cfg&&emp.cfg.dir||'')
+      .replace(/\{\{ciudad\}\}/g,ciudad).replace(/\{\{representante\}\}/g,rep||emp.cfg&&emp.cfg.rep||'')
+      .replace(/\{\{banco\}\}/g,t.banco||'').replace(/\{\{cuenta\}\}/g,t.cuenta||'')
+      .replace(/\{\{depto\}\}/g,t.depto||'').replace(/\{\{fnac\}\}/g,t.fnac||'')
+      .replace(/\{\{nac\}\}/g,t.nac||'').replace(/\{\{ecivil\}\}/g,t.ecivil||'')
+      .replace(/\{\{dir_trab\}\}/g,t.dir||'').replace(/\{\{email\}\}/g,t.email||'')
+      .replace(/\{\{tel\}\}/g,t.tel||'');
+  }
+  if(plt.tipo==='docx'){
+    if(typeof mammoth==='undefined'){alert('Librería mammoth no disponible. Verifica conexión.');return;}
+    const base64Data=plt.base64.split(',')[1];
+    const binary=atob(base64Data);
+    const bytes=new Uint8Array(binary.length);
+    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
+    mammoth.extractRawText({arrayBuffer:bytes.buffer}).then(result=>{
+      closeModal('addModal');
+      trabs.forEach((t,i)=>setTimeout(()=>_descargarComoWord(reemplazar(result.value,t),`Contrato_${(t.nombre||'').replace(/\s+/g,'_')}`),i*400));
+      if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
+    }).catch(err=>alert('Error al leer Word: '+err.message));
+  } else {
+    closeModal('addModal');
+    trabs.forEach((t,i)=>setTimeout(()=>{
+      const texto=`CONTRATO DE TRABAJO\nPlantilla: ${plt.nombre}\n\nTrabajador: ${t.nombre||''}\nRUT: ${t.rut||''}\nFecha Nac: ${t.fnac||''}\nNacionalidad: ${t.nac||''}\nEstado Civil: ${t.ecivil||''}\nDirección: ${t.dir||''}\nTeléfono: ${t.tel||''}\nCorreo: ${t.email||''}\nCargo: ${t.cargo||''}\nSueldo: ${t.sb?fmt(t.sb):''}\nAFP: ${t.afp||''}\nSalud: ${t.salud||''}\nJornada: ${t.jornada||44}h/sem\nFecha inicio: ${fi}\n${ft?'Fecha término: '+ft+'\n':''}\nEmpresa: ${emp.nombre||''}\nCiudad: ${ciudad}\nRepresentante: ${rep||''}`;
+      _descargarComoWord(texto,`Datos_${(t.nombre||'').replace(/\s+/g,'_')}`);
+    },i*400));
+    if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
+  }
+}
+function _descargarComoWord(texto,nombreArchivo){
+  const htmlContenido=texto.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('');
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${nombreArchivo}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2.5cm;line-height:1.8;}p{margin:0 0 6pt 0;text-align:justify;}</style></head><body>${htmlContenido}</body></html>`;
+  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download=nombreArchivo+'.doc';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+}
+function _generarExcelResumen(trabs,fi,ft,nombrePlantilla){
+  const datos=trabs.map(t=>({'Nombre':t.nombre||'','RUT':t.rut||'','Cargo':t.cargo||'','Fecha Nac':t.fnac||'','Nacionalidad':t.nac||'','Estado Civil':t.ecivil||'','Dirección':t.dir||'','Teléfono':t.tel||'','Correo':t.email||'','Sueldo Base':t.sb||0,'AFP':t.afp||'','Salud':t.salud||'','Jornada h/sem':t.jornada||44,'Fecha Inicio':fi,'Fecha Término':ft||'Indefinido','Plantilla':nombrePlantilla,'Generado':new Date().toLocaleDateString('es-CL')}));
+  const ws=XLSX.utils.json_to_sheet(datos);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Contratos');
+  XLSX.writeFile(wb,`Resumen_Contratos_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── Sub-vista: Importar Excel ── (100% reactiva, sin getElementById en lógica)
@@ -3490,6 +3746,9 @@ function openAddTrab(id){
   $('addBody').innerHTML=`
     <div class="frow h2"><div><div class="fl">Nombre completo</div><input class="fi" id="f_nombre" value="${t.nombre||''}"></div><div><div class="fl">RUT</div><input class="fi" id="f_rut" value="${t.rut||''}" placeholder="XX.XXX.XXX-X"></div></div>
     <div class="frow h2"><div><div class="fl">Cargo</div><input class="fi" id="f_cargo" value="${t.cargo||''}"></div><div><div class="fl">Fecha ingreso</div><input class="fi" type="date" id="f_fi" value="${t.fi||''}"></div></div>
+    <div class="frow h2"><div><div class="fl">Fecha de nacimiento</div><input class="fi" type="date" id="f_fnac" value="${t.fnac||''}"></div><div><div class="fl">Nacionalidad</div><input class="fi" id="f_nac" value="${t.nac||''}" placeholder="Ej: Chilena"></div></div>
+    <div class="frow h2"><div><div class="fl">Estado civil</div><select class="fi" id="f_ecivil"><option ${t.ecivil==='Soltero/a'?'selected':''}>Soltero/a</option><option ${t.ecivil==='Casado/a'?'selected':''}>Casado/a</option><option ${t.ecivil==='Divorciado/a'?'selected':''}>Divorciado/a</option><option ${t.ecivil==='Viudo/a'?'selected':''}>Viudo/a</option><option ${t.ecivil==='Conviviente civil'?'selected':''}>Conviviente civil</option></select></div><div><div class="fl">Dirección particular</div><input class="fi" id="f_dir" value="${t.dir||''}" placeholder="Calle, número, comuna"></div></div>
+    <div class="frow h2"><div><div class="fl">Correo electrónico</div><input class="fi" type="email" id="f_email" value="${t.email||''}" placeholder="correo@ejemplo.com"></div><div><div class="fl">Teléfono</div><input class="fi" id="f_tel" value="${t.tel||''}" placeholder="+56 9 XXXX XXXX"></div></div>
     <div class="frow h2"><div><div class="fl">Sueldo base</div><input class="fi" type="number" id="f_sb" value="${t.sb||''}"></div><div><div class="fl">Tipo contrato</div><select class="fi" id="f_contrato"><option ${t.contrato==='Indefinido'?'selected':''}>Indefinido</option><option ${t.contrato==='Plazo fijo'?'selected':''}>Plazo fijo</option><option ${t.contrato==='Por obra'?'selected':''}>Por obra</option></select></div></div>
     <div class="frow h2">
       <div><div class="fl">🕐 Jornada semanal (hrs/sem)</div>
@@ -3525,7 +3784,7 @@ function openAddTrab(id){
   $('addOk').onclick=()=>{
     const jornadaSel=document.getElementById('f_jornada')?.value;
     const jornadaVal=jornadaSel==='custom'?fv(document.getElementById('f_jornada_custom')?.value||42):parseInt(jornadaSel)||42;
-    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
+    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),fnac:f$('fnac'),nac:f$('nac'),ecivil:f$('ecivil'),dir:f$('dir'),email:f$('email'),tel:f$('tel'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
     if(!item.nombre){toast('Ingresa nombre','err');return;}
     if(!validRutToast(item.rut,'Trabajador'))return;
     if(id){const ix=DB().trabajadores.findIndex(x=>x.id===id);if(ix>=0)DB().trabajadores[ix]=item;}
@@ -4916,10 +5175,10 @@ function calcLiq(){
   // Salud: FONASA 7% fijo. ISAPRE: 7% base + monto pactado adicional (liq_isapre_add)
   const saludTipo=$('liq_salud_tipo')?.value||'FONASA'; // FONASA vs ISAPRE
   const saludTasa=0.07;                        // base 7% DFL1 (ambas)
-  const sisTasa=SIS_TASA;                      // 1.49% cargo empleador
+  const sisTasa=+(CFG().sis)||SIS_TASA;        // 1.49% cargo empleador (configurable)
   const ctrato=$('liq_ctrato')?.value||'indefinido';
   const _plazo=ctrato==='plazo'||ctrato==='plazo_fijo'||ctrato==='por_obra';
-  const afcTrabTasa=esJubilado?0:(_plazo?0.0:AFC_TRAB_INDEF);
+  const afcTrabTasa=esJubilado?0:(_plazo?0.0:(+(CFG().afcTrab)||AFC_TRAB_INDEF));
   const afcEmpTasa=esJubilado?0:(_plazo?AFC_EMP_PLAZO:AFC_EMP_INDEF);
   const apvA=+$('liq_apvA')?.value||0;
   const apvB=+$('liq_apvB')?.value||0;
@@ -5442,7 +5701,8 @@ function htmlLiqFormal(l, c) {
       ${l.heNocturnas?`<tr><td>HE Nocturnas (+50%)</td><td style="text-align:right;">${M(l.heNocturnas)}</td><td></td><td></td></tr>`:''}
       ${l.heFestivas?`<tr><td>HE Festivas/Dom (+100%)</td><td style="text-align:right;">${M(l.heFestivas)}</td><td></td><td></td></tr>`:''}
       ${l.recDomVal?`<tr><td>Recargo 30% Domingo</td><td style="text-align:right;">${M(l.recDomVal)}</td><td></td><td></td></tr>`:''}
-      ${l.sc?`<tr><td>Semana Corrida</td><td style="text-align:right;">${M(l.sc)}</td><td>AFC Trabajador <span style="font-size:8pt;color:#555;">${ctrato==='Plazo Fijo'?'0%':'0.6%'}</span></td><td style="text-align:right;color:#c00;">-${M(l.afcDesc||0)}</td></tr>`:''}
+      ${l.sc?`<tr><td>Semana Corrida</td><td style="text-align:right;">${M(l.sc)}</td><td></td><td></td></tr>`:''}
+      ${l.afcDesc?`<tr><td></td><td></td><td>AFC Trabajador <span style="font-size:8pt;color:#555;">${ctrato==='Plazo Fijo'?'0%':'0.6%'}</span></td><td style="text-align:right;color:#c00;">-${M(l.afcDesc||0)}</td></tr>`:''}
       ${habImpTrib.map(h=>`<tr><td>${h.lbl}</td><td style="text-align:right;">${M(h.monto)}</td><td></td><td></td></tr>`).join('')}
       ${habImpNT.map(h=>`<tr><td>${h.lbl} <span style="font-size:8pt;color:#555;">(N.T.)</span></td><td style="text-align:right;">${M(h.monto)}</td><td></td><td></td></tr>`).join('')}
       ${l.apvA?`<tr><td></td><td></td><td>APV Modalidad A</td><td style="text-align:right;color:#c00;">-${M(l.apvA)}</td></tr>`:''}
@@ -5453,7 +5713,7 @@ function htmlLiqFormal(l, c) {
         <td>TOTAL HABERES IMPONIBLES</td>
         <td style="text-align:right;">${M(totalHabImp)}</td>
         <td>TOTAL DESCUENTOS LEGALES</td>
-        <td style="text-align:right;color:#c00;">-${M(l.afpDesc||0)+M(l.saludDesc||0)}</td>
+        <td style="text-align:right;color:#c00;">-${M((l.afpDesc||0)+(l.saludDesc||0)+(l.afcDesc||0))}</td>
       </tr>
       <!-- No imponibles y Art.58 -->
       ${l.mov?`<tr><td>Movilización</td><td style="text-align:right;">${M(l.mov)}</td><td></td><td></td></tr>`:''}
@@ -8203,11 +8463,15 @@ function renderF29(){
       <div style="flex:1;"><div class="ct">Formulario 29 — Declaración Mensual IVA</div>
       <div class="cs">Período ${MESES[getMesTrib()]} ${d.año} · Vence día 20 mes siguiente</div></div>
       <button class="btn orange sm" onclick="guardarF29()">💾 Guardar</button>
+      <button class="btn success sm" onclick="exportF29Excel()">📊 Excel</button>
+      <button class="btn err sm" onclick="exportF29PDF()">📄 PDF</button>
     </div>
     <div class="card-body">
       <div class="tab-btns" id="f29Tabs">
-        <button class="tab-btn active" onclick="showF29Tab('debitos',this)">📊 Débitos</button>
-        <button class="tab-btn" onclick="showF29Tab('creditos',this)">💳 Créditos</button>
+        <button class="tab-btn active" onclick="showF29Tab('info',this)">📋 Información</button>
+        <button class="tab-btn" onclick="showF29Tab('debitos',this)">📊 Débitos IVA</button>
+        <button class="tab-btn" onclick="showF29Tab('creditos',this)">💳 Créditos IVA</button>
+        <button class="tab-btn" onclick="showF29Tab('postergacion',this)">⏳ Postergación</button>
         <button class="tab-btn" onclick="showF29Tab('ila',this)">🍷 Imp. Adicional</button>
         <button class="tab-btn" onclick="showF29Tab('retenciones',this)">📋 Retenciones/PPM</button>
         <button class="tab-btn" onclick="showF29Tab('resumen',this)">📑 Resumen F-29</button>
@@ -8222,169 +8486,483 @@ function showF29Tab(tab,btn){
   const el=document.getElementById('f29Content');if(!el)return;
   const sv=(field)=>`onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.${field}=+this.value||0;save()"`;
   const fld=(label,code,val,field,auto)=>{
-    if(auto) return `<div class="rrow"><div class="rlbl">${code?'Cód '+code+' — ':''}${label}</div><div class="rval acc">${fmt(val)}</div></div>`;
-    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;"><div style="flex:1;font-size:11px;">${code?'<b>Cód '+code+'</b> — ':''}${label}</div><input class="fi" type="number" style="max-width:140px;text-align:right;" value="${val||0}" ${sv(field)}></div>`;
+    if(auto) return `<div class="rrow"><div class="rlbl">${code?'<b>Cód '+code+'</b> — ':''}${label}</div><div class="rval acc">${fmt(val)}</div></div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);"><div style="flex:1;font-size:11px;">${code?'<b style="color:var(--orange)">Cód '+code+'</b> — ':''}<span style="color:var(--txt)">${label}</span></div><input class="fi" type="number" style="max-width:140px;text-align:right;font-family:monospace;" value="${val||0}" ${sv(field)}></div>`;
   };
 
-  // ILA calculations
-  const ila577=+(m.ila577||0);const ila32=+(m.ila32||0);const ila150=+(m.ila150||0);const ila752=+(m.ila752||0);const ila146=+(m.ila146||0);
-  const ila545=+(m.ila545||0);const ila546=+(m.ila546||0);
-  const totalDebILA=ila577+ila32+ila150+ila752+ila146+ila545-ila546;
-  const ilaCred576=+(m.ilaCred576||0);const ilaCred33=+(m.ilaCred33||0);const ilaCred149=+(m.ilaCred149||0);const ilaCred85=+(m.ilaCred85||0);const ilaCred754=+(m.ilaCred754||0);
-  const ila551=+(m.ila551||0);const ila559=+(m.ila559||0);const ila508=+(m.ila508||0);
-  const totalCredILA=ilaCred576+ilaCred33+ilaCred149+ilaCred85+ilaCred754+ila551-ila559+ila508;
-  const ilaNet=Math.max(0,totalDebILA-totalCredILA);
-  // IVA
+  // ── Cálculos centrales ──
   const ivaRemanente=+(m.ivaRemanente||0);const ivaActFijo=+(m.ivaActFijo||0);const iva27bis=+(m.iva27bis||0);
-  const ivaExportDS348=+(m.ivaExportDS348||0);
-  const totalCredFiscal=d.ivaC+ivaRemanente+ivaActFijo+iva27bis+ivaExportDS348;
+  const ivaExportDS348=+(m.ivaExportDS348||0);const ivaDocElec=+(m.ivaDocElec||0);
+  const ivaInternasSin=+(m.ivaInternasSin||0);const ivaActFijoSin=+(m.ivaActFijoSin||0);
+  const ivaND531=+(m.ivaND531||0);const ivaCert592=+(m.ivaCert592||0);const ivaDS311=+(m.ivaDS311||0);
+  const ivaImportGiro=+(m.ivaImportGiro||0);const ivaImportActFijo=+(m.ivaImportActFijo||0);
+  const ivaCertImput592=+(m.ivaCertImput592||0);const ivaZonaFranca=+(m.ivaZonaFranca||0);
+  const ivaTimbres712=+(m.ivaTimbres712||0);const ivaRestit760=+(m.ivaRestit760||0);
+  const totalCredFiscal=d.ivaC+ivaRemanente+ivaActFijo+iva27bis+ivaExportDS348+ivaDocElec+ivaImportGiro+ivaImportActFijo+ivaCertImput592+ivaZonaFranca+ivaTimbres712-ivaRestit760;
   const ivaNeto=d.ivaD-totalCredFiscal;
   const ivaAPagar=Math.max(0,ivaNeto);
   const ivaRemanenteSig=Math.max(0,-ivaNeto);
+  // Postergación
+  const ivaPosterg756=+(m.ivaPosterg756||0);
+  const ivaPost12_774=+(m.ivaPost12_774||0);
+  // ILA
+  const ila577=+(m.ila577||0);const ila32=+(m.ila32||0);const ila150=+(m.ila150||0);
+  const ila752=+(m.ila752||0);const ila146=+(m.ila146||0);const ila545=+(m.ila545||0);const ila546=+(m.ila546||0);
+  const totalDebILA=ila577+ila32+ila150+ila752+ila146+ila545-ila546;
+  const ilaCred576=+(m.ilaCred576||0);const ilaCred33=+(m.ilaCred33||0);const ilaCred149=+(m.ilaCred149||0);
+  const ilaCred85=+(m.ilaCred85||0);const ilaCred754=+(m.ilaCred754||0);const ila551=+(m.ila551||0);const ila559=+(m.ila559||0);const ila508=+(m.ila508||0);
+  const totalCredILA=ilaCred576+ilaCred33+ilaCred149+ilaCred85+ilaCred754+ila551-ila559+ila508;
+  const ilaNet=Math.max(0,totalDebILA-totalCredILA);
   // Retenciones
-  const retHon=d.retHon; const iusc=+(m.iusc||0);const retDirectores=+(m.retDirectores||0);
-  const retSuplementeros=+(m.retSuplementeros||0);const retMineros=+(m.retMineros||0);
-  const retSeguros=+(m.retSeguros||0);const retAPV=+(m.retAPV||0);
+  const retHon=d.retHon;const iusc=+(m.iusc||0);const retDirectores=+(m.retDirectores||0);
+  const retCapMob=+(m.retCapMob||0);const retSuplementeros=+(m.retSuplementeros||0);
+  const retMineros=+(m.retMineros||0);const retSeguros=+(m.retSeguros||0);const retAPV=+(m.retAPV||0);
+  const retPrestamo49=+(m.retPrestamo49||0);const retPrestamo155=+(m.retPrestamo155||0);
   // PPM
-  const ppm=d.ppmMensual; const ppmMinero=+(m.ppmMinero||0);const ppmTransp=+(m.ppmTransp||0);
-  const ppm2daCat=+(m.ppm2daCat||0);const ppmTaller=+(m.ppmTaller||0);
-  // Créditos contra PPM
-  const credSence=+(m.credSence||0);const credEmpConstr=+(m.credEmpConstr||0);
-  const credDiesel=+(m.credDiesel||0);const credTimbres=+(m.credTimbres||0);
-  // Totals
-  const totalImptos=ivaAPagar+ilaNet+retHon+iusc+retDirectores+retSuplementeros+retMineros+retSeguros+retAPV+ppm+ppmMinero+ppmTransp+ppm2daCat+ppmTaller;
-  const totalCreditos=credSence+credEmpConstr+credDiesel+credTimbres;
-  const totalF29=Math.max(0,totalImptos-totalCreditos);
+  const ppm=d.ppmMensual;const ppmMinero=+(m.ppmMinero||0);const ppmTransp=+(m.ppmTransp||0);
+  const ppm2daCat=+(m.ppm2daCat||0);const ppmTaller=+(m.ppmTaller||0);const ppmPerdida=+(m.ppmPerdida||0);
+  // Créditos SENCE
+  const credSenceMes=+(m.credSenceMes||0);const credSenceAnt=+(m.credSenceAnt||0);
+  const credSenceImp=Math.min(credSenceMes+credSenceAnt,ppm);
+  const credSenceSig=Math.max(0,credSenceMes+credSenceAnt-ppm);
+  // Otros créditos
+  const credEmpConstr=+(m.credEmpConstr||0);const credDiesel730=+(m.credDiesel730||0);
+  const credDiesel729=+(m.credDiesel729||0);const credTimbres712=+(m.credTimbres712||0);
+  // Subtotal y total
+  const subtotal595=ivaAPagar+ilaNet+retCapMob+iusc+retHon+retDirectores+retSuplementeros+retMineros+retSeguros+retAPV+retPrestamo49+retPrestamo155+ppm+ppmMinero+ppmTransp+ppm2daCat+ppmTaller;
+  const totalCreditos=credSenceImp+credEmpConstr+credDiesel730+credDiesel729+credTimbres712;
+  const totalF29=Math.max(0,subtotal595-totalCreditos+(+(m.ivaPostergPagar||0)));
 
-  if(tab==='debitos'){
-    const nVafectas=db.ventas.filter(v=>v.tipo!=='34').length;
-    const nVexentas=db.ventas.filter(v=>v.tipo==='34').length;
-    const nFacEmi=db.ventas.filter(v=>v.tipo==='33').length;
-    const nBoletas=db.ventas.filter(v=>v.tipo==='39').length;
-    const nND=db.ventas.filter(v=>v.tipo==='56').length;
-    const nNC=db.ventas.filter(v=>v.tipo==='61').length;
-    const ivaNC=db.ventas.filter(v=>v.tipo==='61').reduce((a,x)=>a+(+x.iva||0),0);
-    const ivaND=db.ventas.filter(v=>v.tipo==='56').reduce((a,x)=>a+(+x.iva||0),0);
-    const ivaBol=db.ventas.filter(v=>v.tipo==='39').reduce((a,x)=>a+(+x.iva||0),0);
-    const ivaFac=db.ventas.filter(v=>v.tipo==='33').reduce((a,x)=>a+(+x.iva||0),0);
+  // ══════════════════════════════════════════════
+  if(tab==='info'){
+    const nVafectas=db.ventas?db.ventas.filter(v=>v.tipo!=='34').length:0;
+    const nVexentas=db.ventas?db.ventas.filter(v=>v.tipo==='34').length:0;
+    const netoVexentas=db.ventas?db.ventas.filter(v=>v.tipo==='34').reduce((a,x)=>a+(+x.neto||0),0):0;
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>DÉBITO FISCAL IVA — VENTAS</span></div>
-      ${fld('Facturas emitidas','503',nFacEmi,'',true)} ${fld('IVA Débito Facturas','502',ivaFac,'',true)}
-      ${fld('Boletas electrónicas','110',nBoletas,'',true)} ${fld('IVA Débito Boletas','111',ivaBol,'',true)}
-      ${fld('Notas de Débito emitidas','512',nND,'',true)} ${fld('IVA Notas Débito','513',ivaND,'',true)}
-      ${fld('Notas de Crédito emitidas','509',nNC,'',true)} ${fld('IVA Notas Crédito (rebaja)','510',ivaNC,'',true)}
-      <div class="dvd"><span>VENTAS EXENTAS Y EXPORTACIONES</span></div>
-      ${fld('Facturas exentas (DTE 34)','','Docs: '+nVexentas,'',true)}
-      ${fld('Exportaciones (manual)','20',m.exportaciones||0,'exportaciones',false)}
+      <div class="dvd"><span>📋 INFORMACIÓN DE INGRESOS — PERÍODO ${MESES[getMesTrib()]} ${d.año}</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">📌 Formulario 29 SII — Declaración mensual y pago simultáneo de impuestos. Vence día 20 del mes siguiente.</div>
+      <div class="dvd"><span>VENTAS Y/O SERVICIOS PRESTADOS (Sin generar débito)</span></div>
+      ${fld('Exportaciones (Art.36 D.L.825)','585',m.exportaciones||0,'exportaciones',false)}
+      ${fld('Ventas/Servicios Exentos o No Gravados del giro','586',netoVexentas,'',true)}
+      ${fld('Ventas con retención margen comercialización (contribuyentes retenidos)','731',m.ret731||0,'ret731',false)}
+      ${fld('Ventas/Servicios Exentos que NO son del giro','714',m.venta714||0,'venta714',false)}
+      ${fld('Facturas Compra recibidas con retención total (retenidos)','515',m.fac515||0,'fac515',false)}
+      ${fld('Facturas Compra con retención parcial (según línea 16)','720',m.fac720||0,'fac720',false)}
+      <div class="dvd"><span>GENERA DÉBITO (Ventas afectas)</span></div>
+      ${fld('Facturas emitidas ventas/servicios del giro (N° docs)','503',db.ventas?db.ventas.filter(v=>v.tipo==='33').length:0,'',true)}
+      ${fld('Facturas emitidas por venta bienes inmuebles afectas IVA','763',m.fac763||0,'fac763',false)}
+      ${fld('Facturas/ND por ventas/servicios que NO son del giro','716',m.fac716||0,'fac716',false)}
+      ${fld('Comprobantes/Recibos transacciones electrónicas','758',m.comp758||0,'comp758',false)}
+      ${fld('Facturas Compra recibidas retención parcial (retenidos)','516',m.fac516||0,'fac516',false)}
+      ${fld('Liquidación y Liquidación-Factura','500',m.liq500||0,'liq500',false)}
+      <div class="dvd"><span>COMPRAS Y/O SERVICIOS UTILIZADOS (Sin derecho a crédito)</span></div>
+      ${fld('IVA documentos electrónicos recibidos (sin derecho CF)','514',m.iva514||0,'iva514',false)}
+      ${fld('Compras internas afectas (N° docs)','564',db.compras?db.compras.filter(v=>v.tipo!=='34').length:0,'',true)}
+      ${fld('Importaciones sin derecho a crédito','566',m.imp566||0,'imp566',false)}
+      ${fld('Compras internas exentas o no gravadas','584',db.compras?db.compras.filter(v=>v.tipo==='34').length:0,'',true)}
+    </div>`;
+
+  } else if(tab==='debitos'){
+    const nFacEmi=db.ventas?db.ventas.filter(v=>v.tipo==='33').length:0;
+    const nBoletas=db.ventas?db.ventas.filter(v=>v.tipo==='39').length:0;
+    const nND=db.ventas?db.ventas.filter(v=>v.tipo==='56').length:0;
+    const nNC=db.ventas?db.ventas.filter(v=>v.tipo==='61').length:0;
+    const ivaNC=db.ventas?db.ventas.filter(v=>v.tipo==='61').reduce((a,x)=>a+(+x.iva||0),0):0;
+    const ivaND=db.ventas?db.ventas.filter(v=>v.tipo==='56').reduce((a,x)=>a+(+x.iva||0),0):0;
+    const ivaBol=db.ventas?db.ventas.filter(v=>v.tipo==='39').reduce((a,x)=>a+(+x.iva||0),0):0;
+    const ivaFac=db.ventas?db.ventas.filter(v=>v.tipo==='33').reduce((a,x)=>a+(+x.iva||0),0):0;
+    const ivaVBBRR=+(m.ivaVBBRR||0);const ivaND513=+(m.ivaND513||0);const ivaNCVM=+(m.ivaNCVM||0);
+    const ivaNCNoGiro=+(m.ivaNCNoGiro||0);const ivaFacRetParcial=+(m.ivaFacRetParcial||0);
+    const ivaLiqFac=+(m.ivaLiqFac||0);const ivaAdicRest=+(m.ivaAdicRest||0);const ivaRestProp=+(m.ivaRestProp||0);
+    const ivaReint=+(m.ivaReint||0);const ivaIEPDdeb=+(m.ivaIEPDdeb||0);const ivaRest791=+(m.ivaRest791||0);
+    const totalDebCalc=ivaFac+ivaVBBRR+(+(m.ivaNoGiro717||0))+ivaBol+(+(m.ivaCompElec759||0))+ivaND+ivaNC+ivaNCVM+ivaNCNoGiro+ivaFacRetParcial+ivaLiqFac+ivaAdicRest+ivaRestProp+ivaReint+ivaIEPDdeb+ivaRest791;
+    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>DÉBITO FISCAL IVA — Art. D.L.825/74</span></div>
+      <div style="display:grid;grid-template-columns:1fr auto auto;gap:4px;padding:4px 0;border-bottom:1px solid var(--border2);font-size:9px;color:var(--muted);font-weight:700;">
+        <div>Línea / Concepto</div><div style="text-align:center">Cód N°docs</div><div style="text-align:right;padding-right:145px">Cód Débito</div>
+      </div>
+      <div class="dvd"><span>GENERA DÉBITO</span></div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.7</b> — Facturas emitidas ventas/servicios del giro</div>
+        <div style="font-size:10px;color:var(--muted)">Cód 503: ${nFacEmi}</div>
+        <div style="font-size:10px;color:var(--orange);font-weight:700;min-width:120px;text-align:right">Cód 502: ${fmt(ivaFac)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.8</b> — Facturas venta bienes inmuebles afectas IVA <span style="font-size:9px;color:var(--muted)">(Cód 763)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaVBBRR||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaVBBRR=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.9</b> — Facturas/ND ventas/servicios NO del giro (activo fijo) <span style="font-size:9px;color:var(--muted)">(Cód 716/717)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaNoGiro717||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaNoGiro717=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.10</b> — Boletas electrónicas</div>
+        <div style="font-size:10px;color:var(--muted)">Cód 110: ${nBoletas}</div>
+        <div style="font-size:10px;color:var(--orange);font-weight:700;min-width:120px;text-align:right">Cód 111: ${fmt(ivaBol)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.11</b> — Comprobantes/Recibos transacciones electrónicas <span style="font-size:9px;color:var(--muted)">(Cód 758/759)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaCompElec759||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaCompElec759=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.12</b> — Notas de Débito emitidas del giro</div>
+        <div style="font-size:10px;color:var(--muted)">Cód 512: ${nND}</div>
+        <div style="font-size:10px;color:var(--orange);font-weight:700;min-width:120px;text-align:right">Cód 513: ${fmt(ivaND)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.13</b> — Notas de Crédito emitidas facturas del giro <span style="font-size:9px;color:var(--red)">(resta débito)</span></div>
+        <div style="font-size:10px;color:var(--muted)">Cód 509: ${nNC}</div>
+        <div style="font-size:10px;color:var(--red);font-weight:700;min-width:120px;text-align:right">Cód 510: -${fmt(ivaNC)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.14</b> — NC emitidas por Vales de máquinas autorizadas <span style="font-size:9px;color:var(--muted)">(Cód 708/709)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaNCVM||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaNCVM=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.15</b> — NC emitidas ventas/servicios NO del giro <span style="font-size:9px;color:var(--muted)">(Cód 733/734)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaNCNoGiro||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaNCNoGiro=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.16</b> — Facturas Compra retención parcial (retenidos) <span style="font-size:9px;color:var(--muted)">(Cód 516/517)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaFacRetParcial||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaFacRetParcial=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.17</b> — Liquidación y Liquidación-Factura <span style="font-size:9px;color:var(--muted)">(Cód 500/501)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaLiqFac||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaLiqFac=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.18</b> — Adiciones al Débito por devoluciones excesivas Art.27 bis <span style="font-size:9px;color:var(--muted)">(Cód 154)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaAdicRest||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaAdicRest=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.19</b> — Restitución adicional por proporción exentas Art.27 bis <span style="font-size:9px;color:var(--muted)">(Cód 518)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaRestProp||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaRestProp=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.20</b> — Reintegro Timbres/Estampillas y arrend. BBRR amoblados <span style="font-size:9px;color:var(--muted)">(Cód 713)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaReint||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaReint=+this.value||0;save()">
+      </div>
+      <div style="display:flex;align-items:center;gap:4px;padding:4px 0;border-bottom:1px solid var(--border);font-size:11px;">
+        <div style="flex:1;color:var(--txt)"><b style="color:var(--orange)">Lín.22</b> — Restitución adicional Reembolso Remanente CF IVA Ley 21.256 <span style="font-size:9px;color:var(--muted)">(Cód 791)</span></div>
+        <input class="fi" type="number" style="max-width:130px;text-align:right;font-family:monospace;" value="${m.ivaRest791||0}" onchange="if(!DB().f29Manual)DB().f29Manual={};DB().f29Manual.ivaRest791=+this.value||0;save()">
+      </div>
       <div class="rrow" style="border-top:2px solid var(--orange);padding-top:8px;margin-top:6px;">
-        <div class="rlbl" style="font-weight:800;font-size:13px">Cód 538 — TOTAL DÉBITO FISCAL</div>
+        <div class="rlbl" style="font-weight:800;font-size:13px">Lín.23 — <b>Cód 538</b> — TOTAL DÉBITO FISCAL</div>
         <div class="rval r" style="font-size:16px;font-weight:800">${fmt(d.ivaD)}</div>
       </div>
     </div>`;
+
   } else if(tab==='creditos'){
-    const nCompras=db.compras.filter(v=>v.tipo!=='34').length;
+    const nCompras=db.compras?db.compras.filter(v=>v.tipo!=='34').length:0;
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>CRÉDITO FISCAL IVA — COMPRAS</span></div>
-      ${fld('Facturas de compra recibidas','519',nCompras,'',true)}
-      ${fld('Monto Neto compras','520',d.netoC,'',true)}
-      ${fld('IVA Crédito Fiscal compras','521',d.ivaC,'',true)}
-      <div class="dvd"><span>OTROS CRÉDITOS IVA (editable)</span></div>
-      ${fld('Remanente CF período anterior','504',m.ivaRemanente||0,'ivaRemanente',false)}
-      ${fld('IVA Activo Fijo Art. 27 bis','524',m.ivaActFijo||0,'ivaActFijo',false)}
-      ${fld('Devolución exportadores DS 348','164',m.ivaExportDS348||0,'ivaExportDS348',false)}
-      ${fld('Devolución Art. 27 bis (cert.)','127',m.iva27bis||0,'iva27bis',false)}
+      <div class="dvd"><span>CRÉDITO FISCAL IVA — D.L.825/74</span></div>
+      <div class="dvd"><span style="font-size:9px">CON DERECHO A CRÉDITO FISCAL</span></div>
+      <div style="font-size:10px;color:var(--muted);padding:4px 0;border-bottom:1px solid var(--border2);">IVA documentos electrónicos recibidos (con derecho) <b style="color:var(--orange)">Cód 511</b></div>
+      ${fld('Lín.24 — IVA docs electrónicos recibidos con derecho CF','511',m.ivaDocElec||0,'ivaDocElec',false)}
+      <div class="dvd"><span style="font-size:9px">INTERNAS — CON DERECHO A CRÉDITO</span></div>
+      ${fld('Lín.28 — Facturas compra del giro y Fac. Compra emitidas (N° docs)','519',nCompras,'',true)}
+      ${fld('Lín.28 — Monto Neto compras','520',d.netoC,'',true)}
+      ${fld('Lín.28 — IVA Crédito Fiscal compras del giro','521',d.ivaC,'',true)}
+      ${fld('Lín.29 — Facturas proveedores: Supermercados Art.23 N°4 (Ley 20.780)','762',m.ivaSuper762||0,'ivaSuper762',false)}
+      ${fld('Lín.30 — Facturas Adq. o Construcción Bienes Inmuebles Art.8 trans. (Ley 20.780)','766',m.ivaBBRRCred||0,'ivaBBRRCred',false)}
+      ${fld('Lín.31 — Facturas Activo Fijo','524',m.ivaActFijo||0,'ivaActFijo',false)}
+      ${fld('Lín.32 — NC recibidas y NC emitidas por retención cambio sujeto (CF)','527',m.ivaNCrec527||0,'ivaNCrec527',false)}
+      ${fld('Lín.33 — ND recibidas y ND emitidas por retención cambio sujeto (CF)','531',m.ivaNDrec531||0,'ivaNDrec531',false)}
+      <div class="dvd"><span style="font-size:9px">IMPORTACIONES — CON DERECHO A CRÉDITO</span></div>
+      ${fld('Lín.34 — DIN importaciones del giro','534',m.ivaImportGiro||0,'ivaImportGiro',false)}
+      ${fld('Lín.35 — DIN importaciones activo fijo','536',m.ivaImportActFijo||0,'ivaImportActFijo',false)}
+      <div class="dvd"><span style="font-size:9px">REMANENTES Y DEVOLUCIONES</span></div>
+      ${fld('Lín.36 — Remanente CF período anterior','504',m.ivaRemanente||0,'ivaRemanente',false)}
+      ${fld('Lín.37 — Devolución Art.36 (Exportadores)','593',m.ivaDev593||0,'ivaDev593',false)}
+      ${fld('Lín.38 — Devolución Art.27 bis (Activo fijo)','594',m.ivaDev594||0,'ivaDev594',false)}
+      ${fld('Lín.39 — Certificado Imputación Art.27 bis (Activo fijo)','592',m.ivaCertImput592||0,'ivaCertImput592',false)}
+      ${fld('Lín.40 — Devolución Art.3 (Cambio de Sujeto)','539',m.ivaDev539||0,'ivaDev539',false)}
+      ${fld('Lín.43 — Reintegro indebido D.S.348 (Exportadores)','164',m.ivaExportDS348||0,'ivaExportDS348',false)}
+      <div class="dvd"><span style="font-size:9px">RECUPERACIÓN DIESEL — Ley 20.765</span></div>
+      ${fld('Lín.44 — Recuperación Imp. Específico Petróleo Diesel Art.7 Ley 18.502','127',m.credDiesel730||0,'credDiesel730',false)}
+      ${fld('Lín.45 — Recuperación Diesel Transportistas carga Art.2 Ley 19.764','544',m.credDiesel729||0,'credDiesel729',false)}
+      ${fld('Lín.46 — Crédito Art.11 Ley 18.211 (Zona Franca de Extensión)','523',m.ivaZonaFranca||0,'ivaZonaFranca',false)}
+      ${fld('Lín.47 — Crédito por Timbres y Estampillas Art.3 Ley 20.259','712',m.ivaTimbres712||0,'ivaTimbres712',false)}
+      ${fld('Lín.57 — Restitución Art.27 ter inc.2 Ley 20.720 (resta crédito)','760',m.ivaRestit760||0,'ivaRestit760',false)}
       <div class="rrow" style="border-top:2px solid var(--green);padding-top:8px;margin-top:6px;">
-        <div class="rlbl" style="font-weight:800;font-size:13px">TOTAL CRÉDITO FISCAL</div>
+        <div class="rlbl" style="font-weight:800;font-size:13px">Lín.49 — <b>Cód 537</b> — TOTAL CRÉDITOS</div>
         <div class="rval g" style="font-size:16px;font-weight:800">${fmt(totalCredFiscal)}</div>
       </div>
       <div class="dvd"><span>IVA DETERMINADO</span></div>
-      <div class="rrow"><div class="rlbl" style="font-weight:700">IVA Débito - IVA Crédito</div><div class="rval ${ivaNeto>=0?'r':'g'}" style="font-weight:700">${fmt(ivaNeto)}</div></div>
-      ${ivaRemanenteSig>0?`<div class="rrow"><div class="rlbl">→ Remanente CF para período siguiente</div><div class="rval g">${fmt(ivaRemanenteSig)}</div></div>`:''}
+      <div class="rrow"><div class="rlbl" style="font-weight:700">Débito Fiscal - Crédito Fiscal</div><div class="rval ${ivaNeto>=0?'r':'g'}" style="font-weight:700">${fmt(ivaNeto)}</div></div>
+      ${ivaRemanenteSig>0?`<div class="rrow"><div class="rlbl">→ <b>Cód 77</b> Remanente CF para período siguiente</div><div class="rval g">${fmt(ivaRemanenteSig)}</div></div>`:''}
+      ${ivaAPagar>0?`<div class="rrow"><div class="rlbl" style="font-weight:700">→ IVA a pagar este período</div><div class="rval r" style="font-weight:700">${fmt(ivaAPagar)}</div></div>`:''}
     </div>`;
+
+  } else if(tab==='postergacion'){
+    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>⏳ POSTERGACIÓN DE IVA — Leyes 20.780 / 21.207</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">📌 La postergación de IVA permite diferir el pago bajo ciertas condiciones. Consulte con su contador si aplica a su empresa.</div>
+      <div class="dvd"><span>POSTERGACIÓN IVA (Ley 20.780) — Cód 756</span></div>
+      ${fld('Lín.50 — Monto IVA postergado (Ley 20.780)','756',m.ivaPosterg756||0,'ivaPosterg756',false)}
+      <div class="dvd"><span>POSTERGACIÓN IVA EN 12 CUOTAS (Ley 21.207)</span></div>
+      ${fld('Lín.51 — Saldo IVA postergado en 12 cuotas','772',m.ivaPost12_772||0,'ivaPost12_772',false)}
+      ${fld('Lín.51 — Monto IVA postergado en 12 cuotas','773',m.ivaPost12_773||0,'ivaPost12_773',false)}
+      ${fld('Lín.51 — Monto cuota a pagar por IVA postergado','775',m.ivaPost12_775||0,'ivaPost12_775',false)}
+      <div class="dvd"><span>POSTERGACIÓN IVA (6 o 12 CUOTAS — D.S.420/997 MH)</span></div>
+      ${fld('Lín.52 — Total IVA postergado (6 o 12 cuotas)','777',m.ivaPost6_777||0,'ivaPost6_777',false)}
+      ${fld('Lín.52 — Cuota postergada','780',m.ivaPost6_780||0,'ivaPost6_780',false)}
+      ${fld('Lín.53 — Total IVA postergado Ley 20.780 (6 o 12 cuotas)','782',m.ivaPost20780||0,'ivaPost20780',false)}
+      ${fld('Monto cuota a pagar IVA postergado este período','',m.ivaPostergPagar||0,'ivaPostergPagar',false)}
+      <div class="dvd"><span>SISTEMA TRIBUTACIÓN SIMPLIFICADA IVA — Art.29 D.L.825</span></div>
+      ${fld('Lín.80 — Ventas del período (Trib. Simplificada)','529',m.tribSimp529||0,'tribSimp529',false)}
+      ${fld('Lín.81 — Crédito del período (Trib. Simplificada)','530',m.tribSimp530||0,'tribSimp530',false)}
+      ${fld('Lín.82 — IVA determinado Tributación Simplificada','409',m.tribSimp409||0,'tribSimp409',false)}
+    </div>`;
+
   } else if(tab==='ila'){
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>IMPUESTO ADICIONAL Art. 42 D.L. 825 — DÉBITOS</span></div>
-      <div class="info-box" style="font-size:9px;margin-bottom:8px;">🍷 Tasas vigentes 2025: Licores/Pisco/Whisky <b>31,5%</b> · Vinos/Champaña/Chichas <b>20,5%</b> · Cervezas <b>20,5%</b> · Bebidas alto azúcar <b>18%</b> · Bebidas analcohólicas <b>10%</b></div>
-      ${fld('Pisco, Licores, Whisky, Aguardiente (31,5%)','577',m.ila577||0,'ila577',false)}
-      ${fld('Vinos, Champaña, Chichas (20,5%)','32',m.ila32||0,'ila32',false)}
-      ${fld('Cervezas (20,5%)','150',m.ila150||0,'ila150',false)}
-      ${fld('Bebidas alto contenido azúcar (18%)','752',m.ila752||0,'ila752',false)}
-      ${fld('Bebidas analcohólicas (10%)','146',m.ila146||0,'ila146',false)}
-      ${fld('Notas de Débito emitidas Art.42','545',m.ila545||0,'ila545',false)}
-      ${fld('Notas de Crédito emitidas Art.42 (rebaja)','546',m.ila546||0,'ila546',false)}
-      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Cód 602 — Total Débitos Art. 42</div><div class="rval r" style="font-weight:700">${fmt(totalDebILA)}</div></div>
-      <div class="dvd"><span>CRÉDITO Art. 42 — COMPRAS</span></div>
-      ${fld('Crédito Licores/Pisco/Whisky (31,5%)','576',m.ilaCred576||0,'ilaCred576',false)}
-      ${fld('Crédito Vinos/Champaña (20,5%)','33',m.ilaCred33||0,'ilaCred33',false)}
-      ${fld('Crédito Cervezas (20,5%)','149',m.ilaCred149||0,'ilaCred149',false)}
-      ${fld('Crédito Beb. alto azúcar (18%)','754',m.ilaCred754||0,'ilaCred754',false)}
-      ${fld('Crédito Beb. analcohólicas (10%)','85',m.ilaCred85||0,'ilaCred85',false)}
-      ${fld('ND recibidas Art.42','551',m.ila551||0,'ila551',false)}
-      ${fld('NC recibidas Art.42 (rebaja)','559',m.ila559||0,'ila559',false)}
-      ${fld('Remanente crédito Art.42 mes anterior','508',m.ila508||0,'ila508',false)}
-      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Cód 603 — Total Créditos Art. 42</div><div class="rval g" style="font-weight:700">${fmt(totalCredILA)}</div></div>
+      <div class="dvd"><span>IMPUESTO ADICIONAL Art.42 D.L.825 — DÉBITOS 2026</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">🍷 Tasas vigentes 2026: Licores/Pisco/Whisky <b>31,5%</b> · Vinos/Champaña/Chichas <b>20,5%</b> · Cervezas <b>20,5%</b> · Bebidas alto azúcar <b>18%</b> · Bebidas analcohólicas <b>10%</b></div>
+      ${fld('Lín.91 — Pisco, Licores, Whisky, Aguardiente (31,5%)','577',m.ila577||0,'ila577',false)}
+      ${fld('Lín.92 — Vinos, Champaña, Chichas (20,5%)','32',m.ila32||0,'ila32',false)}
+      ${fld('Lín.93 — Cervezas (20,5%)','150',m.ila150||0,'ila150',false)}
+      ${fld('Lín.94 — Bebidas analcohólicas (10%)','146',m.ila146||0,'ila146',false)}
+      ${fld('Lín.95 — Bebidas analcohólicas elevado azúcar (18%)','752',m.ila752||0,'ila752',false)}
+      ${fld('Lín.96 — Notas de Débito emitidas Art.42','545',m.ila545||0,'ila545',false)}
+      ${fld('Lín.97 — Notas de Crédito emitidas por Facturas Art.42 (resta)','546',m.ila546||0,'ila546',false)}
+      ${fld('Lín.98 — NC emitidas Vales máquinas autorizadas SII (resta)','710',m.ila710||0,'ila710',false)}
+      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Lín.99 — Cód 602 — Total Débitos Art.42</div><div class="rval r" style="font-weight:700">${fmt(totalDebILA)}</div></div>
+      <div class="dvd"><span>CRÉDITO Art.42 — COMPRAS</span></div>
+      ${fld('Lín.100 — Crédito Licores/Pisco/Whisky (31,5%)','576',m.ilaCred576||0,'ilaCred576',false)}
+      ${fld('Lín.101 — Crédito Vinos/Champaña (20,5%)','33',m.ilaCred33||0,'ilaCred33',false)}
+      ${fld('Lín.102 — Crédito Cervezas (20,5%)','149',m.ilaCred149||0,'ilaCred149',false)}
+      ${fld('Lín.103 — Crédito Bebidas analcohólicas (10%)','85',m.ilaCred85||0,'ilaCred85',false)}
+      ${fld('Lín.104 — Crédito Beb. alto azúcar (18%)','754',m.ilaCred754||0,'ilaCred754',false)}
+      ${fld('Lín.105 — ND recibidas Art.42','551',m.ila551||0,'ila551',false)}
+      ${fld('Lín.106 — NC recibidas Art.42 (resta)','559',m.ila559||0,'ila559',false)}
+      ${fld('Lín.107 — Remanente crédito Art.42 mes anterior','508',m.ila508||0,'ila508',false)}
+      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Cód 603 — Total Créditos Art.42</div><div class="rval g" style="font-weight:700">${fmt(totalCredILA)}</div></div>
       <div class="rrow" style="border-top:2px solid var(--purple);padding-top:8px;margin-top:6px;">
-        <div class="rlbl" style="font-weight:800;font-size:13px">IMP. ADICIONAL ART. 42 NETO</div>
+        <div class="rlbl" style="font-weight:800;font-size:13px">IMP. ADICIONAL ART.42 NETO</div>
         <div class="rval" style="font-size:16px;font-weight:800;color:var(--purple)">${fmt(ilaNet)}</div>
       </div>
+      <div class="dvd"><span>IMPUESTO ADICIONAL Art.37 D.L.825</span></div>
+      ${fld('Lín.83 — Letras e), h), i), l) Art.37 (15%)','522',m.ila522||0,'ila522',false)}
+      ${fld('Lín.84 — Letra j) Art.37 (50%)','526',m.ila526||0,'ila526',false)}
+      ${fld('Lín.85 — Débito Imp.Adicional ventas Art.37 letras a),b),c) (15%)','113',m.ila113||0,'ila113',false)}
+      ${fld('Lín.86 — Crédito Imp.Adicional Art.37 letras a),b),c) (resta)','28',m.ila28||0,'ila28',false)}
+      ${fld('Lín.88 — Remanente crédito Art.37 mes anterior (resta)','540',m.ila540||0,'ila540',false)}
     </div>`;
+
   } else if(tab==='retenciones'){
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>RETENCIONES IMPUESTO A LA RENTA</span></div>
-      ${fld('Ret. Imp. Único Trabajadores Art.74 N°1','048',m.iusc||0,'iusc',false)}
-      ${fld('Ret. Honorarios Art.74 N°2 (14,5% desde 2025)','151',retHon,'',true)}
-      ${fld('Ret. Directores S.A. Art.48 (10%)','153',m.retDirectores||0,'retDirectores',false)}
-      ${fld('Ret. Suplementeros Art.74 N°5 (0,5%)','','',false)} 
-      ${fld('Ret. Productos Mineros Art.74 N°6','','',false)}
-      ${fld('Ret. Seguros dotales Art.17 N°3 (15%)','588',m.retSeguros||0,'retSeguros',false)}
-      ${fld('Ret. APV Art.42 bis (15%)','589',m.retAPV||0,'retAPV',false)}
+      <div class="dvd"><span>RETENCIONES IMPUESTO A LA RENTA — D.L.824/74</span></div>
+      ${fld('Lín.59 — Ret. Imp. 1ª Cat. Capitales Mobiliarios Art.20 N°2 / Art.73 LIR','50',m.retCapMob||0,'retCapMob',false)}
+      <div style="background:var(--s3);border:1px solid var(--border);border-radius:6px;padding:6px;margin:4px 0;">
+        <div style="font-size:9px;color:var(--muted);margin-bottom:4px;"><b style="color:var(--orange)">Lín.60</b> — Ret. IUSC Trabajadores Art.74 N°1 LIR — <b style="color:var(--orange)">Cód 048/751</b></div>
+        ${fld('Retención IUSC Trabajadores (desde liquidaciones)','048',iusc,'iusc',false)}
+      </div>
+      ${fld('Lín.61 — Ret. Honorarios Art.74 N°2 LIR (10% desde 2025)','151',retHon,'',true)}
+      ${fld('Lín.62 — Ret. Directores S.A. Art.48 Art.74 N°3 LIR (10%)','153',m.retDirectores||0,'retDirectores',false)}
+      ${fld('Lín.63 — Ret. Art.42 N°1 tasa 3% reintegro préstamo 0% (Art.9 Ley 21.252)','49',m.retPrestamo49||0,'retPrestamo49',false)}
+      ${fld('Lín.64 — Ret. Art.42 N°2 tasa 3% reintegro préstamo 0% (Art.7 Ley 21.242)','155',m.retPrestamo155||0,'retPrestamo155',false)}
+      ${fld('Lín.65 — Ret. Suplementeros Art.74 N°5 (0,5%)','54',m.retSuplementeros||0,'retSuplementeros',false)}
+      ${fld('Lín.66 — Ret. Productos Mineros Art.74 N°6','56',m.retMineros||0,'retMineros',false)}
+      ${fld('Lín.67 — Ret. Seguros dotales Art.17 N°3 (15%)','588',m.retSeguros||0,'retSeguros',false)}
+      ${fld('Lín.68 — Ret. APV Art.42 bis LIR (15%)','589',m.retAPV||0,'retAPV',false)}
       <div class="dvd"><span>PPM — PAGOS PROVISIONALES MENSUALES</span></div>
-      ${fld('PPM 1ª Cat. Art.84 a) — '+( c.ppm||1.5)+'% s/ventas','62',ppm,'',true)}
-      ${fld('PPM 2ª Cat. Art.84 b) (10% honorarios)','152',m.ppm2daCat||0,'ppm2daCat',false)}
-      ${fld('PPM Talleres Artesanales (3% ingresos)','','',false)}
-      ${fld('PPM Mineros Art.84 h)','','',false)}
-      ${fld('PPM Transportistas Art.84 e) (0,3%)','66',m.ppmTransp||0,'ppmTransp',false)}
-      <div class="dvd"><span>CRÉDITOS Y REBAJAS</span></div>
-      ${fld('Crédito SENCE capacitación','82',m.credSence||0,'credSence',false)}
+      <div class="info-box" style="font-size:9px;">📌 PPM 1ª Cat. tasa actual: <b>${c.ppm||1.5}%</b> sobre ventas netas. Configurable en ⚙️ empresa.</div>
+      ${fld('Lín.69 — PPM 1ª Cat. Art.84 a) — '+( c.ppm||1.5)+'% s/ventas netas','62',ppm,'',true)}
+      ${fld('Lín.69 — Pérdida acumulada (suspensión PPM Art.90 LIR)','750',m.ppmPerdida||0,'ppmPerdida',false)}
+      ${fld('Lín.71 — PPM Mineros Art.84 a)','565',m.ppmMinero||0,'ppmMinero',false)}
+      ${fld('Lín.73 — PPM Transportistas renta presunta Art.84 e) y f) (0,3%)','66',m.ppmTransp||0,'ppmTransp',false)}
+      ${fld('Lín.75 — PPM 2ª Cat. Art.84 b) (10% honorarios)','152',m.ppm2daCat||0,'ppm2daCat',false)}
+      ${fld('Lín.77 — PPM Taller artesanal Art.84 c) (1,5% o 3%)','70',m.ppmTaller||0,'ppmTaller',false)}
+      <div class="dvd"><span>CRÉDITO SENCE CAPACITACIÓN — Ley 19.518/97 (Cód 721-724)</span></div>
+      ${fld('Crédito SENCE del mes','721',m.credSenceMes||0,'credSenceMes',false)}
+      ${fld('Remanente SENCE mes anterior','722',m.credSenceAnt||0,'credSenceAnt',false)}
+      <div class="rrow"><div class="rlbl">Crédito SENCE a imputar este período <b style="color:var(--orange)">(Cód 723)</b></div><div class="rval g">-${fmt(credSenceImp)}</div></div>
+      ${credSenceSig>0?`<div class="rrow"><div class="rlbl">Remanente SENCE período siguiente <b style="color:var(--orange)">(Cód 724)</b></div><div class="rval acc">${fmt(credSenceSig)}</div></div>`:''}
+      <div class="dvd"><span>OTROS CRÉDITOS Y REBAJAS</span></div>
       ${fld('Crédito Empresas Constructoras','130',m.credEmpConstr||0,'credEmpConstr',false)}
-      ${fld('Recup. Imp. Específico Diesel Art.7 L.18.502','127',m.credDiesel||0,'credDiesel',false)}
-      ${fld('Crédito Timbres y Estampillas Art.3 L.20.259','','',false)}
+      ${fld('Crédito por Timbres y Estampillas Art.3 Ley 20.259','712',m.credTimbres712||0,'credTimbres712',false)}
+      <div class="rrow" style="border-top:2px solid var(--orange);padding-top:8px;margin-top:6px;">
+        <div class="rlbl" style="font-weight:800;font-size:13px">Lín.79 — <b>Cód 595</b> — SUBTOTAL IMPUESTO DETERMINADO</div>
+        <div class="rval r" style="font-size:15px;font-weight:800">${fmt(subtotal595)}</div>
+      </div>
+      <div class="rrow">
+        <div class="rlbl" style="font-weight:700">Total Créditos y Rebajas</div>
+        <div class="rval g" style="font-weight:700">-${fmt(totalCreditos)}</div>
+      </div>
     </div>`;
+
   } else {
+    // RESUMEN F-29
     el.innerHTML=`<div style="background:linear-gradient(135deg,var(--orange2),rgba(249,115,22,.02));border:2px solid var(--orange);border-radius:12px;padding:14px;margin-top:10px;">
       <div style="font-size:13px;font-weight:800;margin-bottom:10px;">RESUMEN F-29 — ${MESES[getMesTrib()]} ${d.año}</div>
+      <div style="font-size:9px;color:var(--muted);margin-bottom:8px;">Formulario 29 · Declaración Mensual IVA · SII Chile · Vence día 20 del mes siguiente</div>
       <div class="rbox">
-        <div class="dvd"><span>IVA</span></div>
+        <div class="dvd"><span>IVA D.L.825/74</span></div>
         <div class="rrow"><div class="rlbl">Cód 538 — Total Débito Fiscal</div><div class="rval r">${fmt(d.ivaD)}</div></div>
         <div class="rrow"><div class="rlbl">Cód 537 — Total Crédito Fiscal</div><div class="rval g">-${fmt(totalCredFiscal)}</div></div>
-        <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">IVA a pagar / (Remanente)</div><div class="rval ${ivaAPagar>0?'r':'g'}" style="font-weight:700">${ivaAPagar>0?fmt(ivaAPagar):'('+fmt(ivaRemanenteSig)+')'}</div></div>
-        ${totalDebILA||totalCredILA?`<div class="dvd"><span>IMPUESTO ADICIONAL Art. 42</span></div>
-        <div class="rrow"><div class="rlbl">Cód 602 — Débitos Art. 42</div><div class="rval r">${fmt(totalDebILA)}</div></div>
-        <div class="rrow"><div class="rlbl">Cód 603 — Créditos Art. 42</div><div class="rval g">-${fmt(totalCredILA)}</div></div>
+        <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">IVA a pagar / (Remanente CF)</div><div class="rval ${ivaAPagar>0?'r':'g'}" style="font-weight:700">${ivaAPagar>0?fmt(ivaAPagar):'('+fmt(ivaRemanenteSig)+')'}</div></div>
+        ${totalDebILA||totalCredILA?`<div class="dvd"><span>IMPUESTO ADICIONAL Art.42</span></div>
+        <div class="rrow"><div class="rlbl">Cód 602 — Total Débitos Art.42</div><div class="rval r">${fmt(totalDebILA)}</div></div>
+        <div class="rrow"><div class="rlbl">Cód 603 — Total Créditos Art.42</div><div class="rval g">-${fmt(totalCredILA)}</div></div>
         <div class="rrow"><div class="rlbl" style="font-weight:700">ILA Neto</div><div class="rval" style="font-weight:700;color:var(--purple)">${fmt(ilaNet)}</div></div>`:''}
-        <div class="dvd"><span>RETENCIONES Y PPM</span></div>
+        <div class="dvd"><span>IMPUESTO A LA RENTA D.L.824/74</span></div>
+        ${retCapMob?`<div class="rrow"><div class="rlbl">Cód 50 — Ret. Capitales Mobiliarios</div><div class="rval r">${fmt(retCapMob)}</div></div>`:''}
         ${iusc?`<div class="rrow"><div class="rlbl">Cód 048 — IUSC Trabajadores</div><div class="rval r">${fmt(iusc)}</div></div>`:''}
-        <div class="rrow"><div class="rlbl">Cód 151 — Ret. Honorarios 14,5%</div><div class="rval r">${fmt(retHon)}</div></div>
-        ${retDirectores?`<div class="rrow"><div class="rlbl">Cód 153 — Ret. Directores</div><div class="rval r">${fmt(retDirectores)}</div></div>`:''}
+        <div class="rrow"><div class="rlbl">Cód 151 — Ret. Honorarios (10%)</div><div class="rval r">${fmt(retHon)}</div></div>
+        ${retDirectores?`<div class="rrow"><div class="rlbl">Cód 153 — Ret. Directores (10%)</div><div class="rval r">${fmt(retDirectores)}</div></div>`:''}
+        ${retPrestamo49?`<div class="rrow"><div class="rlbl">Cód 49 — Ret. préstamo 0% (3%)</div><div class="rval r">${fmt(retPrestamo49)}</div></div>`:''}
+        <div class="dvd"><span>PPM</span></div>
         <div class="rrow"><div class="rlbl">Cód 62 — PPM 1ª Cat. (${c.ppm||1.5}%)</div><div class="rval r">${fmt(ppm)}</div></div>
-        ${ppm2daCat?`<div class="rrow"><div class="rlbl">PPM 2ª Cat.</div><div class="rval r">${fmt(ppm2daCat)}</div></div>`:''}
+        ${ppmTransp?`<div class="rrow"><div class="rlbl">Cód 66 — PPM Transportistas (0,3%)</div><div class="rval r">${fmt(ppmTransp)}</div></div>`:''}
+        ${ppm2daCat?`<div class="rrow"><div class="rlbl">Cód 152 — PPM 2ª Cat.</div><div class="rval r">${fmt(ppm2daCat)}</div></div>`:''}
+        <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Cód 595 — Subtotal Impuesto Determinado</div><div class="rval r" style="font-weight:700">${fmt(subtotal595)}</div></div>
         ${totalCreditos?`<div class="dvd"><span>CRÉDITOS Y REBAJAS</span></div>
-        ${credSence?`<div class="rrow"><div class="rlbl">SENCE</div><div class="rval g">-${fmt(credSence)}</div></div>`:''}
-        ${credEmpConstr?`<div class="rrow"><div class="rlbl">Emp. Constructoras</div><div class="rval g">-${fmt(credEmpConstr)}</div></div>`:''}
-        ${credDiesel?`<div class="rrow"><div class="rlbl">Recup. Diesel</div><div class="rval g">-${fmt(credDiesel)}</div></div>`:''}
+        ${credSenceImp?`<div class="rrow"><div class="rlbl">Cód 723 — SENCE Capacitación</div><div class="rval g">-${fmt(credSenceImp)}</div></div>`:''}
+        ${credEmpConstr?`<div class="rrow"><div class="rlbl">Cód 130 — Emp. Constructoras</div><div class="rval g">-${fmt(credEmpConstr)}</div></div>`:''}
+        ${credDiesel730?`<div class="rrow"><div class="rlbl">Cód 127 — Recup. Diesel Art.7</div><div class="rval g">-${fmt(credDiesel730)}</div></div>`:''}
+        ${credDiesel729?`<div class="rrow"><div class="rlbl">Cód 544 — Recup. Diesel Transportistas</div><div class="rval g">-${fmt(credDiesel729)}</div></div>`:''}
         <div class="rrow"><div class="rlbl" style="font-weight:700">Total Créditos</div><div class="rval g" style="font-weight:700">-${fmt(totalCreditos)}</div></div>`:''}
+        ${(+(m.ivaPostergPagar||0))>0?`<div class="dvd"><span>POSTERGACIÓN IVA</span></div>
+        <div class="rrow"><div class="rlbl">Cuota IVA postergado a pagar</div><div class="rval r">${fmt(+(m.ivaPostergPagar||0))}</div></div>`:''}
         <div class="rrow" style="border-top:2px solid var(--orange);padding-top:8px;margin-top:6px;">
           <div class="rlbl" style="font-weight:800;font-size:14px;color:var(--text)">Cód 91 — TOTAL A PAGAR F-29</div>
           <div class="rval" style="font-size:22px;font-weight:800;color:var(--orange)">${fmt(totalF29)}</div>
         </div>
       </div>
-      <div class="info-box" style="margin-top:10px;">📌 F-29 se presenta mensualmente. Vence: día 20 del mes siguiente. Declara y paga en <a href="https://www.sii.cl" target="_blank" style="color:var(--acc)">sii.cl</a> → Impuestos Mensuales → Declarar IVA (F29)</div>
+      <div class="info-box" style="margin-top:10px;font-size:9px;">📌 Declara y paga en <a href="https://homer.sii.cl" target="_blank" style="color:var(--acc)">sii.cl</a> → Mi SII → Declarar y Pagar → Formulario 29 · Vence día 20 del mes siguiente. Si el día 20 es feriado o fin de semana, el plazo se extiende al día hábil siguiente.</div>
     </div>`;
   }
 }
-
 function guardarF29(){
   save();toast('✅ F-29 guardado','ok');
+}
+
+function exportF29Excel(){
+  const db=DB();const d=calcDatosRenta();const m=db.f29Manual||{};const c=CFG();
+  const per=MESES[getMesTrib()]+' '+d.año;
+  // Construir datos completos del F29
+  const rows=[
+    ['FORMULARIO 29 — DECLARACIÓN MENSUAL IVA','',''],
+    ['Empresa:',c.emp||'','RUT:',c.rut||''],
+    ['Período:',per,'Vence:','Día 20 mes siguiente'],
+    ['','','',''],
+    ['SECCIÓN','CÓDIGO','MONTO'],
+    ['── DÉBITO FISCAL IVA ──','',''],
+    ['Facturas emitidas giro (N° docs)','503',db.ventas?db.ventas.filter(v=>v.tipo==='33').length:0],
+    ['IVA Débito Facturas','502',db.ventas?db.ventas.filter(v=>v.tipo==='33').reduce((a,x)=>a+(+x.iva||0),0):0],
+    ['Boletas electrónicas (N° docs)','110',db.ventas?db.ventas.filter(v=>v.tipo==='39').length:0],
+    ['IVA Débito Boletas','111',db.ventas?db.ventas.filter(v=>v.tipo==='39').reduce((a,x)=>a+(+x.iva||0),0):0],
+    ['ND emitidas (N° docs)','512',db.ventas?db.ventas.filter(v=>v.tipo==='56').length:0],
+    ['IVA Notas Débito','513',db.ventas?db.ventas.filter(v=>v.tipo==='56').reduce((a,x)=>a+(+x.iva||0),0):0],
+    ['NC emitidas (N° docs)','509',db.ventas?db.ventas.filter(v=>v.tipo==='61').length:0],
+    ['IVA NC emitidas (resta)','510',db.ventas?db.ventas.filter(v=>v.tipo==='61').reduce((a,x)=>a+(+x.iva||0),0):0],
+    ['TOTAL DÉBITO FISCAL','538',d.ivaD],
+    ['── CRÉDITO FISCAL IVA ──','',''],
+    ['Facturas compra giro (N° docs)','519',db.compras?db.compras.filter(v=>v.tipo!=='34').length:0],
+    ['Monto Neto compras','520',d.netoC],
+    ['IVA Crédito Fiscal compras','521',d.ivaC],
+    ['Remanente CF mes anterior','504',m.ivaRemanente||0],
+    ['IVA Activo Fijo','524',m.ivaActFijo||0],
+    ['Otros créditos IVA','',m.ivaDocElec||0+m.ivaImportGiro||0],
+    ['TOTAL CRÉDITO FISCAL','537',d.ivaC+(m.ivaRemanente||0)+(m.ivaActFijo||0)+(m.ivaDocElec||0)+(m.ivaImportGiro||0)],
+    ['IVA A PAGAR / (REMANENTE)','',Math.max(0,d.ivaD-d.ivaC-(m.ivaRemanente||0)-(m.ivaActFijo||0))],
+    ['── RETENCIONES Y PPM ──','',''],
+    ['IUSC Trabajadores','048',m.iusc||0],
+    ['Retención Honorarios (10%)','151',d.retHon],
+    ['Retención Directores','153',m.retDirectores||0],
+    ['PPM 1ª Categoría ('+c.ppm+'%)','62',d.ppmMensual],
+    ['PPM Transportistas (0,3%)','66',m.ppmTransp||0],
+    ['PPM 2ª Categoría','152',m.ppm2daCat||0],
+    ['── CRÉDITOS Y REBAJAS ──','',''],
+    ['Crédito SENCE','723',Math.min((m.credSenceMes||0)+(m.credSenceAnt||0),d.ppmMensual)],
+    ['Recuperación Diesel','127',m.credDiesel730||0],
+    ['Crédito Emp. Constructoras','130',m.credEmpConstr||0],
+    ['── TOTALES ──','',''],
+    ['SUBTOTAL IMPUESTO','595',0],
+    ['TOTAL A PAGAR F-29','91',0],
+  ];
+  try{
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:45},{wch:10},{wch:18}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'F-29 '+per);
+    XLSX.writeFile(wb,'F29_'+per.replace(' ','_')+'.xlsx');
+    toast('✅ F-29 Excel exportado','ok');
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function exportF29PDF(){
+  const db=DB();const d=calcDatosRenta();const m=db.f29Manual||{};const cfg=CFG();
+  const per=MESES[getMesTrib()]+' '+d.año;
+  // Calcular totales
+  const totalCF=d.ivaC+(m.ivaRemanente||0)+(m.ivaActFijo||0)+(m.ivaDocElec||0)+(m.ivaImportGiro||0)+(m.ivaImportActFijo||0);
+  const ivaNeto=d.ivaD-totalCF;
+  const ivaAPagar=Math.max(0,ivaNeto);
+  const ivaRem=Math.max(0,-ivaNeto);
+  const retHon=d.retHon; const iusc=+(m.iusc||0); const ppm=d.ppmMensual;
+  const credSence=Math.min((m.credSenceMes||0)+(m.credSenceAnt||0),ppm);
+  const subtotal=ivaAPagar+(+(m.retCapMob||0))+iusc+retHon+(+(m.retDirectores||0))+ppm+(+(m.ppmTransp||0))+(+(m.ppm2daCat||0));
+  const totalCred=credSence+(+(m.credEmpConstr||0))+(+(m.credDiesel730||0))+(+(m.credDiesel729||0));
+  const totalF29=Math.max(0,subtotal-totalCred);
+  const fmt2=(v)=>v?'$'+v.toLocaleString('es-CL'):'$0';
+  const row=(label,cod,val,bold)=>`<tr style="border-bottom:1px solid #e5e7eb;${bold?'background:#f8fafc;font-weight:700;':''}">
+    <td style="padding:5px 8px;font-size:10px;">${label}</td>
+    <td style="padding:5px 8px;text-align:center;font-size:10px;color:#f97316;">${cod||''}</td>
+    <td style="padding:5px 8px;text-align:right;font-family:monospace;font-size:10px;">${val}</td>
+  </tr>`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>F-29 ${per}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:10px;color:#1e293b;margin:15px;}
+  h1{font-size:14px;margin:0;text-align:center;}h2{font-size:11px;text-align:center;color:#64748b;margin:4px 0 12px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+  th{background:#ea580c;color:#fff;padding:6px 8px;text-align:left;font-size:9px;}
+  .sec{background:#fff7ed;font-weight:800;font-size:9px;color:#ea580c;padding:5px 8px;letter-spacing:.5px;}
+  .tot{background:#1e293b;color:#fff;}
+  .tot td{color:#fff;font-weight:800;font-size:12px;}
+  @media print{@page{margin:1.5cm;}}</style></head><body>
+  <div style="text-align:center;margin-bottom:14px;border-bottom:2px solid #ea580c;padding-bottom:10px;">
+    <h1>FORMULARIO 29 — DECLARACIÓN MENSUAL IVA</h1>
+    <h2>${cfg.emp||''} · RUT: ${cfg.rut||''} · Período: ${per} · Vence: Día 20 mes siguiente</h2>
+  </div>
+  <table>
+    <thead><tr><th style="width:60%">Concepto</th><th style="width:10%;text-align:center">Cód</th><th style="width:30%;text-align:right">Monto</th></tr></thead>
+    <tbody>
+    <tr><td colspan="3" class="sec">DÉBITO FISCAL IVA — D.L.825/74</td></tr>
+    ${row('Facturas emitidas del giro','503',db.ventas?db.ventas.filter(v=>v.tipo==='33').length+' docs':0)}
+    ${row('IVA Débito Facturas','502',fmt2(db.ventas?db.ventas.filter(v=>v.tipo==='33').reduce((a,x)=>a+(+x.iva||0),0):0))}
+    ${row('Boletas electrónicas','110/111',fmt2(db.ventas?db.ventas.filter(v=>v.tipo==='39').reduce((a,x)=>a+(+x.iva||0),0):0))}
+    ${row('Notas de Débito emitidas','512/513',fmt2(db.ventas?db.ventas.filter(v=>v.tipo==='56').reduce((a,x)=>a+(+x.iva||0),0):0))}
+    ${row('Notas de Crédito emitidas (resta)','509/510',fmt2(db.ventas?db.ventas.filter(v=>v.tipo==='61').reduce((a,x)=>a+(+x.iva||0),0):0))}
+    ${row('TOTAL DÉBITO FISCAL','538',fmt2(d.ivaD),true)}
+    <tr><td colspan="3" class="sec">CRÉDITO FISCAL IVA — D.L.825/74</td></tr>
+    ${row('Facturas compra del giro','519/521',fmt2(d.ivaC))}
+    ${row('Remanente CF mes anterior','504',fmt2(m.ivaRemanente||0))}
+    ${row('IVA Activo Fijo','524',fmt2(m.ivaActFijo||0))}
+    ${row('Otros créditos IVA','',fmt2((m.ivaDocElec||0)+(m.ivaImportGiro||0)))}
+    ${row('TOTAL CRÉDITO FISCAL','537',fmt2(totalCF),true)}
+    ${row(ivaNeto>=0?'IVA A PAGAR':'REMANENTE CF PERÍODO SIGUIENTE',ivaNeto>=0?'':'77',fmt2(ivaNeto>=0?ivaAPagar:ivaRem),true)}
+    <tr><td colspan="3" class="sec">IMPUESTO A LA RENTA — RETENCIONES Y PPM</td></tr>
+    ${iusc?row('Retención IUSC Trabajadores','048',fmt2(iusc)):''}
+    ${row('Retención Honorarios (10%)','151',fmt2(retHon))}
+    ${m.retDirectores?row('Retención Directores S.A.','153',fmt2(m.retDirectores)):''}
+    ${row('PPM 1ª Categoría ('+cfg.ppm+'%)','62',fmt2(ppm))}
+    ${m.ppmTransp?row('PPM Transportistas (0,3%)','66',fmt2(m.ppmTransp)):''}
+    ${m.ppm2daCat?row('PPM 2ª Categoría','152',fmt2(m.ppm2daCat)):''}
+    ${row('SUBTOTAL IMPUESTO DETERMINADO','595',fmt2(subtotal),true)}
+    ${totalCred?`<tr><td colspan="3" class="sec">CRÉDITOS Y REBAJAS</td></tr>`:''}
+    ${credSence?row('Crédito SENCE Capacitación','723','-'+fmt2(credSence)):''}
+    ${m.credEmpConstr?row('Crédito Emp. Constructoras','130','-'+fmt2(m.credEmpConstr)):''}
+    ${m.credDiesel730?row('Recuperación Diesel','127','-'+fmt2(m.credDiesel730)):''}
+    </tbody>
+    <tfoot><tr class="tot"><td style="padding:8px;">Cód 91 — TOTAL A PAGAR F-29</td><td></td><td style="padding:8px;text-align:right;font-size:14px;">${fmt2(totalF29)}</td></tr></tfoot>
+  </table>
+  <div style="font-size:9px;color:#64748b;text-align:center;border-top:1px solid #e5e7eb;padding-top:8px;">
+    Generado: ${new Date().toLocaleString('es-CL')} · Declara en sii.cl → Formulario 29 · Art.64 D.L.825/74
+  </div>
+  <script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank','width=800,height=700');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Habilita ventanas emergentes','warn');
 }
 
 // ── renderF22 — Operación Renta Completa ──────────────────────────────
@@ -8395,15 +8973,19 @@ function renderF22(){
       <div style="flex:1;"><div class="ct">Formulario 22 — Renta Anual Completo</div>
       <div class="cs">Año Tributario ${d.año+1} · Renta ${d.año} · ${d.regimen||'Sin régimen'}</div></div>
       <button class="btn purple sm" onclick="guardarF22()">💾 Guardar</button>
+      <button class="btn success sm" onclick="exportF22Excel()">📊 Excel</button>
+      <button class="btn err sm" onclick="exportF22PDF()">📄 PDF</button>
     </div>
     <div class="card-body">
       <div class="info-box">
         📌 <b>F-22</b> completo. Valores en <span style="color:var(--acc)">azul</span> = auto desde registros. <span style="color:var(--orange)">Naranja</span> = ingreso manual. Se presenta en abril ${d.año+1}.
       </div>
       <div class="tab-btns" id="f22Tabs" style="margin-top:10px;">
-        <button class="tab-btn active" onclick="showF22Tab('resultados',this)">📊 Resultado</button>
-        <button class="tab-btn" onclick="showF22Tab('rli',this)">📋 RLI</button>
-        <button class="tab-btn" onclick="showF22Tab('cpt',this)">🏦 CPT</button>
+        <button class="tab-btn active" onclick="showF22Tab('anverso',this)">📋 Anverso</button>
+        <button class="tab-btn" onclick="showF22Tab('rebajas',this)">➖ Rebajas</button>
+        <button class="tab-btn" onclick="showF22Tab('igc',this)">💹 IGC/IUSC</button>
+        <button class="tab-btn" onclick="showF22Tab('rli',this)">📊 RLI/1°Cat</button>
+        <button class="tab-btn" onclick="showF22Tab('cpt',this)">🏦 CPT/RAI</button>
         <button class="tab-btn" onclick="showF22Tab('creditos',this)">💳 Créditos</button>
         <button class="tab-btn" onclick="showF22Tab('ajustes',this)">✏️ Ajustes</button>
       </div>
@@ -8425,107 +9007,507 @@ function showF22Tab(tab,btn){
   if(btn){document.querySelectorAll('#f22Tabs .tab-btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active');}
   const d=calcDatosRenta();const db=DB();const m=db.f22Manual||{};
   const el=document.getElementById('f22Content');if(!el)return;
+  const sv=(field)=>`onchange="if(!DB().f22Manual)DB().f22Manual={};DB().f22Manual.${field}=+this.value||0;save()"`;
+  const fld=(label,code,val,field,auto)=>{
+    if(auto) return `<div class="rrow"><div class="rlbl">${code?'<b style="color:var(--purple)">Cód '+code+'</b> — ':''}${label}</div><div class="rval acc">${typeof val==='number'?fmt(val):val}</div></div>`;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border);"><div style="flex:1;font-size:11px;">${code?'<b style="color:var(--purple)">Cód '+code+'</b> — ':''}<span style="color:var(--txt)">${label}</span></div><input class="fi" type="number" style="max-width:140px;text-align:right;font-family:monospace;" value="${val||0}" ${sv(field)}></div>`;
+  };
 
-  if(tab==='resultados'){
+  // ── Tabla IGC 2026 (UTA 2026 = $834.504) ──
+  // Art.52 LIR — Tabla vigente AT2026
+  function calcIGC(base){
+    if(base<=0) return 0;
+    const t=[
+      [0,11265804,0,0],
+      [11265804.01,25035120,0.04,450632],
+      [25035120.01,41725200,0.08,1452037],
+      [41725200.01,58415280,0.135,3746923],
+      [58415280.01,75105360,0.23,9296375],
+      [75105360.01,100140480,0.304,14854171],
+      [100140480.01,258696240,0.35,19460633],
+      [258696240.01,Infinity,0.40,32397949]
+    ];
+    const r=t.find(x=>base>=x[0]&&base<=x[1]);
+    return r?Math.max(0,Math.round(base*r[2]-r[3])):0;
+  }
+
+  // ── Cálculos centrales F22 ──
+  // Rentas brutas
+  const retiros1592=+(m.retiros1592||0); const dividendos1594=+(m.dividendos1594||0);
+  const gastosRech=+(m.gastosRech||0); const rentaPresunta=+(m.rentaPresunta||0);
+  const honArt42=d.tHon||0;  // honorarios propios (auto desde módulo)
+  const honAdicional=+(m.honAdicional||0); // honorarios adicionales manual
+  const totalHon=honArt42+honAdicional;
+  const capMob=+(m.capMob||0); const rentasExentas=+(m.rentasExentas||0);
+  const sueldos1098=+(m.sueldos1098||0); const incrementoIDPC=+(m.incrementoIDPC||0);
+  const otrasRentas=+(m.otrasRentas||0);
+  // Total anverso líneas 1-14
+  const totalAnverso=retiros1592+dividendos1594+gastosRech+rentaPresunta+totalHon+capMob+rentasExentas+sueldos1098+incrementoIDPC+otrasRentas;
+  // Rebajas líneas 15-24
+  const impTerritorial=+(m.impTerritorial||0); const donaciones907=+(m.donaciones907||0);
+  const perdCapMob=+(m.perdCapMob||0); const cotizSocio=+(m.cotizSocio||0);
+  const interesHipot=+(m.interesHipot||0); const ahorroPrevision=+(m.ahorroPrevision||0);
+  const otrasRebajas=+(m.otrasRebajas||0);
+  const totalRebajas=impTerritorial+donaciones907+perdCapMob+cotizSocio+interesHipot+ahorroPrevision+otrasRebajas;
+  const subtotal158=Math.max(0,totalAnverso-totalRebajas);
+  const baseIGC=Math.max(0,subtotal158-cotizSocio);
+  // IGC/IUSC calculado
+  const igcCalculado=calcIGC(baseIGC);
+  // Créditos contra IGC
+  const credIDPCDevol=+(m.credIDPCDevol||0);
+  const credIDPCSinDevol=+(m.credIDPCSinDevol||0);
+  const credGastoEduc=+(m.credGastoEduc||0);
+  const credDonSociales=+(m.credDonSociales||0);
+  const credExterior=+(m.credExterior||0);
+  const credIUSC=+(m.credIUSC||0);
+  const credOtrosIGC=+(m.credOtrosIGC||0);
+  const totalCredIGC=credIDPCDevol+credIDPCSinDevol+credGastoEduc+credDonSociales+credExterior+credIUSC+credOtrosIGC;
+  const impNeto_IGC=Math.max(0,igcCalculado-totalCredIGC);
+  const devolucionIGC=Math.max(0,totalCredIGC-igcCalculado);
+  // 1ª Categoría
+  const rli=d.rli; const idpcBruto=d.idpcBruto;
+  const ppmReal=+(m.ppmPagado||0)||d.ppmPagados;
+  const cred33bis=d.cred33bisReal; const credCorfo=+(m.credCorfo||0);
+  const otrosCred1cat=+(m.otrosCred||0);
+  const totalCred1cat=ppmReal+cred33bis+credCorfo+otrosCred1cat;
+  const impNeto1cat=Math.max(0,idpcBruto-totalCred1cat);
+  const devolucion1cat=Math.max(0,totalCred1cat-idpcBruto);
+
+  // ══ ANVERSO — Líneas 1-14 ══════════════════════════════════════
+  if(tab==='anverso'){
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>📋 ANVERSO F-22 AT2026 — RENTAS BRUTAS AFECTAS (Líneas 1-14)</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">AT2026 = Año Tributario 2026 (rentas obtenidas durante el año comercial 2025). UTA 2026: $834.504 · Tabla IGC Art.52 LIR actualizada.</div>
+      <div class="dvd"><span>RENTAS ART.14 — RETIROS Y DIVIDENDOS</span></div>
+      ${fld('Lín.1 — Retiros o remesas afectos IGC/IA Art.14 A) y/o D) N°3 LIR','1592',m.retiros1592||0,'retiros1592',false)}
+      ${fld('Lín.2 — Dividendos afectos IGC/IA Art.14 A) y/o D) N°3 LIR','1594',m.dividendos1594||0,'dividendos1594',false)}
+      ${fld('Lín.3 — Gastos rechazados y otras partidas Art.21 inc.3° LIR','106',m.gastosRech||0,'gastosRech',false)}
+      ${fld('Lín.4 — Rentas presuntas propias y/o terceros Art.14 B) N°2 y Art.34 LIR','603',m.rentaPresunta||0,'rentaPresunta',false)}
+      <div class="dvd"><span>HONORARIOS — Art.42 N°2 y Art.48 LIR (Recuadro N°1)</span></div>
+      <div style="background:var(--purple2);border:1px solid var(--purple);border-radius:8px;padding:8px;margin:4px 0;">
+        <div style="font-size:9px;color:var(--purple);font-weight:700;margin-bottom:6px;">📋 RECUADRO N°1 — Rentas Art.42 N°2 (Honorarios) y Art.48 (Directores S.A.)</div>
+        ${fld('Honorarios propios recibidos en el año (auto desde módulo)','110',honArt42,'',true)}
+        ${fld('Honorarios adicionales/Directores S.A. (ingreso manual)','',m.honAdicional||0,'honAdicional',false)}
+        <div class="rrow"><div class="rlbl" style="font-weight:700">Total Honorarios Lín.7 — Cód 110</div><div class="rval" style="font-weight:700;color:var(--purple)">${fmt(totalHon)}</div></div>
+        <div style="font-size:9px;color:var(--muted);margin-top:4px;">⚠️ Retención 10% (2025): ya declarada mensualmente en F-29 Cód 151. En F-22 se informa la renta bruta anual.</div>
+      </div>
+      <div class="dvd"><span>OTRAS RENTAS AFECTAS</span></div>
+      ${fld('Lín.8 — Rentas capitales mobiliarios Art.20 N°2 y mayor valor enajenación','605',m.capMob||0,'capMob',false)}
+      ${fld('Lín.9 — Rentas exentas IGC Art.54 N°3 LIR','1633',m.rentasExentas||0,'rentasExentas',false)}
+      ${fld('Lín.10 — Otras rentas de fuente chilena afectas IGC/IA','1635',m.otrasRentas||0,'otrasRentas',false)}
+      ${fld('Lín.13 — Sueldos, pensiones y rentas similares fuente nacional','1098',m.sueldos1098||0,'sueldos1098',false)}
+      ${fld('Lín.14 — Incremento por IDPC Arts.54 N°1 y 62 LIR','159',m.incrementoIDPC||0,'incrementoIDPC',false)}
+      <div class="rrow" style="border-top:2px solid var(--purple);padding-top:8px;margin-top:6px;">
+        <div class="rlbl" style="font-weight:800;font-size:13px">TOTAL ANVERSO (Suma líneas 1-14)</div>
+        <div class="rval" style="font-size:16px;font-weight:800;color:var(--purple)">${fmt(totalAnverso)}</div>
+      </div>
+    </div>`;
+
+  // ══ REBAJAS — Líneas 15-24 ════════════════════════════════════
+  } else if(tab==='rebajas'){
+    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>➖ REBAJAS A LA RENTA (Líneas 15-24)</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">Estas rebajas reducen la base imponible del IGC/IUSC. Ingrésalas según los antecedentes del contribuyente para el año comercial 2025.</div>
+      ${fld('Lín.15 — Impuesto Territorial pagado año 2025 Art.55 letra a) LIR','166',m.impTerritorial||0,'impTerritorial',false)}
+      ${fld('Lín.16 — Donaciones Art.7 Ley 16.282 y D.L.45/1973','907',m.donaciones907||0,'donaciones907',false)}
+      ${fld('Lín.17 — Pérdida en operaciones capitales mobiliarios Art.54 N°1 y 62 LIR','169',m.perdCapMob||0,'perdCapMob',false)}
+      ${fld('Lín.19 — Subtotal (Si declara IA trasladar a Cód 133 o 32)','158',Math.max(0,totalAnverso-(impTerritorial+donaciones907+perdCapMob)),'',true)}
+      ${fld('Lín.20 — Cotizaciones previsionales empresario/socio Art.55 letra b) LIR','111',m.cotizSocio||0,'cotizSocio',false)}
+      ${fld('Lín.21 — Intereses pagados créditos con garantía hipotecaria Art.55 bis LIR','750',m.interesHipot||0,'interesHipot',false)}
+      ${fld('Lín.23 — Ahorro previsional APV Art.42 bis inc.1° LIR','765',m.ahorroPrevision||0,'ahorroPrevision',false)}
+      ${fld('Otras rebajas (ingreso manual)','',m.otrasRebajas||0,'otrasRebajas',false)}
+      <div class="rrow" style="border-top:1px solid var(--border2)">
+        <div class="rlbl" style="font-weight:700">Total Rebajas</div>
+        <div class="rval r" style="font-weight:700">-${fmt(totalRebajas)}</div>
+      </div>
+      <div class="rrow" style="border-top:2px solid var(--purple);padding-top:8px;margin-top:6px;">
+        <div class="rlbl" style="font-weight:800;font-size:13px">Lín.24 — <b>Cód 170</b> — BASE IMPONIBLE ANUAL IGC/IUSC</div>
+        <div class="rval" style="font-size:16px;font-weight:800;color:var(--purple)">${fmt(baseIGC)}</div>
+      </div>
+      <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px;margin-top:10px;">
+        <div style="font-size:9px;color:var(--muted);margin-bottom:4px;font-weight:700;">📊 CÁLCULO PREVIO IGC (Art.52 LIR — Tabla AT2026)</div>
+        <div class="rrow"><div class="rlbl">Base Imponible Anual</div><div class="rval acc">${fmt(baseIGC)}</div></div>
+        <div class="rrow"><div class="rlbl">IGC Calculado (Lín.25 Cód 157)</div><div class="rval r" style="font-weight:700">${fmt(igcCalculado)}</div></div>
+      </div>
+    </div>`;
+
+  // ══ IGC/IUSC — Líneas 25-48 ═══════════════════════════════════
+  } else if(tab==='igc'){
+    // Tabla IGC completa AT2026
+    const tablaRows=[
+      ['Exento','0','$11.265.804','—','—'],
+      ['4%','$11.265.805','$25.035.120','0,04','$450.632'],
+      ['8%','$25.035.121','$41.725.200','0,08','$1.452.037'],
+      ['13,5%','$41.725.201','$58.415.280','0,135','$3.746.923'],
+      ['23%','$58.415.281','$75.105.360','0,23','$9.296.375'],
+      ['30,4%','$75.105.361','$100.140.480','0,304','$14.854.171'],
+      ['35%','$100.140.481','$258.696.240','0,35','$19.460.633'],
+      ['40%','$258.696.241','Y MÁS','0,40','$32.397.949'],
+    ].map(r=>`<tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:4px 6px;font-weight:700;color:var(--purple)">${r[0]}</td>
+      <td style="padding:4px 6px;font-size:10px;font-family:monospace">${r[1]}</td>
+      <td style="padding:4px 6px;font-size:10px;font-family:monospace">${r[2]}</td>
+      <td style="padding:4px 6px;text-align:center">${r[3]}</td>
+      <td style="padding:4px 6px;font-family:monospace;color:var(--red)">${r[4]}</td>
+    </tr>`).join('');
+    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>💹 IGC/IUSC Y DÉBITOS FISCALES — Líneas 25-30</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">Año Tributario 2026 · UTA al 31-12-2025: <b>$834.504</b> · Tabla Art.52 LIR vigente.</div>
+      <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:10px;">
+        <div style="font-size:9px;font-weight:700;color:var(--purple);margin-bottom:6px;">📊 TABLA IGC 2026 — Art.52 LIR</div>
+        <table style="width:100%;border-collapse:collapse;font-size:10px;">
+          <thead><tr style="background:var(--purple2);">
+            <th style="padding:4px 6px;text-align:left;color:var(--purple)">Tasa</th>
+            <th style="padding:4px 6px;text-align:left;color:var(--purple)">Desde ($)</th>
+            <th style="padding:4px 6px;text-align:left;color:var(--purple)">Hasta ($)</th>
+            <th style="padding:4px 6px;text-align:center;color:var(--purple)">Factor</th>
+            <th style="padding:4px 6px;text-align:left;color:var(--purple)">Rebaja ($)</th>
+          </tr></thead>
+          <tbody>${tablaRows}</tbody>
+        </table>
+        <div style="margin-top:8px;padding:6px;background:var(--s2);border-radius:6px;">
+          <div class="rrow"><div class="rlbl">Base Imponible Anual (Cód 170)</div><div class="rval acc">${fmt(baseIGC)}</div></div>
+          <div class="rrow"><div class="rlbl" style="font-weight:700">Lín.25 — IGC/IUSC calculado (Cód 157)</div><div class="rval r" style="font-weight:700">${fmt(igcCalculado)}</div></div>
+        </div>
+      </div>
+      ${fld('Lín.26 — IGC sobre intereses y rendimientos Art.54 bis LIR','1017',m.igcInt||0,'igcInt',false)}
+      ${fld('Lín.27 — Reliquidación IGC ganancias capital Art.17 N°8 LIR','1033',m.igcReliq||0,'igcReliq',false)}
+      ${fld('Lín.28 — Débito fiscal ahorro neto negativo (ex Art.57 bis LIR)','201',m.igcAhorro||0,'igcAhorro',false)}
+      ${fld('Lín.29 — Débito fiscal restitución crédito IDPC Art.56 N°3 LIR','1035',m.igcRestit||0,'igcRestit',false)}
+      ${fld('Lín.30 — Tasa adicional 10% IGC sobre Cód 106 Art.21 inc.3° LIR','910',m.igcTasAd||0,'igcTasAd',false)}
+      <div class="dvd"><span>CRÉDITOS CONTRA IGC/IUSC — Líneas 31-48</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:6px;">Los créditos reducen el IGC calculado. El exceso con derecho a devolución genera reembolso del SII.</div>
+      ${fld('Lín.34 — Crédito proporcional IGC por rentas exentas Art.56 N°2 LIR','136',m.credPropExen||0,'credPropExen',false)}
+      ${fld('Lín.36 — Crédito IGC por donaciones fines deportivos Ley 19.712','752',m.credDonDep||0,'credDonDep',false)}
+      ${fld('Lín.37 — Crédito IGC por IDPC SIN derecho a devolución Art.56 N°3','608',m.credIDPCSinDevol||0,'credIDPCSinDevol',false)}
+      ${fld('Lín.41 — Crédito IGC/IUSC por gastos en educación Art.55 ter LIR','895',m.credGastoEduc||0,'credGastoEduc',false)}
+      ${fld('Lín.42 — Crédito IGC/IUSC por donaciones fines sociales Art.1° bis Ley 19.885','867',m.credDonSociales||0,'credDonSociales',false)}
+      ${fld('Lín.45 — Crédito IUSC/IGC por impuestos exterior Art.41 A N°4 LIR','1018',m.credExterior||0,'credExterior',false)}
+      ${fld('Lín.46 — Crédito IGC/IUSC por IUSC Art.56 N°2 LIR','162',m.credIUSC||0,'credIUSC',false)}
+      ${fld('Lín.48 — Crédito IGC/IUSC por IDPC CON derecho a devolución Art.56 N°3','610',m.credIDPCDevol||0,'credIDPCDevol',false)}
+      ${fld('Otros créditos IGC/IUSC (manual)','',m.credOtrosIGC||0,'credOtrosIGC',false)}
+      <div class="rrow" style="border-top:1px solid var(--border2)">
+        <div class="rlbl" style="font-weight:700">Total Créditos IGC/IUSC</div>
+        <div class="rval g" style="font-weight:700">-${fmt(totalCredIGC)}</div>
+      </div>
+      <div class="rrow" style="border-top:2px solid ${impNeto_IGC>0?'var(--red)':'var(--green)'};padding-top:8px;margin-top:6px;">
+        <div class="rlbl" style="font-weight:800;font-size:13px">${impNeto_IGC>0?'IGC/IUSC NETO A PAGAR':'DEVOLUCIÓN IGC A FAVOR'}</div>
+        <div class="rval" style="font-size:16px;font-weight:800;color:${impNeto_IGC>0?'var(--red)':'var(--green)'}">${fmt(impNeto_IGC>0?impNeto_IGC:devolucionIGC)}</div>
+      </div>
+    </div>`;
+
+  // ══ RLI / 1ª CATEGORÍA ════════════════════════════════════════
+  } else if(tab==='rli'){
+    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
+      <div class="dvd"><span>📊 RESULTADO / RENTA LÍQUIDA IMPONIBLE — 1ª Categoría</span></div>
       <div class="dvd"><span>INGRESOS</span></div>
-      <div class="rrow"><div class="rlbl">Ventas / Ingresos giro (auto)</div><div class="rval g">${fmt(d.netoV)}</div></div>
-      <div class="rrow"><div class="rlbl">Otros ingresos</div><div class="rval">${fmt(d.otrosIng)}</div></div>
-      <div class="rrow"><div class="rlbl">Ingresos financieros</div><div class="rval">${fmt(d.ingFin)}</div></div>
+      <div class="rrow"><div class="rlbl">Ventas/Ingresos giro (auto)</div><div class="rval g">${fmt(d.netoV)}</div></div>
+      <div class="rrow"><div class="rlbl">Otros ingresos (manual)</div><div class="rval">${fmt(+(m.otrosIng||0))}</div></div>
+      <div class="rrow"><div class="rlbl">Ingresos financieros (manual)</div><div class="rval">${fmt(+(m.ingFin||0))}</div></div>
       <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Total Ingresos</div><div class="rval g">${fmt(d.totalIng)}</div></div>
       <div class="dvd"><span>GASTOS</span></div>
-      <div class="rrow"><div class="rlbl">Costo de Ventas (auto)</div><div class="rval r">-${fmt(d.netoC)}</div></div>
+      <div class="rrow"><div class="rlbl">Costo Ventas (auto)</div><div class="rval r">-${fmt(d.netoC)}</div></div>
       <div class="rrow"><div class="rlbl">Remuneraciones (auto)</div><div class="rval r">-${fmt(d.tRemu)}</div></div>
       <div class="rrow"><div class="rlbl">Honorarios (auto)</div><div class="rval r">-${fmt(d.tHon)}</div></div>
       <div class="rrow"><div class="rlbl">Depreciación (auto)</div><div class="rval r">-${fmt(d.tDep)}</div></div>
-      <div class="rrow"><div class="rlbl">Arriendos</div><div class="rval r">-${fmt(d.arriendos)}</div></div>
-      <div class="rrow"><div class="rlbl">Intereses</div><div class="rval r">-${fmt(d.intereses)}</div></div>
-      <div class="rrow"><div class="rlbl">Donaciones</div><div class="rval r">-${fmt(d.donaciones)}</div></div>
-      <div class="rrow"><div class="rlbl">Otros gastos</div><div class="rval r">-${fmt(d.otrosGastos)}</div></div>
-      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Total Gastos</div><div class="rval r">-${fmt(d.totalGastos)}</div></div>
-      <div class="rrow" style="border-top:2px solid var(--acc);padding-top:8px;margin-top:6px;">
+      <div class="rrow"><div class="rlbl">Arriendos (manual)</div><div class="rval r">-${fmt(+(m.arriendos||0))}</div></div>
+      <div class="rrow"><div class="rlbl">Intereses (manual)</div><div class="rval r">-${fmt(+(m.intereses||0))}</div></div>
+      <div class="rrow"><div class="rlbl">Donaciones (manual)</div><div class="rval r">-${fmt(+(m.donaciones||0))}</div></div>
+      <div class="rrow"><div class="rlbl">Otros gastos (manual)</div><div class="rval r">-${fmt(+(m.otrosGastos||0))}</div></div>
+      <div class="rrow" style="border-top:2px solid var(--acc);padding-top:8px;margin-top:4px;">
         <div class="rlbl" style="font-weight:800;font-size:13px">UTILIDAD BRUTA</div>
         <div class="rval acc" style="font-size:16px;font-weight:800">${fmt(d.utBruta)}</div>
       </div>
-    </div>`;
-  } else if(tab==='rli'){
-    el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>RENTA LÍQUIDA IMPONIBLE</span></div>
+      <div class="dvd"><span>RENTA LÍQUIDA IMPONIBLE — Art.29-33 LIR</span></div>
       <div class="rrow"><div class="rlbl">Resultado base (Ingresos - Gastos)</div><div class="rval acc">${fmt(d.rliBase)}</div></div>
-      <div class="rrow"><div class="rlbl" style="color:var(--orange)">+ Agregados RLI</div><div class="rval">${fmt(d.rliAgregados)}</div></div>
-      <div class="rrow"><div class="rlbl" style="color:var(--orange)">- Deducciones RLI</div><div class="rval">-${fmt(d.rliDeducciones)}</div></div>
+      <div class="rrow"><div class="rlbl">+ Agregados RLI (gastos rechazados, etc.)</div><div class="rval">${fmt(+(m.rliAgregados||0))}</div></div>
+      <div class="rrow"><div class="rlbl">- Deducciones RLI</div><div class="rval">-${fmt(+(m.rliDeducciones||0))}</div></div>
       <div class="rrow" style="border-top:2px solid var(--purple);padding-top:8px;">
         <div class="rlbl" style="font-weight:800;font-size:14px">RLI FINAL</div>
-        <div class="rval" style="font-size:18px;font-weight:800;color:var(--purple)">${fmt(d.rli)}</div>
+        <div class="rval" style="font-size:18px;font-weight:800;color:var(--purple)">${fmt(rli)}</div>
       </div>
-      <div class="dvd"><span>CÁLCULO IMPUESTO</span></div>
-      <div class="rrow"><div class="rlbl">Régimen tributario</div><div class="rval">${d.regimen}</div></div>
-      <div class="rrow"><div class="rlbl">Tasa IDPC</div><div class="rval">${(d.tasa*100).toFixed(0)}%</div></div>
+      <div class="dvd"><span>CÁLCULO IDPC — 1ª CATEGORÍA</span></div>
+      <div class="rrow"><div class="rlbl">Régimen tributario</div><div class="rval acc">${d.regimen||'Semi-integrado'}</div></div>
+      <div class="rrow"><div class="rlbl">Tasa IDPC aplicable</div><div class="rval acc">${((d.tasa||0.27)*100).toFixed(0)}%</div></div>
       <div class="rrow" style="border-top:1px solid var(--border2)">
-        <div class="rlbl" style="font-weight:800">IDPC Bruto</div>
-        <div class="rval r" style="font-weight:700">${fmt(d.idpcBruto)}</div>
+        <div class="rlbl" style="font-weight:800">IDPC Bruto (RLI × Tasa)</div>
+        <div class="rval r" style="font-weight:700">${fmt(idpcBruto)}</div>
       </div>
     </div>`;
+
+  // ══ CPT / RAI ════════════════════════════════════════════════
   } else if(tab==='cpt'){
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>CAPITAL PROPIO TRIBUTARIO</span></div>
+      <div class="dvd"><span>🏦 CAPITAL PROPIO TRIBUTARIO — Art.41 LIR</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:8px;">El CPT se determina al inicio del ejercicio. Se usa para calcular el RAI y el crédito por IDPC imputable a socios/accionistas.</div>
       <div class="rrow"><div class="rlbl">Total Activos (Activo Fijo + otros)</div><div class="rval acc">${fmt(d.totalActivoContable)}</div></div>
       <div class="rrow"><div class="rlbl">Total Pasivos</div><div class="rval r">-${fmt(d.totalPasivoContable)}</div></div>
       <div class="rrow" style="border-top:2px solid var(--acc);padding-top:8px;">
         <div class="rlbl" style="font-weight:800;font-size:13px">CPT</div>
         <div class="rval acc" style="font-size:16px;font-weight:800">${fmt(d.cpt)}</div>
       </div>
-      <div class="dvd"><span>RAI — RENTAS ACUMULADAS</span></div>
-      <div class="rrow"><div class="rlbl">Capital Aportado</div><div class="rval">${fmt(d.capitalAportado)}</div></div>
-      <div class="rrow"><div class="rlbl"><b>RAI estimado (CPT - Capital Aportado)</b></div><div class="rval" style="font-weight:700">${fmt(d.rai)}</div></div>
+      <div class="dvd"><span>RAI — RENTAS ACUMULADAS IMPUTABLES</span></div>
+      <div class="info-box" style="font-size:9px;margin-bottom:6px;">RAI = CPT - Capital Aportado - DDAN + REX negativo. Utilidades disponibles para distribución afectas a IGC/IA.</div>
+      <div class="rrow"><div class="rlbl">Capital Aportado (reajustado)</div><div class="rval">${fmt(d.capitalAportado)}</div></div>
+      <div class="rrow"><div class="rlbl"><b>RAI estimado (CPT - Capital Aportado)</b></div><div class="rval" style="font-weight:700;color:var(--purple)">${fmt(d.rai)}</div></div>
+      <div class="dvd"><span>REGISTROS EMPRESA — Art.14 LIR</span></div>
+      ${fld('DDAN — Diferencia depreciación acelerada/normal','',m.ddan||0,'ddan',false)}
+      ${fld('REX — Rentas exentas e ingresos no renta acumulados','',m.rex||0,'rex',false)}
+      ${fld('SAC — Saldo acumulado de créditos imputables','',m.sac||0,'sac',false)}
+      ${fld('Ingreso diferido (Art.14 D) N°8)','',m.ingDiferido||0,'ingDiferido',false)}
     </div>`;
+
+  // ══ CRÉDITOS 1ª CATEGORÍA ═════════════════════════════════════
   } else if(tab==='creditos'){
     el.innerHTML=`<div class="rbox" style="margin-top:10px;">
-      <div class="dvd"><span>CRÉDITOS CONTRA IDPC</span></div>
-      <div class="rrow"><div class="rlbl">PPM pagados en el año</div><div class="rval g">${fmt(d.ppmPagados)}</div></div>
-      <div class="rrow"><div class="rlbl">Crédito Art. 33 bis (6% activos nuevos)</div><div class="rval g">${fmt(d.cred33bisReal)}</div></div>
-      <div class="rrow"><div class="rlbl">Crédito CORFO</div><div class="rval g">${fmt(d.credCorfo)}</div></div>
-      <div class="rrow"><div class="rlbl">Otros créditos</div><div class="rval g">${fmt(d.otrosCred)}</div></div>
-      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Total Créditos</div><div class="rval g" style="font-weight:700">${fmt(d.totalCred)}</div></div>
-      <div class="dvd"><span>RESULTADO FINAL</span></div>
-      <div class="rrow"><div class="rlbl">IDPC Bruto</div><div class="rval r">${fmt(d.idpcBruto)}</div></div>
-      <div class="rrow"><div class="rlbl">(-) Total Créditos</div><div class="rval g">-${fmt(d.totalCred)}</div></div>
-      <div class="rrow" style="border-top:2px solid ${d.impNeto>0?'var(--red)':'var(--green)'};padding-top:8px;">
-        <div class="rlbl" style="font-weight:800;font-size:14px">${d.impNeto>0?'IMPUESTO NETO A PAGAR':'DEVOLUCIÓN A FAVOR'}</div>
-        <div class="rval" style="font-size:18px;font-weight:800;color:${d.impNeto>0?'var(--red)':'var(--green)'}">${fmt(d.impNeto>0?d.impNeto:d.devolucion)}</div>
+      <div class="dvd"><span>💳 CRÉDITOS CONTRA IDPC — 1ª CATEGORÍA</span></div>
+      <div class="rrow"><div class="rlbl">IDPC Bruto (RLI × ${((d.tasa||0.27)*100).toFixed(0)}%)</div><div class="rval r">${fmt(idpcBruto)}</div></div>
+      <div class="rrow"><div class="rlbl">PPM pagados en el año (auto/manual)</div><div class="rval g">-${fmt(ppmReal)}</div></div>
+      <div class="rrow"><div class="rlbl">Crédito Art.33 bis (6% activos nuevos)</div><div class="rval g">-${fmt(cred33bis)}</div></div>
+      ${fld('Crédito CORFO (manual)','',m.credCorfo||0,'credCorfo',false)}
+      ${fld('Otros créditos 1ª Categoría (manual)','',m.otrosCred||0,'otrosCred',false)}
+      <div class="rrow" style="border-top:1px solid var(--border2)"><div class="rlbl" style="font-weight:700">Total Créditos</div><div class="rval g" style="font-weight:700">-${fmt(totalCred1cat)}</div></div>
+      <div class="rrow" style="border-top:2px solid ${impNeto1cat>0?'var(--red)':'var(--green)'};padding-top:8px;margin-top:6px;">
+        <div class="rlbl" style="font-weight:800;font-size:14px">${impNeto1cat>0?'IDPC NETO A PAGAR':'DEVOLUCIÓN A FAVOR'}</div>
+        <div class="rval" style="font-size:18px;font-weight:800;color:${impNeto1cat>0?'var(--red)':'var(--green)'}">${fmt(impNeto1cat>0?impNeto1cat:devolucion1cat)}</div>
       </div>
+      <div class="dvd"><span>💹 RESUMEN CONSOLIDADO F-22 AT2026</span></div>
+      <div style="background:var(--purple2);border:2px solid var(--purple);border-radius:10px;padding:12px;margin-top:8px;">
+        <div style="font-size:11px;font-weight:800;color:var(--purple);margin-bottom:8px;">RESULTADO FINAL OPERACIÓN RENTA 2026</div>
+        <div class="rrow"><div class="rlbl">IDPC 1ª Categoría</div><div class="rval r">${fmt(impNeto1cat)}</div></div>
+        <div class="rrow"><div class="rlbl">IGC/IUSC</div><div class="rval ${impNeto_IGC>0?'r':'g'}">${impNeto_IGC>0?fmt(impNeto_IGC):'('+fmt(devolucionIGC)+')'}</div></div>
+        <div class="rrow" style="border-top:2px solid var(--purple);padding-top:6px;margin-top:4px;">
+          <div class="rlbl" style="font-weight:800;font-size:13px">TOTAL F-22 A PAGAR / (DEVOLVER)</div>
+          <div class="rval" style="font-size:16px;font-weight:800;color:var(--purple)">${fmt(impNeto1cat+Math.max(0,impNeto_IGC))}</div>
+        </div>
+        ${devolucionIGC>0||devolucion1cat>0?`<div class="rrow" style="margin-top:4px;"><div class="rlbl" style="color:var(--green);font-weight:700">Devolución total a solicitar</div><div class="rval g" style="font-weight:700">${fmt(devolucionIGC+devolucion1cat)}</div></div>`:''}
+      </div>
+      <div class="info-box" style="margin-top:10px;font-size:9px;">📌 Declaración AT2026 vence: 30 de abril de 2026. Declara en <a href="https://homer.sii.cl" target="_blank" style="color:var(--acc)">sii.cl</a> → Operación Renta → F-22.</div>
     </div>`;
+
+  // ══ AJUSTES MANUALES ══════════════════════════════════════════
   } else {
-    const sv=(id,field)=>`onchange="if(!DB().f22Manual)DB().f22Manual={};DB().f22Manual.${field}=+this.value||0;save()"`;
     el.innerHTML=`<div class="fgrid" style="margin-top:10px;">
-      <div class="info-box">✏️ Ajustes manuales para completar el cálculo. Los campos auto se calculan desde tus libros.</div>
-      <div class="dvd"><span>INGRESOS ADICIONALES</span></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Otros ingresos</div><input class="fi" type="number" value="${m.otrosIng||0}" ${sv('','otrosIng')}></div>
-        <div><div class="fl" style="color:var(--orange)">Ingresos financieros</div><input class="fi" type="number" value="${m.ingFin||0}" ${sv('','ingFin')}></div></div>
-      <div class="dvd"><span>GASTOS ADICIONALES</span></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Arriendos</div><input class="fi" type="number" value="${m.arriendos||0}" ${sv('','arriendos')}></div>
-        <div><div class="fl" style="color:var(--orange)">Intereses</div><input class="fi" type="number" value="${m.intereses||0}" ${sv('','intereses')}></div></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Donaciones</div><input class="fi" type="number" value="${m.donaciones||0}" ${sv('','donaciones')}></div>
-        <div><div class="fl" style="color:var(--orange)">Otros gastos</div><input class="fi" type="number" value="${m.otrosGastos||0}" ${sv('','otrosGastos')}></div></div>
-      <div class="dvd"><span>AJUSTES RLI</span></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Agregados RLI</div><input class="fi" type="number" value="${m.rliAgregados||0}" ${sv('','rliAgregados')}></div>
-        <div><div class="fl" style="color:var(--orange)">Deducciones RLI</div><input class="fi" type="number" value="${m.rliDeducciones||0}" ${sv('','rliDeducciones')}></div></div>
+      <div class="info-box">✏️ Ajustes manuales para completar el cálculo. Los campos <b>auto</b> se calculan desde tus libros de compras, ventas, remuneraciones y activos.</div>
+      <div class="dvd"><span>INGRESOS ADICIONALES (para RLI 1ª Cat.)</span></div>
+      <div class="frow h2">
+        <div><div class="fl">Otros ingresos</div><input class="fi" type="number" value="${m.otrosIng||0}" ${sv('otrosIng')}></div>
+        <div><div class="fl">Ingresos financieros</div><input class="fi" type="number" value="${m.ingFin||0}" ${sv('ingFin')}></div>
+      </div>
+      <div class="dvd"><span>GASTOS ADICIONALES (para RLI 1ª Cat.)</span></div>
+      <div class="frow h2">
+        <div><div class="fl">Arriendos</div><input class="fi" type="number" value="${m.arriendos||0}" ${sv('arriendos')}></div>
+        <div><div class="fl">Intereses</div><input class="fi" type="number" value="${m.intereses||0}" ${sv('intereses')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Donaciones</div><input class="fi" type="number" value="${m.donaciones||0}" ${sv('donaciones')}></div>
+        <div><div class="fl">Otros gastos</div><input class="fi" type="number" value="${m.otrosGastos||0}" ${sv('otrosGastos')}></div>
+      </div>
+      <div class="dvd"><span>AJUSTES RLI 1ª CATEGORÍA</span></div>
+      <div class="frow h2">
+        <div><div class="fl">Agregados RLI</div><input class="fi" type="number" value="${m.rliAgregados||0}" ${sv('rliAgregados')}></div>
+        <div><div class="fl">Deducciones RLI</div><input class="fi" type="number" value="${m.rliDeducciones||0}" ${sv('rliDeducciones')}></div>
+      </div>
+      <div class="dvd"><span>RENTAS ANVERSO F-22 (IGC/IUSC)</span></div>
+      <div class="frow h2">
+        <div><div class="fl">Retiros/Remesas afectos IGC (Cód 1592)</div><input class="fi" type="number" value="${m.retiros1592||0}" ${sv('retiros1592')}></div>
+        <div><div class="fl">Dividendos afectos IGC (Cód 1594)</div><input class="fi" type="number" value="${m.dividendos1594||0}" ${sv('dividendos1594')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Honorarios adicionales/Directores (Cód 110)</div><input class="fi" type="number" value="${m.honAdicional||0}" ${sv('honAdicional')}></div>
+        <div><div class="fl">Sueldos/Pensiones fuente nacional (Cód 1098)</div><input class="fi" type="number" value="${m.sueldos1098||0}" ${sv('sueldos1098')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Incremento IDPC (Cód 159)</div><input class="fi" type="number" value="${m.incrementoIDPC||0}" ${sv('incrementoIDPC')}></div>
+        <div><div class="fl">Capitales mobiliarios (Cód 605)</div><input class="fi" type="number" value="${m.capMob||0}" ${sv('capMob')}></div>
+      </div>
+      <div class="dvd"><span>REBAJAS A LA RENTA (IGC)</span></div>
+      <div class="frow h2">
+        <div><div class="fl">Imp. Territorial pagado 2025 (Cód 166)</div><input class="fi" type="number" value="${m.impTerritorial||0}" ${sv('impTerritorial')}></div>
+        <div><div class="fl">Cotizaciones previsionales socio (Cód 111)</div><input class="fi" type="number" value="${m.cotizSocio||0}" ${sv('cotizSocio')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Intereses hipotecarios (Cód 750)</div><input class="fi" type="number" value="${m.interesHipot||0}" ${sv('interesHipot')}></div>
+        <div><div class="fl">APV Art.42 bis (Cód 765)</div><input class="fi" type="number" value="${m.ahorroPrevision||0}" ${sv('ahorroPrevision')}></div>
+      </div>
       <div class="dvd"><span>CPT / PATRIMONIO</span></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Capital aportado</div><input class="fi" type="number" value="${m.capitalAportado||0}" ${sv('','capitalAportado')}></div>
-        <div><div class="fl" style="color:var(--orange)">Otros activos</div><input class="fi" type="number" value="${m.otrosActivos||0}" ${sv('','otrosActivos')}></div></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">Pasivos / Deudas</div><input class="fi" type="number" value="${m.otrasDeudasPasivo||0}" ${sv('','otrasDeudasPasivo')}></div>
-        <div><div class="fl" style="color:var(--orange)">Rentas exentas</div><input class="fi" type="number" value="${m.renExentas||0}" ${sv('','renExentas')}></div></div>
-      <div class="dvd"><span>CRÉDITOS</span></div>
-      <div class="frow h2"><div><div class="fl" style="color:var(--orange)">PPM real pagado</div><input class="fi" type="number" value="${m.ppmPagado||0}" ${sv('','ppmPagado')}></div>
-        <div><div class="fl" style="color:var(--orange)">Crédito CORFO</div><input class="fi" type="number" value="${m.credCorfo||0}" ${sv('','credCorfo')}></div></div>
-      <div class="frow"><div><div class="fl" style="color:var(--orange)">Otros créditos</div><input class="fi" type="number" value="${m.otrosCred||0}" ${sv('','otrosCred')}></div></div>
+      <div class="frow h2">
+        <div><div class="fl">Capital aportado</div><input class="fi" type="number" value="${m.capitalAportado||0}" ${sv('capitalAportado')}></div>
+        <div><div class="fl">Otros activos</div><input class="fi" type="number" value="${m.otrosActivos||0}" ${sv('otrosActivos')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Pasivos/Deudas</div><input class="fi" type="number" value="${m.otrasDeudasPasivo||0}" ${sv('otrasDeudasPasivo')}></div>
+        <div><div class="fl">DDAN (dep. acelerada)</div><input class="fi" type="number" value="${m.ddan||0}" ${sv('ddan')}></div>
+      </div>
+      <div class="dvd"><span>CRÉDITOS IGC</span></div>
+      <div class="frow h2">
+        <div><div class="fl">IDPC con derecho devolución (Cód 610)</div><input class="fi" type="number" value="${m.credIDPCDevol||0}" ${sv('credIDPCDevol')}></div>
+        <div><div class="fl">IDPC sin derecho devolución (Cód 608)</div><input class="fi" type="number" value="${m.credIDPCSinDevol||0}" ${sv('credIDPCSinDevol')}></div>
+      </div>
+      <div class="frow h2">
+        <div><div class="fl">Crédito PPM real pagado</div><input class="fi" type="number" value="${m.ppmPagado||0}" ${sv('ppmPagado')}></div>
+        <div><div class="fl">Crédito CORFO</div><input class="fi" type="number" value="${m.credCorfo||0}" ${sv('credCorfo')}></div>
+      </div>
+      <div class="frow"><div><div class="fl">Otros créditos 1ª Cat.</div><input class="fi" type="number" value="${m.otrosCred||0}" ${sv('otrosCred')}></div></div>
       <button class="btn purple full" style="margin-top:12px;" onclick="guardarF22();go('f22')">💾 Guardar y Recalcular</button>
     </div>`;
   }
 }
-
 function guardarF22(){
   save();toast('✅ F-22 guardado','ok');
+}
+
+function exportF22Excel(){
+  const db=DB();const d=calcDatosRenta();const m=db.f22Manual||{};const cfg=CFG();
+  const at='AT'+(d.año+1);
+  const honTotal=(d.tHon||0)+(+(m.honAdicional||0));
+  const totalAnverso=(+(m.retiros1592||0))+(+(m.dividendos1594||0))+(+(m.gastosRech||0))+(+(m.rentaPresunta||0))+honTotal+(+(m.capMob||0))+(+(m.rentasExentas||0))+(+(m.sueldos1098||0))+(+(m.incrementoIDPC||0))+(+(m.otrasRentas||0));
+  const totalRebajas=(+(m.impTerritorial||0))+(+(m.donaciones907||0))+(+(m.perdCapMob||0))+(+(m.cotizSocio||0))+(+(m.interesHipot||0))+(+(m.ahorroPrevision||0))+(+(m.otrasRebajas||0));
+  const baseIGC=Math.max(0,totalAnverso-totalRebajas);
+  function calcIGC(b){if(b<=0)return 0;const t=[[0,11265804,0,0],[11265804.01,25035120,0.04,450632],[25035120.01,41725200,0.08,1452037],[41725200.01,58415280,0.135,3746923],[58415280.01,75105360,0.23,9296375],[75105360.01,100140480,0.304,14854171],[100140480.01,258696240,0.35,19460633],[258696240.01,Infinity,0.40,32397949]];const r=t.find(x=>b>=x[0]&&b<=x[1]);return r?Math.max(0,Math.round(b*r[2]-r[3])):0;}
+  const igc=calcIGC(baseIGC);
+  const credIGC=(+(m.credIDPCDevol||0))+(+(m.credIDPCSinDevol||0))+(+(m.credGastoEduc||0))+(+(m.credDonSociales||0))+(+(m.credExterior||0))+(+(m.credIUSC||0))+(+(m.credOtrosIGC||0));
+  const ppmReal=(+(m.ppmPagado||0))||d.ppmPagados;
+  const totalCred1cat=ppmReal+d.cred33bisReal+(+(m.credCorfo||0))+(+(m.otrosCred||0));
+  const rows=[
+    ['FORMULARIO 22 — OPERACIÓN RENTA '+at],
+    ['Empresa:',cfg.emp||'','RUT:',cfg.rut||''],
+    ['Año Tributario:',at,'Régimen:',d.regimen||''],
+    ['',''],
+    ['ANVERSO — RENTAS BRUTAS AFECTAS','CÓDIGO','MONTO'],
+    ['Retiros/Remesas afectos IGC/IA (Lín.1)','1592',+(m.retiros1592||0)],
+    ['Dividendos afectos IGC/IA (Lín.2)','1594',+(m.dividendos1594||0)],
+    ['Gastos rechazados Art.21 (Lín.3)','106',+(m.gastosRech||0)],
+    ['Renta presunta (Lín.4)','603',+(m.rentaPresunta||0)],
+    ['Honorarios Art.42 N°2 / Directores (Lín.7)','110',honTotal],
+    ['Capitales mobiliarios (Lín.8)','605',+(m.capMob||0)],
+    ['Rentas exentas (Lín.9)','1633',+(m.rentasExentas||0)],
+    ['Sueldos/Pensiones (Lín.13)','1098',+(m.sueldos1098||0)],
+    ['Incremento IDPC (Lín.14)','159',+(m.incrementoIDPC||0)],
+    ['TOTAL ANVERSO','',totalAnverso],
+    [''],
+    ['REBAJAS A LA RENTA','CÓDIGO','MONTO'],
+    ['Impuesto Territorial 2025 (Lín.15)','166',+(m.impTerritorial||0)],
+    ['Cotizaciones previsionales socio (Lín.20)','111',+(m.cotizSocio||0)],
+    ['Intereses hipotecarios (Lín.21)','750',+(m.interesHipot||0)],
+    ['APV Art.42 bis (Lín.23)','765',+(m.ahorroPrevision||0)],
+    ['TOTAL REBAJAS','',totalRebajas],
+    ['BASE IMPONIBLE ANUAL IGC/IUSC (Lín.24)','170',baseIGC],
+    [''],
+    ['IGC/IUSC','CÓDIGO','MONTO'],
+    ['IGC/IUSC calculado Art.52 LIR (Lín.25)','157',igc],
+    ['Crédito IDPC con devolución (Lín.48)','610',+(m.credIDPCDevol||0)],
+    ['Crédito IDPC sin devolución (Lín.37)','608',+(m.credIDPCSinDevol||0)],
+    ['Crédito gastos educación (Lín.41)','895',+(m.credGastoEduc||0)],
+    ['Total créditos IGC','',credIGC],
+    ['IGC/IUSC NETO A PAGAR','',Math.max(0,igc-credIGC)],
+    [''],
+    ['1ª CATEGORÍA — RLI','',''],
+    ['Ventas/Ingresos giro (auto)','',d.netoV],
+    ['Costo Ventas (auto)','',-(d.netoC||0)],
+    ['Remuneraciones (auto)','',-(d.tRemu||0)],
+    ['Honorarios (auto)','',-(d.tHon||0)],
+    ['Depreciación (auto)','',-(d.tDep||0)],
+    ['Utilidad Bruta','',d.utBruta],
+    ['RLI Final','',d.rli],
+    ['Tasa IDPC','',(d.tasa||0.27)*100+'%'],
+    ['IDPC Bruto','',d.idpcBruto],
+    ['PPM pagados (auto/manual)','',ppmReal],
+    ['Total créditos 1ª Cat.','',totalCred1cat],
+    ['IDPC NETO A PAGAR','',Math.max(0,d.idpcBruto-totalCred1cat)],
+  ];
+  try{
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:45},{wch:10},{wch:18}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,ws,'F-22 '+at);
+    XLSX.writeFile(wb,'F22_'+at+'.xlsx');
+    toast('✅ F-22 Excel exportado','ok');
+  }catch(e){toast('Error: '+e.message,'err');}
+}
+
+function exportF22PDF(){
+  const db=DB();const d=calcDatosRenta();const m=db.f22Manual||{};const cfg=CFG();
+  const at='AT'+(d.año+1);
+  const honTotal=(d.tHon||0)+(+(m.honAdicional||0));
+  const totalAnverso=(+(m.retiros1592||0))+(+(m.dividendos1594||0))+(+(m.gastosRech||0))+(+(m.rentaPresunta||0))+honTotal+(+(m.capMob||0))+(+(m.rentasExentas||0))+(+(m.sueldos1098||0))+(+(m.incrementoIDPC||0))+(+(m.otrasRentas||0));
+  const totalRebajas=(+(m.impTerritorial||0))+(+(m.donaciones907||0))+(+(m.perdCapMob||0))+(+(m.cotizSocio||0))+(+(m.interesHipot||0))+(+(m.ahorroPrevision||0))+(+(m.otrasRebajas||0));
+  const baseIGC=Math.max(0,totalAnverso-totalRebajas);
+  function calcIGC(b){if(b<=0)return 0;const t=[[0,11265804,0,0],[11265804.01,25035120,0.04,450632],[25035120.01,41725200,0.08,1452037],[41725200.01,58415280,0.135,3746923],[58415280.01,75105360,0.23,9296375],[75105360.01,100140480,0.304,14854171],[100140480.01,258696240,0.35,19460633],[258696240.01,Infinity,0.40,32397949]];const r=t.find(x=>b>=x[0]&&b<=x[1]);return r?Math.max(0,Math.round(b*r[2]-r[3])):0;}
+  const igc=calcIGC(baseIGC);
+  const credIGC=(+(m.credIDPCDevol||0))+(+(m.credIDPCSinDevol||0))+(+(m.credGastoEduc||0))+(+(m.credDonSociales||0))+(+(m.credExterior||0))+(+(m.credIUSC||0))+(+(m.credOtrosIGC||0));
+  const ppmReal=(+(m.ppmPagado||0))||d.ppmPagados;
+  const totalCred1cat=ppmReal+d.cred33bisReal+(+(m.credCorfo||0))+(+(m.otrosCred||0));
+  const impNeto1cat=Math.max(0,d.idpcBruto-totalCred1cat);
+  const devol1cat=Math.max(0,totalCred1cat-d.idpcBruto);
+  const impNetoIGC=Math.max(0,igc-credIGC);
+  const devolIGC=Math.max(0,credIGC-igc);
+  const fmt2=(v)=>v?'$'+v.toLocaleString('es-CL'):'$0';
+  const row=(label,cod,val,bold,color)=>`<tr style="border-bottom:1px solid #e5e7eb;${bold?'font-weight:700;background:#f8fafc;':''}">
+    <td style="padding:5px 8px;font-size:10px;">${label}</td>
+    <td style="padding:5px 8px;text-align:center;font-size:9px;color:#7c3aed;">${cod||''}</td>
+    <td style="padding:5px 8px;text-align:right;font-family:monospace;font-size:10px;color:${color||'inherit'};">${val}</td>
+  </tr>`;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>F-22 ${at}</title>
+  <style>body{font-family:Arial,sans-serif;font-size:10px;color:#1e293b;margin:15px;}
+  h1{font-size:14px;margin:0;text-align:center;}h2{font-size:10px;text-align:center;color:#6b7280;margin:4px 0 10px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:10px;}
+  th{background:#7c3aed;color:#fff;padding:5px 8px;text-align:left;font-size:9px;}
+  .sec{background:#f5f3ff;font-weight:800;font-size:9px;color:#7c3aed;padding:4px 8px;letter-spacing:.5px;}
+  .tot{background:#1e293b;}.tot td{color:#fff;font-weight:800;}
+  .res{background:#7c3aed;padding:12px;border-radius:8px;color:#fff;margin-top:10px;}
+  @media print{@page{margin:1.5cm;size:portrait;}}</style></head><body>
+  <div style="text-align:center;margin-bottom:12px;border-bottom:2px solid #7c3aed;padding-bottom:10px;">
+    <h1>FORMULARIO 22 — OPERACIÓN RENTA ${at}</h1>
+    <h2>${cfg.emp||''} · RUT: ${cfg.rut||''} · Año Comercial ${d.año} · Régimen: ${d.regimen||''}</h2>
+  </div>
+  <table>
+    <thead><tr><th style="width:55%">Concepto</th><th style="width:10%;text-align:center">Cód</th><th style="width:35%;text-align:right">Monto</th></tr></thead>
+    <tbody>
+    <tr><td colspan="3" class="sec">ANVERSO — RENTAS BRUTAS AFECTAS (Líneas 1-14)</td></tr>
+    ${+(m.retiros1592||0)?row('Retiros/Remesas afectos IGC Art.14 (Lín.1)','1592',fmt2(+(m.retiros1592||0))):''}
+    ${+(m.dividendos1594||0)?row('Dividendos afectos IGC Art.14 (Lín.2)','1594',fmt2(+(m.dividendos1594||0))):''}
+    ${+(m.gastosRech||0)?row('Gastos rechazados Art.21 inc.3° (Lín.3)','106',fmt2(+(m.gastosRech||0))):''}
+    ${honTotal?row('Honorarios Art.42 N°2 / Directores Art.48 (Lín.7)','110',fmt2(honTotal)):''}
+    ${+(m.sueldos1098||0)?row('Sueldos/Pensiones fuente nacional (Lín.13)','1098',fmt2(+(m.sueldos1098||0))):''}
+    ${+(m.incrementoIDPC||0)?row('Incremento por IDPC Art.54 N°1 (Lín.14)','159',fmt2(+(m.incrementoIDPC||0))):''}
+    ${row('TOTAL ANVERSO','',fmt2(totalAnverso),true)}
+    <tr><td colspan="3" class="sec">REBAJAS A LA RENTA (Líneas 15-24)</td></tr>
+    ${+(m.impTerritorial||0)?row('Impuesto Territorial 2025 (Lín.15)','166',fmt2(+(m.impTerritorial||0))):''}
+    ${+(m.cotizSocio||0)?row('Cotizaciones previsionales socio (Lín.20)','111',fmt2(+(m.cotizSocio||0))):''}
+    ${+(m.interesHipot||0)?row('Intereses hipotecarios (Lín.21)','750',fmt2(+(m.interesHipot||0))):''}
+    ${+(m.ahorroPrevision||0)?row('APV Art.42 bis (Lín.23)','765',fmt2(+(m.ahorroPrevision||0))):''}
+    ${row('TOTAL REBAJAS','',fmt2(totalRebajas),true)}
+    ${row('BASE IMPONIBLE ANUAL IGC/IUSC (Lín.24)','170',fmt2(baseIGC),true,'#7c3aed')}
+    <tr><td colspan="3" class="sec">IGC/IUSC — Art.52 LIR (Tabla AT2026)</td></tr>
+    ${row('IGC/IUSC calculado (Lín.25)','157',fmt2(igc))}
+    ${credIGC?row('Total créditos IGC','',fmt2(credIGC)):''}
+    ${row(impNetoIGC>0?'IGC/IUSC NETO A PAGAR':'DEVOLUCIÓN IGC','',fmt2(impNetoIGC>0?impNetoIGC:devolIGC),true,impNetoIGC>0?'#dc2626':'#16a34a')}
+    <tr><td colspan="3" class="sec">1ª CATEGORÍA — RENTA LÍQUIDA IMPONIBLE</td></tr>
+    ${row('Ventas/Ingresos giro (auto)','',fmt2(d.netoV))}
+    ${row('Gastos totales (auto)','',fmt2(d.totalGastos||0),'','')}
+    ${row('Utilidad Bruta','',fmt2(d.utBruta))}
+    ${row('RLI Final','',fmt2(d.rli),true,'#7c3aed')}
+    ${row('IDPC Bruto (RLI × '+(((d.tasa||0.27)*100).toFixed(0))+'%)','',fmt2(d.idpcBruto))}
+    ${row('PPM pagados en el año','',fmt2(ppmReal),'','')}
+    ${d.cred33bisReal?row('Crédito Art.33 bis','',fmt2(d.cred33bisReal)):''}
+    ${row('TOTAL CRÉDITOS 1ª CAT.','',fmt2(totalCred1cat),'','')}
+    ${row(impNeto1cat>0?'IDPC NETO A PAGAR':'DEVOLUCIÓN 1ª CAT.','',fmt2(impNeto1cat>0?impNeto1cat:devol1cat),true,impNeto1cat>0?'#dc2626':'#16a34a')}
+    </tbody>
+  </table>
+  <div style="background:#7c3aed;border-radius:8px;padding:12px;color:#fff;text-align:center;">
+    <div style="font-size:11px;font-weight:700;margin-bottom:6px;">RESULTADO FINAL F-22 ${at}</div>
+    <div style="display:flex;justify-content:space-around;">
+      <div><div style="font-size:9px;opacity:.8">IDPC 1ª Categoría</div><div style="font-size:13px;font-weight:700;">${fmt2(impNeto1cat)}</div></div>
+      <div><div style="font-size:9px;opacity:.8">IGC/IUSC</div><div style="font-size:13px;font-weight:700;">${fmt2(impNetoIGC)}</div></div>
+      <div><div style="font-size:9px;opacity:.8">DEVOLUCIÓN</div><div style="font-size:13px;font-weight:700;">${fmt2(devolIGC+devol1cat)}</div></div>
+    </div>
+  </div>
+  <div style="font-size:9px;color:#64748b;text-align:center;margin-top:8px;">Generado: ${new Date().toLocaleString('es-CL')} · Declara en sii.cl → Operación Renta → F-22 · Vence 30 Abril ${d.año+1}</div>
+  <script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank','width=800,height=700');
+  if(w){w.document.write(html);w.document.close();}
+  else toast('Habilita ventanas emergentes','warn');
 }
 
 // ── renderEstFin wrapper ─────────────────────────────────────────────
@@ -17108,6 +18090,8 @@ function renderVacac(){
   return `<div class="card">
     <div class="card-hdr"><div class="ci" style="background:var(--pink2)">🌴</div><div><div class="ct">Vacaciones</div><div class="cs">${vacs.length} solicitudes registradas</div></div>
       <button class="btn pink sm" onclick="addVacacion()">➕ Nueva</button>
+      <button class="btn success sm" onclick="exportVacaciones()">📊 Excel</button>
+      <button class="btn err sm" onclick="pdfVacaciones()">📄 PDF</button>
     </div>
     <div class="card-body">
       <div class="info-box" style="margin-bottom:12px;">Art. 67 CT: 15 días hábiles anuales con remuneración íntegra. Sábados son hábiles para vacaciones. Derecho se devenga tras 1 año de servicio.</div>
@@ -21243,6 +22227,48 @@ function exportTrabajadores(){
       ...trabs.map(t=>[t.id||'',t.nombre||'',t.rut||'',t.cargo||'',t.sueldo||t.sb||0,t.contrato||'',t.afp||'',t.salud||'',t.banco||'',t.cuenta||'',t.fi||t.ingreso||'',t.estado||'Activo'])];
     modXLSX('Trabajadores',[{name:'Trabajadores',aoa,cols:[{wch:5},{wch:30},{wch:14},{wch:20},{wch:12},{wch:14},{wch:12},{wch:14},{wch:18},{wch:14},{wch:14},{wch:10}]}]);
   }catch(e){toast('Error XLSX: '+e.message,'err');}
+}
+
+// Vacaciones → PDF
+function pdfVacaciones(){
+  const vacs=DB().vacaciones||[];
+  const emp=DB();
+  const hoy=new Date().toLocaleDateString('es-CL');
+  const filas=vacs.map((v,i)=>`<tr style="background:${i%2?'#f9f9f9':'#fff'}">
+    <td style="padding:5px 8px;">${v.nombre||'-'}</td>
+    <td style="padding:5px 8px;">${v.rut||'-'}</td>
+    <td style="padding:5px 8px;">${v.fini||'-'}</td>
+    <td style="padding:5px 8px;">${v.ffin||'-'}</td>
+    <td style="padding:5px 8px;text-align:center;">${v.dias||0}</td>
+    <td style="padding:5px 8px;text-align:right;">$${(v.sueldo||0).toLocaleString('es-CL')}</td>
+    <td style="padding:5px 8px;text-align:right;color:green;">$${(v.monto||0).toLocaleString('es-CL')}</td>
+    <td style="padding:5px 8px;text-align:center;"><span style="padding:2px 6px;border-radius:4px;background:${v.estado==='Aprobada'?'#d1fae5':v.estado==='Rechazada'?'#fee2e2':'#fef3c7'};color:${v.estado==='Aprobada'?'#065f46':v.estado==='Rechazada'?'#991b1b':'#92400e'}">${v.estado||'Pendiente'}</span></td>
+  </tr>`).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vacaciones — ${emp.nombre||''}</title>
+  <style>body{font-family:'Times New Roman',serif;font-size:10pt;color:#111;margin:20px;}
+  h2{text-align:center;font-size:13pt;margin-bottom:4px;}
+  .sub{text-align:center;font-size:9pt;color:#555;margin-bottom:16px;}
+  table{width:100%;border-collapse:collapse;font-size:9pt;}
+  th{background:#1e293b;color:#fff;padding:6px 8px;text-align:left;font-size:8pt;}
+  .tot{font-weight:bold;background:#f1f5f9;}
+  @media print{body{margin:10mm;}}</style></head><body>
+  <h2>REGISTRO DE VACACIONES</h2>
+  <div class="sub">${emp.nombre||''} · RUT: ${emp.cfg&&emp.cfg.rut||''} · Generado: ${hoy}</div>
+  <div style="font-size:8pt;color:#666;margin-bottom:10px;border:1px solid #ddd;padding:6px;border-radius:4px;">
+    ⚖️ Art. 67 CT: 15 días hábiles anuales con remuneración íntegra. Sábados son hábiles para vacaciones.
+  </div>
+  <table><thead><tr>
+    <th>Trabajador</th><th>RUT</th><th>Inicio</th><th>Fin</th><th style="text-align:center">Días</th>
+    <th style="text-align:right">Sueldo</th><th style="text-align:right">Monto</th><th style="text-align:center">Estado</th>
+  </tr></thead><tbody>${filas||'<tr><td colspan="8" style="text-align:center;padding:20px;color:#888;">Sin registros de vacaciones</td></tr>'}</tbody>
+  <tfoot><tr class="tot"><td colspan="4" style="padding:5px 8px;">TOTAL</td>
+    <td style="padding:5px 8px;text-align:center;">${vacs.reduce((a,v)=>a+(v.dias||0),0)}</td>
+    <td></td>
+    <td style="padding:5px 8px;text-align:right;color:green;">$${vacs.reduce((a,v)=>a+(v.monto||0),0).toLocaleString('es-CL')}</td>
+    <td></td></tr></tfoot></table>
+  <script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html); w.document.close();
 }
 
 // Vacaciones → Excel
