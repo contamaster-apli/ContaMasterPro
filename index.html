@@ -1386,6 +1386,251 @@ function activarDemo(){
     {id:2,trabajadorId:4,nombre:'Diego Hernán Contreras Pinto',monto:300000,cuotas:6,pagadas:1,fechaOtorg:fIso(anio,mes-1,15),obs:'Anticipo vacaciones',activo:true},
   ];
 
+  // ── Horarios ficticios (formato clave mes-anio) ──
+  const claveHor = `${String(mes).padStart(2,'0')}-${anio}`;
+  const horarios = [];
+  // Turno mañana: trabajadores 1,2,4,7 (idx 0,1,3,6)
+  [[1,1],[2,1],[4,2],[7,2],[3,2],[8,2]].forEach(([trabId,jorId],i)=>{
+    const diasMes = new Date(anio,mes,0).getDate();
+    const dias = [];
+    for(let d=1;d<=diasMes;d++){
+      const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(fecha+'T12:00:00');
+      const diaSem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][dt.getDay()];
+      const esDom=dt.getDay()===0;
+      const esDescanso=(dt.getDay()===(i%6)+1); // día libre escalonado
+      const jor=jorId===1?{entrada:'06:00',salida:'13:30'}:{entrada:'13:30',salida:'21:00'};
+      dias.push({fecha,diaSem,tipo:esDom||esDescanso?'descanso':'trabajo',
+        entrada:esDom||esDescanso?'':jor.entrada,salida:esDom||esDescanso?'':jor.salida,
+        colacion:30,nota:esDom?'Descanso dominical':esDescanso?'Descanso semanal':''});
+    }
+    horarios.push({trabajadorId:trabId,jornadaId:jorId,clave:claveHor,dias});
+  });
+  // Administrativos 5,6 (5x2)
+  [5,6].forEach((trabId,i)=>{
+    const diasMes=new Date(anio,mes,0).getDate(); const dias=[];
+    for(let d=1;d<=diasMes;d++){
+      const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      const dt=new Date(fecha+'T12:00:00');
+      const diaSem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][dt.getDay()];
+      const esFinde=dt.getDay()===0||dt.getDay()===6;
+      dias.push({fecha,diaSem,tipo:esFinde?'descanso':'trabajo',
+        entrada:esFinde?'':'08:30',salida:esFinde?'':'18:00',colacion:60,nota:''});
+    }
+    horarios.push({trabajadorId:trabId,jornadaId:3,clave:claveHor,dias});
+  });
+
+  // ── Finiquitos ficticios ──
+  const finiquitos=[
+    {id:9001,fecha:fIso(anio,mes-1,28),nombre:'Rodrigo Andrés Pino Soto',rut:'11.222.333-4',
+     cargo:'Conductor',depto:'Operaciones',trabajadorId:99,causal:'159_4',
+     fi:fIso(anio-1,mes,1),ft:fIso(anio,mes-1,28),dias:365,vacDias:15,
+     sb:630000,indemnizacion:0,aviso:630000,vacaciones:315000,afc:189000,
+     totalBruto:1134000,descuentos:0,totalNeto:1134000,cuotas:'1',
+     adj_indem:'',adj_aviso:'',adj_vac:'',adj_afc:'',periodo:`${anio}-${String(mes-1).padStart(2,'0')}`},
+    {id:9002,fecha:fIso(anio,mes,5),nombre:'Carmen Gloria Tapia Rojas',rut:'12.333.444-5',
+     cargo:'Inspectora',depto:'Operaciones',trabajadorId:98,causal:'161_emp',
+     fi:fIso(anio-2,3,1),ft:fIso(anio,mes,5),dias:730,vacDias:20,
+     sb:580000,indemnizacion:1160000,aviso:580000,vacaciones:386667,afc:174000,
+     totalBruto:2300667,descuentos:0,totalNeto:2300667,cuotas:'3',
+     adj_indem:'',adj_aviso:'',adj_vac:'',adj_afc:'',periodo:`${anio}-${String(mes).padStart(2,'0')}`},
+  ];
+
+  // ── Ausencias ficticias ──
+  const ausencias=[
+    {id:1,trabajadorId:4,desde:fIso(anio,mes,7),hasta:fIso(anio,mes,9),
+     tipo:'Licencia médica',dias:3,estado:'Aprobada',obs:'Licencia médica código 1 — gripe'},
+    {id:2,trabajadorId:7,desde:fIso(anio,mes,14),hasta:fIso(anio,mes,14),
+     tipo:'Permiso sin goce',dias:1,estado:'Aprobada',obs:'Trámites personales'},
+    {id:3,trabajadorId:2,desde:fIso(anio,mes,21),hasta:fIso(anio,mes,22),
+     tipo:'Accidente laboral',dias:2,estado:'Pendiente',obs:'Revisión en mutualidad'},
+  ];
+
+  // ── Estado Financiero semanal ──
+  const conceptosEF=[
+    {id:'c1',nombre:'Ingresos servicios transporte',tipo:'ingreso',categoria:'Operacional'},
+    {id:'c2',nombre:'Combustible',tipo:'egreso',categoria:'Operacional'},
+    {id:'c3',nombre:'Remuneraciones',tipo:'egreso',categoria:'RRHH'},
+    {id:'c4',nombre:'Seguros',tipo:'egreso',categoria:'Gastos Fijos'},
+    {id:'c5',nombre:'Mantención vehículos',tipo:'egreso',categoria:'Operacional'},
+  ];
+  const wkBase=`${anio}-W${String(Math.ceil(new Date(anio,mes-1,7).getDate()/7)+1).padStart(2,'0')}`;
+  const semanasEF=[
+    {semana:`${anio}-W${String(Math.ceil(mes*4-3)).padStart(2,'0')}`,saldoInicial:2500000,
+     valores:{c1:3200000,c2:850000,c3:1462500,c4:291550,c5:170000},movimientos:{}},
+    {semana:`${anio}-W${String(Math.ceil(mes*4-2)).padStart(2,'0')}`,saldoInicial:926950,
+     valores:{c1:2800000,c2:920000,c3:1462500,c4:0,c5:85000},movimientos:{}},
+    {semana:`${anio}-W${String(Math.ceil(mes*4-1)).padStart(2,'0')}`,saldoInicial:1259450,
+     valores:{c1:3500000,c2:780000,c3:1462500,c4:291550,c5:0},movimientos:{}},
+  ];
+  const estadoFin={conceptos:conceptosEF,semanas:semanasEF,meses:[],categorias:{}};
+
+  // ── Flujo de Caja ──
+  const flujoCaja={
+    conceptos:[
+      {id:'f1',nombre:'Cobro clientes',tipo:'ingreso'},{id:'f2',nombre:'Pago proveedores',tipo:'egreso'},
+      {id:'f3',nombre:'Remuneraciones',tipo:'egreso'},{id:'f4',nombre:'Combustible',tipo:'egreso'},
+    ],
+    semanas:[
+      {semana:`${anio}-W${String(mes*4-3).padStart(2,'0')}`,saldoInicial:3000000,valores:{f1:3808000,f2:499800,f3:1462500,f4:850000}},
+      {semana:`${anio}-W${String(mes*4-2).padStart(2,'0')}`,saldoInicial:4995700,valores:{f1:2142000,f2:1166200,f3:0,f4:920000}},
+    ]
+  };
+
+  // ── Cuentas Fijas ──
+  const cuentasFijas=[
+    {id:1,nombre:'Arriendo oficina Linares',categoria:'Arriendo',monto:350000,dia:1,icono:'🏢',descripcion:'Arriendo mensual oficinas Av. Valentín Letelier',activa:true,pagos:{}},
+    {id:2,nombre:'Internet fibra óptica',categoria:'Servicios',monto:45000,dia:5,icono:'🌐',descripcion:'Internet empresarial 300Mbps',activa:true,pagos:{}},
+    {id:3,nombre:'Telefonía corporativa',categoria:'Servicios',monto:89000,dia:5,icono:'📱',descripcion:'Plan corporativo 4 líneas',activa:true,pagos:{}},
+    {id:4,nombre:'Seguro flota vehicular',categoria:'Seguros',monto:291550,dia:8,icono:'🛡',descripcion:'Prima mensual Mapfre — 2 buses',activa:true,pagos:{}},
+    {id:5,nombre:'Mantención preventiva',categoria:'Mantención',monto:150000,dia:15,icono:'🔧',descripcion:'Revisión mensual ambos buses',activa:true,pagos:{}},
+  ];
+
+  // ── Tesorería ──
+  const tesoreria=[
+    {id:1,tipo:'Por cobrar',razonSocial:'Municipalidad de Linares',rut:'69.123.456-7',
+     tipoDoc:'Factura',folio:'V-000125',monto:2856000,
+     femision:fIso(anio,mes,10),vencimiento:fIso(anio,mes+1,10),pagado:false,obs:'Servicio transporte temporada'},
+    {id:2,tipo:'Por cobrar',razonSocial:'Constructora Maulina SpA',rut:'69.567.890-1',
+     tipoDoc:'Factura',folio:'V-000127',monto:3332000,
+     femision:fIso(anio,mes,20),vencimiento:fIso(anio,mes+1,20),pagado:false,obs:'Transporte trabajadores'},
+    {id:3,tipo:'Por pagar',razonSocial:'Copec S.A.',rut:'76.543.210-1',
+     tipoDoc:'Factura',folio:'F-006789',monto:2499000,
+     femision:fIso(anio,mes,18),vencimiento:fIso(anio,mes,28),pagado:true,obs:'Combustible quincenal'},
+    {id:4,tipo:'Por pagar',razonSocial:'Seguros Mapfre Chile',rut:'78.765.432-3',
+     tipoDoc:'Factura',folio:'F-003456',monto:1166200,
+     femision:fIso(anio,mes,8),vencimiento:fIso(anio,mes,25),pagado:false,obs:'Prima seguro flota'},
+    {id:5,tipo:'Por pagar',razonSocial:'Tecno Bus Ltda.',rut:'81.098.765-6',
+     tipoDoc:'Factura',folio:'F-007890',monto:809200,
+     femision:fIso(anio,mes,22),vencimiento:fIso(anio,mes+1,5),pagado:false,obs:'Reparación motor'},
+  ];
+
+  // ── Fondos por rendir ──
+  const fondos=[
+    {id:1,nombre:'Fondo viáticos conductores',responsable:'Francisco Javier Reyes Núñez',
+     entregado:200000,estado:'En rendición',
+     gastos:[
+       {id:1,fecha:fIso(anio,mes,3),concepto:'Almuerzo conducotres línea norte',monto:28000},
+       {id:2,fecha:fIso(anio,mes,7),concepto:'Peajes ruta Linares-Talca',monto:15400},
+       {id:3,fecha:fIso(anio,mes,12),concepto:'Estacionamiento terminal',monto:8500},
+     ]},
+    {id:2,nombre:'Fondo compras urgentes',responsable:'Valentina Andrea Morales Díaz',
+     entregado:150000,estado:'Rendido',
+     gastos:[
+       {id:1,fecha:fIso(anio,mes,5),concepto:'Repuestos menores urgentes',monto:45000},
+       {id:2,fecha:fIso(anio,mes,8),concepto:'Útiles oficina',monto:32500},
+     ]},
+  ];
+
+  // ── Leasing ──
+  const leasings=[
+    {id:1,bien:'Bus Mercedes-Benz 915',empresa:'Leasing Bci S.A.',rut:'97.006.000-6',
+     capital:45000000,tasa:0.89,cuotas:48,cuotasPagadas:18,
+     fechaInicio:fIso(anio-1,mes,1),activo:true,obs:'Leasing bus nuevo línea norte'},
+    {id:2,bien:'Furgón Hyundai H-1',empresa:'Santander Consumer Finance',rut:'97.036.000-K',
+     capital:12000000,tasa:0.95,cuotas:36,cuotasPagadas:24,
+     fechaInicio:fIso(anio-2,mes,1),activo:true,obs:'Furgón administrativo'},
+  ];
+
+  // ── Retiros y multas ──
+  const retiros=[
+    {id:1,fecha:fIso(anio,mes,5),tipo:'retiro',rut:'12.345.678-9',nombre:'Pedro Alejandro Muñoz Vera',
+     monto:500000,obs:'Retiro socio mes '+mes,periodo:`${anio}-${String(mes).padStart(2,'0')}`},
+    {id:2,fecha:fIso(anio,mes,8),tipo:'multa',rut:'15.678.901-2',nombre:'Diego Hernán Contreras Pinto',
+     monto:25000,obs:'Multa atraso injustificado',periodo:`${anio}-${String(mes).padStart(2,'0')}`},
+    {id:3,fecha:fIso(anio,mes-1,5),tipo:'retiro',rut:'12.345.678-9',nombre:'Pedro Alejandro Muñoz Vera',
+     monto:500000,obs:'Retiro socio mes '+(mes-1),periodo:`${anio}-${String(mes-1).padStart(2,'0')}`},
+  ];
+
+  // ── Diesel ──
+  const diesel=[
+    {id:1,fecha:fIso(anio,mes,3),litros:450,utm:68500,tasa:1.5,
+     recuperar:Math.round(450*68500*1.5/1000),usado:true,
+     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-34 — ruta norte'},
+    {id:2,fecha:fIso(anio,mes,10),litros:380,utm:68500,tasa:1.5,
+     recuperar:Math.round(380*68500*1.5/1000),usado:true,
+     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-35 — ruta sur'},
+    {id:3,fecha:fIso(anio,mes,18),litros:420,utm:68500,tasa:1.5,
+     recuperar:Math.round(420*68500*1.5/1000),usado:false,
+     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-34 — completar PPM'},
+  ];
+
+  // ── Obras / Proyectos ──
+  const obras=[
+    {id:1,nombre:'Contrato Transporte Escolar 2026',cc:'OB-001',
+     presupuesto:38400000,real:12800000,
+     fechaInicio:fIso(anio,3,1),fechaFin:fIso(anio,12,31),
+     estado:'En ejecución',obs:'Municipalidad de Linares — 12 meses',
+     gastos:[
+       {fecha:fIso(anio,mes-1,28),concepto:'Combustible marzo',monto:4200000},
+       {fecha:fIso(anio,mes-1,28),concepto:'Remuneraciones marzo',monto:5850000},
+       {fecha:fIso(anio,mes,28),concepto:'Combustible abril',monto:3980000},
+     ]},
+    {id:2,nombre:'Transporte Temporada Agrícola',cc:'OB-002',
+     presupuesto:8500000,real:8500000,
+     fechaInicio:fIso(anio,1,15),fechaFin:fIso(anio,mes-1,28),
+     estado:'Terminado',obs:'Agrícola Los Olivos — temporada verano',
+     gastos:[
+       {fecha:fIso(anio,2,28),concepto:'Servicios transporte feb',monto:4250000},
+       {fecha:fIso(anio,mes-1,28),concepto:'Servicios transporte mar',monto:4250000},
+     ]},
+  ];
+
+  // ── Honorarios ──
+  const honorarios=[
+    {id:1,fecha:fIso(anio,mes,5),nombre:'Contadora External Ltda.',rut:'76.111.222-3',
+     concepto:'Honorarios contabilidad mensual',monto:350000,retencion:Math.round(350000*0.115),
+     neto:Math.round(350000*0.885),pagado:true},
+    {id:2,fecha:fIso(anio,mes,10),nombre:'Asesor Jurídico Laboral',rut:'14.222.333-4',
+     concepto:'Asesoría contrato colectivo',monto:250000,retencion:Math.round(250000*0.115),
+     neto:Math.round(250000*0.885),pagado:false},
+    {id:3,fecha:fIso(anio,mes-1,5),nombre:'Contadora External Ltda.',rut:'76.111.222-3',
+     concepto:'Honorarios contabilidad mes anterior',monto:350000,retencion:Math.round(350000*0.115),
+     neto:Math.round(350000*0.885),pagado:true},
+  ];
+
+  // ── BHE Emitidas ──
+  const bheEmitidas=[
+    {id:1,fecha:fIso(anio,mes,5),nbhe:'BHE-001',receptor:'Colegio San Francisco',
+     rut:'69.234.567-8',servicio:'Servicio transporte estudiantes abril',
+     bruto:2142000,retencion:Math.round(2142000*0.105),
+     pago:'Transferencia bancaria',pagado:true},
+    {id:2,fecha:fIso(anio,mes,10),nbhe:'BHE-002',receptor:'Hospital Regional Linares',
+     rut:'69.456.789-0',servicio:'Transporte personal médico abril',
+     bruto:1428000,retencion:Math.round(1428000*0.105),
+     pago:'Transferencia bancaria',pagado:false},
+  ];
+
+  // ── F-29 manual ──
+  const f29Manual={
+    ventasAfectas:11400000,ventasExentas:0,
+    comprasAfectas:6536000,comprasExentas:0,
+    ivaDebito:Math.round(11400000*0.19),
+    ivaCredito:Math.round(6536000*0.19),
+    ppm:Math.round(11400000*0.015),
+    retencionHonorarios:Math.round(600000*0.115),
+  };
+
+  // ── Reg 14A ──
+  const reg14a={
+    rai:[{anio,monto:8500000,obs:'RAI acumulado período'}],
+    ddan:[{anio,monto:2100000,obs:'Depreciación acelerada buses'}],
+    rex:[{anio,monto:1200000,obs:'Rentas exentas dividendos'}],
+    sac:[{anio,monto:650000,obs:'SAC créditos imputables'}]
+  };
+
+  // ── Conciliación bancaria ──
+  const conciliacion=[
+    {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',descripcion:'Depósito Municipalidad Linares',
+     montoLib:3808000,montoBco:3808000,conciliado:true},
+    {id:2,fecha:fIso(anio,mes,3),tipo:'egreso',descripcion:'Pago Copec combustible',
+     montoLib:2201500,montoBco:2201500,conciliado:true},
+    {id:3,fecha:fIso(anio,mes,28),tipo:'egreso',descripcion:'Pago remuneraciones',
+     montoLib:5850000,montoBco:5850000,conciliado:true},
+    {id:4,fecha:fIso(anio,mes,15),tipo:'ingreso',descripcion:'Cobro Constructora Maulina',
+     montoLib:3332000,montoBco:0,conciliado:false,obs:'Pendiente acreditación banco'},
+  ];
+
   // ── Construir empresa Demo completa ──
   const demo = empVacia();
   demo._esDemo = true;
@@ -1424,6 +1669,214 @@ function activarDemo(){
   demo.creditos = creditos;
   demo.contratosDoc = [];
   demo.plantillasContrato = [];
+  demo.horarios = horarios;
+  demo.finiquitos = finiquitos;
+  demo.ausencias = ausencias;
+  demo.estadoFin = estadoFin;
+  demo.flujoCaja = flujoCaja;
+  demo.cuentasFijas = cuentasFijas;
+  demo.tesoreria = tesoreria;
+  demo.fondos = fondos;
+  demo.leasings = leasings;
+  demo.retiros = retiros;
+  demo.diesel = diesel;
+  demo.obras = obras;
+  demo.honorarios = honorarios;
+  demo.bheEmitidas = bheEmitidas;
+  demo.f29Manual = f29Manual;
+  demo.reg14a = reg14a;
+  demo.conciliacion = conciliacion;
+
+  // ── Horarios del mes actual ──
+  const claveHor = `${anio}-${fmt2(mes)}`;
+  const diasMes = new Date(anio,mes,0).getDate();
+  // Generar horarios para los 8 trabajadores
+  const turnosMañana = [1,2,3,4]; // ids trabajadores turno mañana
+  const turnosTarde  = [5,6,7,8]; // ids trabajadores turno tarde
+  const horarios = [];
+  trabajadores.forEach((t,ti)=>{
+    const esMañana = turnosMañana.includes(t.id);
+    const entrada = esMañana?'06:00':'13:30';
+    const salida  = esMañana?'13:30':'21:00';
+    const dias = [];
+    for(let d=1;d<=diasMes;d++){
+      const dt = new Date(anio,mes-1,d);
+      const dow = dt.getDay(); // 0=Dom
+      const fecha = fIso(anio,mes,d);
+      const diaLibre = (ti%6)+1; // escalonado
+      let tipo='trabajo', nota='';
+      if(dow===0){ tipo=ti%2===0&&Math.floor((d-1)/7)%2===0?'descanso':'trabajo'; nota=tipo==='descanso'?'Descanso dominical':'Domingo trabajado'; }
+      else if(dow===diaLibre){ tipo='descanso'; nota='Descanso semanal (6x1)'; }
+      dias.push({fecha,tipo,diaSem:['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][dow],entrada:tipo==='trabajo'?entrada:'',salida:tipo==='trabajo'?salida:'',colacion:tipo==='trabajo'?30:0,nota});
+    }
+    horarios.push({trabajadorId:t.id,jornadaId:esMañana?1:2,clave:claveHor,dias});
+  });
+  demo.horarios = horarios;
+
+  // ── Finiquitos ──
+  const anioFin=anio; const mesFin=mes-1||12;
+  demo.finiquitos = [
+    {id:1,trabajadorId:7,nombre:'Cecilia Paz Gutiérrez Vidal',rut:'18.901.234-5',cargo:'Conductor',depto:'Operaciones',causal:'159_4',fi:'2022-03-15',ft:fIso(anioFin,mesFin,28),sb:630000,diasTrab:365,indemnizacion:0,avisoP:630000,vacaciones:Math.round(630000/30*8),afc:Math.round(630000*0.003*12),totalBruto:0,totalLiquido:0,estado:'firmado',periodo:fIso(anioFin,mesFin,1).slice(0,7)},
+    {id:2,trabajadorId:8,nombre:'Luis Eduardo Vargas Espinoza',rut:'19.012.345-6',cargo:'Mecánico',depto:'Mantención',causal:'161_emp',fi:'2019-11-01',ft:fIso(anioFin,mesFin,15),sb:750000,diasTrab:4*365,indemnizacion:750000*4,avisoP:750000,vacaciones:Math.round(750000/30*10),afc:Math.round(750000*0.003*12*4),totalBruto:0,totalLiquido:0,estado:'firmado',periodo:fIso(anioFin,mesFin,1).slice(0,7)},
+  ];
+  demo.finiquitos.forEach(f=>{ f.totalBruto=f.indemnizacion+f.avisoP+f.vacaciones+f.afc; f.totalLiquido=Math.round(f.totalBruto*0.88); });
+
+  // ── Ausencias ──
+  demo.ausencias = [
+    {id:1,trabajadorId:4,desde:fIso(anio,mes,7),hasta:fIso(anio,mes,9),tipo:'Licencia médica',motivo:'Reposo por lumbalgia aguda — Código 1',dias:3,estado:'Aprobada',doc:'LM-2026-0123'},
+    {id:2,trabajadorId:7,desde:fIso(anio,mes,14),hasta:fIso(anio,mes,14),tipo:'Permiso sin goce de sueldo',motivo:'Trámites personales',dias:1,estado:'Aprobada',doc:''},
+    {id:3,trabajadorId:2,desde:fIso(anio,mes,21),hasta:fIso(anio,mes,21),tipo:'Permiso con goce de sueldo',motivo:'Matrimonio familiar',dias:1,estado:'Aprobada',doc:''},
+  ];
+
+  // ── Honorarios ──
+  demo.honorarios = [
+    {id:1,fecha:fIso(anio,mes,5),nombre:'Asesorías Contables Maulina Ltda.',rut:'76.111.222-3',concepto:'Asesoría contable y tributaria mensual',monto:350000},
+    {id:2,fecha:fIso(anio,mes,10),nombre:'Taller Mecánico Sur',rut:'12.987.654-3',concepto:'Servicio mantención preventiva buses',monto:180000},
+    {id:3,fecha:fIso(anio,mes,15),nombre:'Abogados Maulén y Asociados',rut:'14.876.543-2',concepto:'Asesoría laboral contrato colectivo',monto:420000},
+  ];
+
+  // ── BHE Emitidas ──
+  demo.bheEmitidas = [
+    {id:1,fecha:fIso(anio,mes,3),nbhe:'001',receptor:'Municipalidad de Linares',rut:'69.123.456-7',servicio:'Coordinación transporte escolar',bruto:250000,retencion:Math.round(250000*0.1025),pago:Math.round(250000*0.8975),pagado:true},
+    {id:2,fecha:fIso(anio,mes,12),nbhe:'002',receptor:'Colegio San Francisco',rut:'69.234.567-8',servicio:'Supervisión rutas transporte',bruto:180000,retencion:Math.round(180000*0.1025),pago:Math.round(180000*0.8975),pagado:false},
+  ];
+
+  // ── Tesorería (documentos por cobrar/pagar) ──
+  demo.tesoreria = [
+    {id:1,tipo:'Por cobrar',nombre:'Municipalidad de Linares — Factura V-000125',monto:2856000,doc:'Factura',femision:fIso(anio,mes,10),vencimiento:fIso(anio,mes+1,10),pagado:false},
+    {id:2,tipo:'Por cobrar',nombre:'Constructora Maulina — Factura V-000127',monto:3332000,doc:'Factura',femision:fIso(anio,mes,20),vencimiento:fIso(anio,mes+1,20),pagado:false},
+    {id:3,tipo:'Por pagar',nombre:'Copec S.A. — Combustible quincenal',monto:2499000,doc:'Factura',femision:fIso(anio,mes,18),vencimiento:fIso(anio,mes,28),pagado:true},
+    {id:4,tipo:'Por pagar',nombre:'Seguros Mapfre — Prima mensual',monto:1166200,doc:'Factura',femision:fIso(anio,mes,8),vencimiento:fIso(anio,mes,25),pagado:false},
+  ];
+
+  // ── Fondos por rendir ──
+  demo.fondos = [
+    {id:1,responsable:'Francisco Javier Reyes Núñez',monto:500000,fecha:fIso(anio,mes,1),concepto:'Gastos operacionales zona sur',estado:'Pendiente',gastos:[
+      {fecha:fIso(anio,mes,3),concepto:'Combustible emergencia',monto:45000},
+      {fecha:fIso(anio,mes,7),concepto:'Peaje autopista',monto:12000},
+    ]},
+    {id:2,responsable:'Pedro Alejandro Muñoz Vera',monto:200000,fecha:fIso(anio,mes,10),concepto:'Viáticos viaje Talca',estado:'Rendido',gastos:[
+      {fecha:fIso(anio,mes,11),concepto:'Alojamiento',monto:80000},
+      {fecha:fIso(anio,mes,11),concepto:'Alimentación',monto:35000},
+      {fecha:fIso(anio,mes,12),concepto:'Combustible regreso',monto:40000},
+    ]},
+  ];
+
+  // ── Leasing ──
+  demo.leasings = [
+    {id:1,bien:'Bus Mercedes-Benz 814 (BUS-003)',prov:'Automotriz del Sur S.A.',cuota:850000,meses:48,pagadas:12,finicio:fIso(anio-1,mes,1),ffin:fIso(anio+3,mes,1),estado:'Vigente'},
+    {id:2,bien:'Fotocopiadora Ricoh MP2014',prov:'Tecnologías Maulén Ltda.',cuota:45000,meses:36,pagadas:18,finicio:fIso(anio-2,mes,1),ffin:fIso(anio+1,mes,1),estado:'Vigente'},
+  ];
+
+  // ── Retiros/Multas ──
+  demo.retiros = [
+    {id:1,tipo:'Retiro socio',fecha:fIso(anio,mes,5),concepto:'Retiro utilidades socio administrador',monto:1500000,fpago:'Transferencia bancaria'},
+    {id:2,tipo:'Multa',fecha:fIso(anio,mes,12),concepto:'Multa infracción tránsito bus BCDF-34',monto:62500,fpago:'Efectivo'},
+    {id:3,tipo:'Retiro socio',fecha:fIso(anio,mes-1||1,28),concepto:'Retiro utilidades mes anterior',monto:1200000,fpago:'Transferencia bancaria'},
+  ];
+
+  // ── Diesel ──
+  demo.diesel = [
+    {id:1,fecha:fIso(anio,mes,3),vehiculo:'Bus BCDF-34',litros:250,precio:1180,total:295000,recuperacion:Math.round(295000*0.015),prov:'Copec Linares'},
+    {id:2,fecha:fIso(anio,mes,8),vehiculo:'Bus BCDF-35',litros:230,precio:1180,total:271400,recuperacion:Math.round(271400*0.015),prov:'Copec Linares'},
+    {id:3,fecha:fIso(anio,mes,15),vehiculo:'Bus BCDF-34',litros:260,precio:1185,total:308100,recuperacion:Math.round(308100*0.015),prov:'Copec Linares'},
+    {id:4,fecha:fIso(anio,mes,22),vehiculo:'Bus BCDF-35',litros:245,precio:1185,total:290325,recuperacion:Math.round(290325*0.015),prov:'Copec Linares'},
+  ];
+
+  // ── Obras/Proyectos ──
+  demo.obras = [
+    {id:1,nombre:'Contrato Transporte Escolar 2026',tipo:'Servicio',estado:'En curso',fechaInicio:fIso(anio,3,1),fechaFin:fIso(anio,12,31),presupuesto:28000000,costoReal:12400000,desc:'Transporte estudiantes Municipalidad Linares'},
+    {id:2,nombre:'Convenio Hospital Regional',tipo:'Servicio',estado:'En curso',fechaInicio:fIso(anio,1,1),fechaFin:fIso(anio,12,31),presupuesto:14400000,costoReal:5600000,desc:'Transporte personal médico y administrativo'},
+    {id:3,nombre:'Contrato Agrícola Los Olivos',tipo:'Servicio',estado:'Finalizado',fechaInicio:fIso(anio-1,10,1),fechaFin:fIso(anio,4,30),presupuesto:9600000,costoReal:9100000,desc:'Transporte temporeros temporada 2025-2026'},
+  ];
+
+  // ── Conciliación bancaria ──
+  demo.conciliacion = [
+    {id:1,fecha:fIso(anio,mes,1),concepto:'Saldo inicial cuenta corriente',mBanco:8450000,mLibro:8450000,estado:'Conciliado'},
+    {id:2,fecha:fIso(anio,mes,5),concepto:'Depósito Municipalidad Linares',mBanco:3808000,mLibro:3808000,estado:'Conciliado'},
+    {id:3,fecha:fIso(anio,mes,8),concepto:'Pago Copec combustible',mBanco:-2201500,mLibro:-2201500,estado:'Conciliado'},
+    {id:4,fecha:fIso(anio,mes,15),concepto:'Depósito Colegio San Francisco',mBanco:2142000,mLibro:2142000,estado:'Conciliado'},
+    {id:5,fecha:fIso(anio,mes,20),concepto:'Cheque N°001234 proveedor',mBanco:-499800,mLibro:-499800,estado:'Pendiente'},
+    {id:6,fecha:fIso(anio,mes,28),concepto:'Pago remuneraciones',mBanco:-5850000,mLibro:-5850000,estado:'Conciliado'},
+  ];
+
+  // ── Cuentas fijas ──
+  demo.cuentasFijas = [
+    {id:1,nombre:'Arriendo oficina central',categoria:'Arriendo',monto:350000,dia:1,icono:'🏢',descripcion:'Arriendo mensual oficina Av. Valentín Letelier 456',activa:true,pagos:{}},
+    {id:2,nombre:'Internet Movistar empresas',categoria:'Servicios básicos',monto:45000,dia:5,icono:'📡',descripcion:'Plan fibra óptica 300Mbps',activa:true,pagos:{}},
+    {id:3,nombre:'Seguro SOAP buses',categoria:'Seguros',monto:180000,dia:15,icono:'🚌',descripcion:'SOAP anual dividido en 12 cuotas — 2 buses',activa:true,pagos:{}},
+    {id:4,nombre:'Cuota leasing Bus BUS-003',categoria:'Leasing',monto:850000,dia:1,icono:'💳',descripcion:'Leasing Mercedes-Benz — Automotriz del Sur',activa:true,pagos:{}},
+    {id:5,nombre:'Tarifa básica agua',categoria:'Servicios básicos',monto:28000,dia:10,icono:'💧',descripcion:'Servicio agua potable oficina y taller',activa:true,pagos:{}},
+  ];
+
+  // ── Estado Financiero ──
+  const conceptosEF = [
+    {id:'ef1',nombre:'Ingresos servicios transporte',tipo:'ingreso'},
+    {id:'ef2',nombre:'Combustible',tipo:'egreso'},
+    {id:'ef3',nombre:'Remuneraciones',tipo:'egreso'},
+    {id:'ef4',nombre:'Mantención vehículos',tipo:'egreso'},
+    {id:'ef5',nombre:'Arriendos y servicios',tipo:'egreso'},
+  ];
+  // Generar semanas del mes
+  const semanasEF = [];
+  for(let w=0;w<4;w++){
+    const wk = `${anio}-W${String(w+1).padStart(2,'0')}`;
+    semanasEF.push({
+      semana:wk, saldoInicial:w===0?8450000:0,
+      valores:{
+        ef1: [3808000,2856000,2142000,3332000][w],
+        ef2: [2201500,499800,809200,350000][w],
+        ef3: w===3?5850000:0,
+        ef4: w===1?185640:0,
+        ef5: w===0?416500:0,
+      }
+    });
+  }
+  demo.estadoFin = {conceptos:conceptosEF, semanas:semanasEF, meses:[], categorias:{}};
+
+  // ── Flujo de caja ──
+  demo.flujoCaja = {
+    conceptos:[
+      {id:'fc1',nombre:'Cobros clientes',tipo:'ingreso'},
+      {id:'fc2',nombre:'Pago proveedores',tipo:'egreso'},
+      {id:'fc3',nombre:'Remuneraciones',tipo:'egreso'},
+      {id:'fc4',nombre:'Impuestos',tipo:'egreso'},
+    ],
+    semanas:[
+      {semana:`${anio}-W01`,saldoInicial:8450000,valores:{fc1:3808000,fc2:2201500,fc3:0,fc4:0}},
+      {semana:`${anio}-W02`,saldoInicial:0,valores:{fc1:2856000,fc2:809200,fc3:0,fc4:0}},
+      {semana:`${anio}-W03`,saldoInicial:0,valores:{fc1:2142000,fc2:185640,fc3:0,fc4:0}},
+      {semana:`${anio}-W04`,saldoInicial:0,valores:{fc1:3332000,fc2:350000,fc3:5850000,fc4:186200}},
+    ]
+  };
+
+  // ── Contratos de trabajo (2 ejemplos) ──
+  demo.contratosDoc = [
+    {id:'ct_demo_1',trabajadorId:1,tipo:'Indefinido',fechaInicio:'2019-03-01',fechaTermino:null,estado:'Vigente',
+     clausulas:[
+       {id:'c1',titulo:'Partes contratantes',editable:true,texto:'En Linares, a 01/03/2019, entre Transportes Demo SpA, RUT 76.123.456-7, representada por Francisco Javier Reyes Núñez, y don Pedro Alejandro Muñoz Vera, RUT 12.345.678-9, se celebra el siguiente contrato de trabajo.'},
+       {id:'c2',titulo:'Cargo y funciones (Art. 10 N°3 CT)',editable:true,texto:'El Trabajador se desempeñará en el cargo de Conductor, cumpliendo las funciones propias del cargo y las que le encomiende el Empleador.'},
+       {id:'c3',titulo:'Jornada de trabajo (Art. 10 N°5 CT)',editable:true,texto:'La jornada ordinaria será de 44 horas semanales distribuidas de lunes a sábado, en turno mañana de 06:00 a 13:30 horas, con 30 minutos de colación.'},
+       {id:'c4',titulo:'Remuneración (Art. 10 N°4 CT)',editable:true,texto:'El Empleador pagará una remuneración mensual de $650.000 brutos, pagadera el último día hábil de cada mes mediante depósito en cuenta bancaria.'},
+       {id:'c5',titulo:'Firmas',editable:false,texto:'En señal de conformidad, las partes firman en dos ejemplares.
+
+___________________________     ___________________________
+Firma El Empleador                    Firma El Trabajador'},
+     ],
+     anexos:[{id:'anx1',tipo:'Cambio de sueldo',fecha:fIso(anio-1,1,1),desc:'Se modifica el sueldo base de $580.000 a $650.000 a contar del 01/01/'+( anio-1)+', de acuerdo a reajuste anual.',creado:fIso(anio-1,1,1)}],
+     creado:'2019-03-01T08:00:00.000Z',modificado:new Date().toISOString()},
+    {id:'ct_demo_2',trabajadorId:7,tipo:'Plazo fijo',fechaInicio:fIso(anio,1,1),fechaTermino:fIso(anio,12,31),estado:'Vigente',
+     clausulas:[
+       {id:'c1',titulo:'Partes contratantes',editable:true,texto:'En Linares, a '+fIso(anio,1,1)+', entre Transportes Demo SpA, RUT 76.123.456-7, y doña Cecilia Paz Gutiérrez Vidal, RUT 18.901.234-5, se celebra contrato de trabajo a plazo fijo.'},
+       {id:'c2',titulo:'Duración (Art. 159 N°4 CT)',editable:true,texto:'El contrato tendrá duración desde el '+fIso(anio,1,1)+' hasta el '+fIso(anio,12,31)+'. Si el trabajador continúa prestando servicios vencido el plazo, se transforma en indefinido.'},
+       {id:'c3',titulo:'Remuneración',editable:true,texto:'Se pagará remuneración mensual de $630.000 brutos el último día hábil de cada mes.'},
+       {id:'c4',titulo:'Firmas',editable:false,texto:'En señal de conformidad, las partes firman en dos ejemplares.
+
+___________________________     ___________________________
+Firma El Empleador                    Firma El Trabajador'},
+     ],
+     anexos:[],creado:fIso(anio,1,1)+'T08:00:00.000Z',modificado:new Date().toISOString()},
+  ];
 
   // Agregar empresa Demo y activarla
   MASTER.empresas.push(demo);
