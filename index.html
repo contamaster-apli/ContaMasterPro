@@ -10,7 +10,6 @@
 <meta name="theme-color" content="#060a10">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -465,6 +464,7 @@ textarea.fi{resize:vertical;min-height:50px;}
     <button class="ibtn" onclick="openModal('cfgModal')" title="Configuración">⚙️</button>
     <button class="ibtn" onclick="openLimpiezaModal()" title="Limpiar módulos" style="color:var(--orange);">🧹</button>
     <button class="ibtn" id="gdriveBtnHdr" onclick="gdriveConnect()" title="Conectar Google Drive" style="position:relative;">☁️<span id="gdriveSyncDot" style="display:none;position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:var(--green);border:1px solid var(--s1);"></span></button>
+    <button class="ibtn" id="btnDemo" onclick="activarDemo()" title="Modo Demo — datos de ejemplo para presentación" style="color:var(--yellow,#eab308);border-color:var(--yellow,#eab308);background:rgba(234,179,8,0.1);font-weight:900;font-size:11px;padding:5px 10px;letter-spacing:.5px;">🎯 DEMO</button>
     <button class="ibtn danger" onclick="logout()" title="Salir">🔒</button>
   </div>
   <div id="navWrapper" style="display:flex;align-items:center;background:var(--s1);border-bottom:1px solid var(--border);">
@@ -1133,7 +1133,6 @@ async function load(){
           if(!emp.comprobantes)emp.comprobantes={conceptosIng:[],conceptosEgr:[],registros:[]};
           if(!emp.finiquitos)emp.finiquitos=[];
           if(!emp.contratosDoc)emp.contratosDoc=[];
-          if(!emp.plantillasContrato)emp.plantillasContrato=[];
         });
       }
     }catch(e){}
@@ -1215,6 +1214,278 @@ function checkPin(){
     setTimeout(()=>{el.style.borderColor='';if(lerr)lerr.textContent='';el.value='';el.focus();},1500);
   }
 }
+
+// ══════════════════════════════════════════════════════════════════
+// ║              MODO DEMO — ContaMaster Pro                       ║
+// ║   Empresa ficticia con datos completos para presentaciones     ║
+// ══════════════════════════════════════════════════════════════════
+
+function activarDemo(){
+  // Verificar si ya existe empresa demo
+  const yaExiste = MASTER.empresas.findIndex(e=>e._esDemo===true);
+  if(yaExiste>=0){
+    // Ya existe — solo activarla
+    const prev = MASTER.activa;
+    MASTER._prevActiva = prev;
+    MASTER.activa = yaExiste;
+    save();
+    _actualizarBtnDemo(true);
+    go('dash');
+    toast('🎯 Modo Demo activado — empresa ficticia para presentación','ok');
+    return;
+  }
+
+  if(!confirm('¿Activar Modo Demo?\n\nSe creará una empresa ficticia "Transportes Demo SpA" con datos de ejemplo en todos los módulos.\n\nTus datos reales NO se tocarán.')){return;}
+
+  // Guardar índice actual para volver
+  MASTER._prevActiva = MASTER.activa;
+
+  // ── Datos base ──
+  const hoy = new Date();
+  const anio = hoy.getFullYear();
+  const mes = hoy.getMonth()+1;
+  const fmt2 = n => String(n).padStart(2,'0');
+  const fIso = (y,m,d) => `${y}-${fmt2(m)}-${fmt2(d)}`;
+
+  // ── Trabajadores ficticios ──
+  const trabajadores = [
+    {id:1,nombre:'Carlos Andrés Soto Lobos',rut:'12.345.678-9',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2019-03-01',fnac:'1985-06-15',nac:'Chilena',ecivil:'Casado/a',dir:'Los Aromos 234, Linares',email:'csoto@transportesdemo.cl',tel:'+56 9 8123 4567',sb:650000,contrato:'Indefinido',afp:'Habitat',salud:'FONASA',banco:'BancoEstado',cuenta:'12345678',estado:'Activo',obs:'',jornada:44},
+    {id:2,nombre:'Fernando Ormeño Ormeño',rut:'13.456.789-0',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2020-01-15',fnac:'1988-09-22',nac:'Chilena',ecivil:'Soltero/a',dir:'Av. Brasil 567, Linares',email:'formeno@transportesdemo.cl',tel:'+56 9 8234 5678',sb:650000,contrato:'Indefinido',afp:'Capital',salud:'FONASA',banco:'Santander',cuenta:'23456789',estado:'Activo',obs:'',jornada:44},
+    {id:3,nombre:'Marianne Valbuena Urdaneta',rut:'14.567.890-1',cargo:'Inspectora',depto:'Operaciones',area:'Garita',fi:'2021-05-01',fnac:'1990-03-08',nac:'Venezolana',ecivil:'Casado/a',dir:'Calle Yerbas Buenas 89, Linares',email:'mvalbuena@transportesdemo.cl',tel:'+56 9 8345 6789',sb:580000,contrato:'Indefinido',afp:'Modelo',salud:'FONASA',banco:'BancoEstado',cuenta:'34567890',estado:'Activo',obs:'',jornada:44},
+    {id:4,nombre:'Robinson Cea Mariscal',rut:'15.678.901-2',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2018-08-01',fnac:'1982-11-30',nac:'Chilena',ecivil:'Divorciado/a',dir:'Av. Valentín Letelier 123, Linares',email:'rcea@transportesdemo.cl',tel:'+56 9 8456 7890',sb:670000,contrato:'Indefinido',afp:'ProVida',salud:'COLMENA',banco:'Chile',cuenta:'45678901',estado:'Activo',obs:'',jornada:44},
+    {id:5,nombre:'Yasna Karina Rivera Rivera',rut:'16.789.012-3',cargo:'Administrativa',depto:'Administración',area:'Oficina',fi:'2020-09-01',fnac:'1992-07-14',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Pinos 456, Linares',email:'yrivera@transportesdemo.cl',tel:'+56 9 8567 8901',sb:720000,contrato:'Indefinido',afp:'Cuprum',salud:'BANMEDICA',banco:'BancoEstado',cuenta:'56789012',estado:'Activo',obs:'',jornada:44},
+    {id:6,nombre:'Jorge Arellano Marchant',rut:'17.890.123-4',cargo:'Jefe de Operaciones',depto:'Administración',area:'Oficina',fi:'2017-02-01',fnac:'1978-04-25',nac:'Chilena',ecivil:'Casado/a',dir:'Av. Uno Sur 789, Linares',email:'jarellano@transportesdemo.cl',tel:'+56 9 8678 9012',sb:1200000,contrato:'Indefinido',afp:'Habitat',salud:'CONSALUD',banco:'Chile',cuenta:'67890123',estado:'Activo',obs:'',jornada:44},
+    {id:7,nombre:'Raúl Vera Castillo',rut:'18.901.234-5',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2022-03-15',fnac:'1995-12-10',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Boldos 321, Linares',email:'rvera@transportesdemo.cl',tel:'+56 9 8789 0123',sb:630000,contrato:'Plazo fijo',afp:'Uno',salud:'FONASA',banco:'BancoEstado',cuenta:'78901234',estado:'Activo',obs:'Contrato plazo fijo hasta dic 2026',jornada:44},
+    {id:8,nombre:'Mauricio Peralta Martínez',rut:'19.012.345-6',cargo:'Mecánico',depto:'Mantención',area:'Garita',fi:'2019-11-01',fnac:'1980-08-18',nac:'Chilena',ecivil:'Casado/a',dir:'El Roble 654, Linares',email:'mperalta@transportesdemo.cl',tel:'+56 9 8890 1234',sb:750000,contrato:'Indefinido',afp:'PlanVital',salud:'MASVIDA',banco:'Santander',cuenta:'89012345',estado:'Activo',obs:'',jornada:44},
+  ];
+
+  // ── Liquidaciones ficticias (3 meses) ──
+  const liquidaciones = [];
+  [mes-2,mes-1,mes].forEach((m,mi)=>{
+    const mm = m<=0?m+12:m;
+    const aa = m<=0?anio-1:anio;
+    trabajadores.forEach(t=>{
+      const afpTasa = {Capital:0.1144,Cuprum:0.1144,Habitat:0.1127,Modelo:0.1058,PlanVital:0.1116,ProVida:0.1145,Uno:0.1046}[t.afp]||0.1127;
+      const base = Math.min(t.sb,3269948);
+      const afpDesc = Math.round(base*afpTasa);
+      const saludDesc = t.salud==='FONASA'?Math.round(base*0.07):Math.round(base*0.07);
+      const sisDesc = Math.round(base*0.0163);
+      const grati = Math.round(t.sb*0.25);
+      const total = t.sb + grati;
+      const liquido = total - afpDesc - saludDesc - sisDesc;
+      liquidaciones.push({
+        id:liquidaciones.length+1, trabajadorId:t.id, rut:t.rut,
+        nombre:t.nombre, mes:mm, anio:aa, sb:t.sb,
+        grati, totalHaberes:total,
+        afp:t.afp, afpDesc, salud:t.salud, saludDesc, sisDesc,
+        totalDesc:afpDesc+saludDesc+sisDesc,
+        liquido, contrato:t.contrato, estado:'pagada',
+        fechaPago:fIso(aa,mm,28), obs:''
+      });
+    });
+  });
+
+  // ── Compras ficticias ──
+  const compras = [
+    {id:1,fecha:fIso(anio,mes,3),rut:'76.543.210-1',proveedor:'Copec S.A.',folio:'F-001234',neto:1850000,iva:351500,total:2201500,glosa:'Combustible buses línea 1',tipo:'factura'},
+    {id:2,fecha:fIso(anio,mes,5),rut:'77.654.321-2',proveedor:'Repuestos Automotriz Ltda.',folio:'F-002345',neto:420000,iva:79800,total:499800,glosa:'Neumáticos y repuestos',tipo:'factura'},
+    {id:3,fecha:fIso(anio,mes,8),rut:'78.765.432-3',proveedor:'Seguros Mapfre Chile',folio:'F-003456',neto:980000,iva:186200,total:1166200,glosa:'Prima seguro flota buses',tipo:'factura'},
+    {id:4,fecha:fIso(anio,mes,12),rut:'79.876.543-4',proveedor:'Lubricantes del Sur',folio:'F-004567',neto:156000,iva:29640,total:185640,glosa:'Aceites y lubricantes mantención',tipo:'factura'},
+    {id:5,fecha:fIso(anio,mes,15),rut:'80.987.654-5',proveedor:'Servicios Generales SpA',folio:'F-005678',neto:350000,iva:66500,total:416500,glosa:'Servicio aseo y mantención oficinas',tipo:'factura'},
+    {id:6,fecha:fIso(anio,mes,18),rut:'76.543.210-1',proveedor:'Copec S.A.',folio:'F-006789',neto:2100000,iva:399000,total:2499000,glosa:'Combustible buses línea 2',tipo:'factura'},
+    {id:7,fecha:fIso(anio,mes,22),rut:'81.098.765-6',proveedor:'Tecno Bus Ltda.',folio:'F-007890',neto:680000,iva:129200,total:809200,glosa:'Reparación motor bus patente BCDF-34',tipo:'factura'},
+  ];
+
+  // ── Ventas ficticias ──
+  const ventas = [
+    {id:1,fecha:fIso(anio,mes,1),rut:'69.123.456-7',cliente:'Municipalidad de Linares',folio:'V-000123',neto:3200000,iva:608000,total:3808000,glosa:'Servicio transporte escolar marzo',tipo:'factura'},
+    {id:2,fecha:fIso(anio,mes,5),rut:'69.234.567-8',cliente:'Colegio San Francisco',folio:'V-000124',neto:1800000,iva:342000,total:2142000,glosa:'Servicio transporte estudiantes',tipo:'factura'},
+    {id:3,fecha:fIso(anio,mes,10),rut:'69.345.678-9',cliente:'Agrícola Los Olivos Ltda.',folio:'V-000125',neto:2400000,iva:456000,total:2856000,glosa:'Transporte personal temporada',tipo:'factura'},
+    {id:4,fecha:fIso(anio,mes,15),rut:'69.456.789-0',cliente:'Hospital Regional de Linares',folio:'V-000126',neto:1200000,iva:228000,total:1428000,glosa:'Servicio transporte personal médico',tipo:'factura'},
+    {id:5,fecha:fIso(anio,mes,20),rut:'69.567.890-1',cliente:'Constructora Maulina SpA',folio:'V-000127',neto:2800000,iva:532000,total:3332000,glosa:'Transporte trabajadores obra Panguilemo',tipo:'factura'},
+  ];
+
+  // ── Proveedores ──
+  const proveedores = [
+    {id:1,nombre:'Copec S.A.',rut:'76.543.210-1',giro:'Distribución combustibles',dir:'Av. El Golf 150, Santiago',tel:'+56 2 2888 9000',email:'clientes@copec.cl',banco:'Chile',cuenta:'11111111',obs:'Proveedor principal combustible'},
+    {id:2,nombre:'Repuestos Automotriz Ltda.',rut:'77.654.321-2',giro:'Repuestos vehículos',dir:'Av. Industrial 234, Talca',tel:'+56 71 234567',email:'ventas@repuestosauto.cl',banco:'BancoEstado',cuenta:'22222222',obs:'Repuestos y neumáticos'},
+    {id:3,nombre:'Seguros Mapfre Chile',rut:'78.765.432-3',giro:'Seguros generales',dir:'Av. Providencia 123, Santiago',tel:'+56 2 2999 8000',email:'seguros@mapfre.cl',banco:'Santander',cuenta:'33333333',obs:'Seguro flota vehicular'},
+  ];
+
+  // ── Asientos contables ficticios ──
+  const asientos = [
+    {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',glosa:'Boleta arriendos buses enero',debe:[{cuenta:'1101',nombre:'Caja',monto:3808000}],haber:[{cuenta:'4101',nombre:'Ingresos por servicios',monto:3200000},{cuenta:'2201',nombre:'IVA Débito Fiscal',monto:608000}],total:3808000},
+    {id:2,fecha:fIso(anio,mes,3),tipo:'egreso',glosa:'Pago combustible Copec',debe:[{cuenta:'5101',nombre:'Gasto combustible',monto:1850000},{cuenta:'1102',nombre:'IVA Crédito Fiscal',monto:351500}],haber:[{cuenta:'1101',nombre:'Caja',monto:2201500}],total:2201500},
+    {id:3,fecha:fIso(anio,mes,28),tipo:'egreso',glosa:'Pago remuneraciones personal',debe:[{cuenta:'5201',nombre:'Gasto remuneraciones',monto:5850000}],haber:[{cuenta:'1101',nombre:'Caja',monto:5850000}],total:5850000},
+    {id:4,fecha:fIso(anio,mes,5),tipo:'ingreso',glosa:'Cobro servicio transporte escolar',debe:[{cuenta:'1101',nombre:'Caja',monto:2142000}],haber:[{cuenta:'4101',nombre:'Ingresos por servicios',monto:1800000},{cuenta:'2201',nombre:'IVA Débito Fiscal',monto:342000}],total:2142000},
+    {id:5,fecha:fIso(anio,mes,8),tipo:'egreso',glosa:'Pago seguro flota',debe:[{cuenta:'5301',nombre:'Gasto seguros',monto:980000},{cuenta:'1102',nombre:'IVA Crédito Fiscal',monto:186200}],haber:[{cuenta:'1101',nombre:'Caja',monto:1166200}],total:1166200},
+  ];
+
+  // ── Caja chica ──
+  const cajaChica = {
+    saldo:180000, fondoAsignado:250000,
+    movimientos:[
+      {id:1,fecha:fIso(anio,mes,2),tipo:'egreso',glosa:'Útiles de oficina',monto:12500,categoria:'Útiles',comprobante:'B-001'},
+      {id:2,fecha:fIso(anio,mes,5),tipo:'egreso',glosa:'Café y azúcar para oficina',monto:8900,categoria:'Alimentación',comprobante:'B-002'},
+      {id:3,fecha:fIso(anio,mes,8),tipo:'egreso',glosa:'Taxis trámites municipalidad',monto:15000,categoria:'Transporte',comprobante:'B-003'},
+      {id:4,fecha:fIso(anio,mes,12),tipo:'egreso',glosa:'Impresión documentos SII',monto:5600,categoria:'Útiles',comprobante:'B-004'},
+      {id:5,fecha:fIso(anio,mes,15),tipo:'ingreso',glosa:'Reposición fondo caja chica',monto:100000,categoria:'Reposición',comprobante:''},
+      {id:6,fecha:fIso(anio,mes,18),tipo:'egreso',glosa:'Gas para cocina',monto:28000,categoria:'Servicios',comprobante:'B-005'},
+    ]
+  };
+
+  // ── Activos fijos ──
+  const activos = [
+    {id:1,nombre:'Bus Mercedes-Benz 814',codigo:'BUS-001',patente:'BCDF-34',tipo:'Vehículo',fechaAdq:fIso(anio-3,1,15),valorAdq:35000000,vidaUtil:10,depAcum:10500000,valorLibro:24500000,estado:'Activo'},
+    {id:2,nombre:'Bus Mercedes-Benz 814',codigo:'BUS-002',patente:'BCDF-35',tipo:'Vehículo',fechaAdq:fIso(anio-3,1,15),valorAdq:35000000,vidaUtil:10,depAcum:10500000,valorLibro:24500000,estado:'Activo'},
+    {id:3,nombre:'Computador oficina HP',codigo:'EQ-001',patente:'',tipo:'Equipos',fechaAdq:fIso(anio-1,6,1),valorAdq:650000,vidaUtil:5,depAcum:130000,valorLibro:520000,estado:'Activo'},
+    {id:4,nombre:'Escritorio ejecutivo',codigo:'MOB-001',patente:'',tipo:'Mobiliario',fechaAdq:fIso(anio-2,3,1),valorAdq:280000,vidaUtil:7,depAcum:80000,valorLibro:200000,estado:'Activo'},
+  ];
+
+  // ── Vacaciones ──
+  const vacaciones = [
+    {id:1,trabajadorId:3,nombre:'Marianne Valbuena Urdaneta',fechaInicio:fIso(anio,mes,10),fechaFin:fIso(anio,mes,24),dias:10,tipo:'legal',estado:'aprobada',obs:'Vacaciones anuales'},
+    {id:2,trabajadorId:5,nombre:'Yasna Karina Rivera Rivera',fechaInicio:fIso(anio,mes+1,3),fechaFin:fIso(anio,mes+1,17),dias:10,tipo:'legal',estado:'pendiente',obs:'Vacaciones programadas'},
+  ];
+
+  // ── Ausencias ──
+  const ausencias = [
+    {id:1,trabajadorId:4,nombre:'Robinson Cea Mariscal',fecha:fIso(anio,mes,7),tipo:'Licencia médica',dias:3,obs:'Licencia médica código 1 — gripe'},
+    {id:2,trabajadorId:7,nombre:'Raúl Vera Castillo',fecha:fIso(anio,mes,14),tipo:'Permiso sin goce',dias:1,obs:'Trámites personales'},
+  ];
+
+  // ── Notas ──
+  const notas = [
+    {id:1,titulo:'Renovación SOAP buses',contenido:'Recordar renovar SOAP de ambos buses antes del 30 del mes. Copec ofrece descuento corporativo.',color:'orange',fijada:true,creada:fIso(anio,mes,1)},
+    {id:2,titulo:'Reunión con Municipalidad',contenido:'Reunión programada para revisar contrato transporte escolar próximo año. Preparar propuesta económica.',color:'blue',fijada:false,creada:fIso(anio,mes,5)},
+    {id:3,titulo:'Mantención preventiva BUS-002',contenido:'Bus patente BCDF-35 requiere cambio de aceite y revisión de frenos. Coordinar con Mauricio Peralta.',color:'red',fijada:true,creada:fIso(anio,mes,10)},
+  ];
+
+  // ── Horarios ──
+  const jornadas = [
+    {id:1,nombre:'Turno Mañana (6x1)',codigo:'TM',tipo:'6x1',entrada:'06:00',salida:'13:30',colacion:30,dias:['Lun','Mar','Mié','Jue','Vie','Sáb'],horasSem:44,color:'var(--cyan)'},
+    {id:2,nombre:'Turno Tarde (6x1)',codigo:'TT',tipo:'6x1',entrada:'13:30',salida:'21:00',colacion:30,dias:['Lun','Mar','Mié','Jue','Vie','Sáb'],horasSem:44,color:'var(--purple)'},
+    {id:3,nombre:'Administrativo (5x2)',codigo:'ADM',tipo:'administrativa',entrada:'08:30',salida:'18:00',colacion:60,dias:['Lun','Mar','Mié','Jue','Vie'],horasSem:44,sabado:{entrada:'09:00',salida:'13:00',colacion:0},color:'var(--green)'},
+  ];
+
+  // ── Comprobantes ──
+  const comprobantes = {
+    conceptosIng:['Pago pasajes','Abono servicio','Convenio empresa','Otros ingresos'],
+    conceptosEgr:['Combustible','Mantención','Remuneraciones','Seguros','Útiles','Otros gastos'],
+    registros:[
+      {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',concepto:'Pago pasajes',monto:450000,obs:'Recaudación línea 1 semana 1',archivador:''},
+      {id:2,fecha:fIso(anio,mes,8),tipo:'ingreso',concepto:'Pago pasajes',monto:480000,obs:'Recaudación línea 1 semana 2',archivador:''},
+      {id:3,fecha:fIso(anio,mes,3),tipo:'egreso',concepto:'Combustible',monto:2201500,obs:'Copec factura F-001234',archivador:''},
+      {id:4,fecha:fIso(anio,mes,28),tipo:'egreso',concepto:'Remuneraciones',monto:5850000,obs:'Pago sueldos personal',archivador:''},
+    ]
+  };
+
+  // ── Créditos trabajadores ──
+  const creditos = [
+    {id:1,trabajadorId:1,nombre:'Carlos Andrés Soto Lobos',monto:500000,cuotas:10,pagadas:3,fechaOtorg:fIso(anio-1,mes,1),obs:'Préstamo personal',activo:true},
+    {id:2,trabajadorId:4,nombre:'Robinson Cea Mariscal',monto:300000,cuotas:6,pagadas:1,fechaOtorg:fIso(anio,mes-1,15),obs:'Anticipo vacaciones',activo:true},
+  ];
+
+  // ── Construir empresa Demo completa ──
+  const demo = empVacia();
+  demo._esDemo = true;
+  demo.cfg = {
+    emp:'Transportes Demo SpA',
+    rut:'76.123.456-7',
+    giro:'Transporte de pasajeros',
+    tipo:'SpA',
+    regimen:'Semi-integrado',
+    codsii:'6020',
+    ppm:1.5,
+    dir:'Av. Valentín Letelier 456, Linares, Maule',
+    tel:'+56 73 212345',
+    email:'admin@transportesdemo.cl',
+    rep:'Jorge Arellano Marchant',
+    reprut:'17.890.123-4',
+    cont:'Yasna Rivera Rivera',
+    contrut:'16.789.012-3',
+    uf:38800, utm:68500, smm:510114,
+    mutual:'0.0093', ccaf:'Los Andes',
+    periodoActual: anio
+  };
+  demo.trabajadores = trabajadores;
+  demo.liquidaciones = liquidaciones;
+  demo.compras = compras;
+  demo.ventas = ventas;
+  demo.proveedores = proveedores;
+  demo.asientos = asientos;
+  demo.cajaChica = cajaChica;
+  demo.activos = activos;
+  demo.vacaciones = vacaciones;
+  demo.ausencias = ausencias||[];
+  demo.notas = notas;
+  demo.jornadas = jornadas;
+  demo.comprobantes = comprobantes;
+  demo.creditos = creditos;
+  demo.contratosDoc = [];
+  demo.plantillasContrato = [];
+
+  // Agregar empresa Demo y activarla
+  MASTER.empresas.push(demo);
+  MASTER.activa = MASTER.empresas.length-1;
+  save();
+  _actualizarBtnDemo(true);
+  go('dash');
+  toast('🎯 Modo Demo activado — Transportes Demo SpA lista para presentación','ok');
+}
+
+function salirDemo(){
+  if(!confirm('¿Salir del Modo Demo?\n\nVuelves a tu empresa real. Los datos Demo se conservan para próximas presentaciones.')) return;
+  const prev = MASTER._prevActiva||0;
+  MASTER.activa = prev;
+  save();
+  _actualizarBtnDemo(false);
+  go('dash');
+  toast('✅ Volviste a tu empresa real','ok');
+}
+
+function eliminarDemo(){
+  if(!confirm('¿Eliminar la empresa Demo completamente?\n\nEsta acción no se puede deshacer.')) return;
+  const idx = MASTER.empresas.findIndex(e=>e._esDemo===true);
+  if(idx<0){toast('No hay empresa Demo que eliminar','err');return;}
+  MASTER.empresas.splice(idx,1);
+  const prev = MASTER._prevActiva||0;
+  MASTER.activa = Math.min(prev, MASTER.empresas.length-1);
+  save();
+  _actualizarBtnDemo(false);
+  go('dash');
+  toast('🗑 Empresa Demo eliminada','ok');
+}
+
+function _actualizarBtnDemo(enDemo){
+  const btn = document.getElementById('btnDemo');
+  if(!btn) return;
+  if(enDemo){
+    btn.textContent = '🎯 SALIR DEMO';
+    btn.title = 'Salir del Modo Demo';
+    btn.style.background = 'rgba(234,179,8,0.3)';
+    btn.style.borderColor = '#eab308';
+    btn.style.color = '#eab308';
+    btn.onclick = ()=>{
+      const m = document.createElement('div');
+      m.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:20px;z-index:9999;min-width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);';
+      m.innerHTML=`<div style="font-size:14px;font-weight:800;color:var(--acc);margin-bottom:12px;">🎯 MODO DEMO</div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:14px;">Empresa: <b>Transportes Demo SpA</b></div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <button class="btn secondary" onclick="this.closest('div[style]').remove();salirDemo()">↩️ Volver a mi empresa real</button>
+          <button class="btn err" onclick="this.closest('div[style]').remove();eliminarDemo()">🗑 Eliminar Demo</button>
+          <button class="btn secondary" onclick="this.closest('div[style]').remove()">✕ Cancelar</button>
+        </div>`;
+      document.body.appendChild(m);
+    };
+  } else {
+    btn.textContent='🎯 DEMO';
+    btn.title='Modo Demo — datos de ejemplo para presentación';
+    btn.style.background='rgba(234,179,8,0.1)';
+    btn.onclick=activarDemo;
+  }
+}
+
 function logout(){
   document.getElementById('app').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
@@ -1889,7 +2160,6 @@ function _rTrabContratos(){
         <button class="abt edit" title="Editar contrato" onclick="abrirEditorContrato('${c.id}')">✏️</button>
         <button class="abt ok" title="Agregar anexo" onclick="abrirAnexoContrato('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📎</button>
         <button class="abt ok" title="Imprimir/PDF" onclick="imprimirContrato('${c.id}')" style="background:var(--blue2);color:var(--blue);font-size:10px;">🖨️</button>
-        <button class="abt ok" title="Descargar Word" onclick="descargarContratoWord('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📝</button>
         <button class="abt del" title="Eliminar" onclick="if(confirm('¿Eliminar contrato?')){DB().contratosDoc=DB().contratosDoc.filter(x=>x.id!=='${c.id}');saveDB();go('trab');}">🗑</button>
       </div>
     </div>`;
@@ -1903,7 +2173,6 @@ function _rTrabContratos(){
         <div class="cs">${contratos.length} contrato(s) · Normativa Código del Trabajo Chile</div>
       </div>
       <button class="btn primary sm" onclick="abrirNuevoContrato()">+ Nuevo Contrato</button>
-      <button class="btn success sm" onclick="abrirGestorPlantillas()">📂 Plantilla Propia</button>
     </div>
     <div style="padding:10px 13px;background:var(--s3);border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center;">
       <span style="font-size:9px;color:var(--muted);">FILTRAR:</span>
@@ -1918,95 +2187,54 @@ function _rTrabContratos(){
 }
 
 // ── Abrir nuevo contrato ──
-// ── Sugerir tipo de contrato según datos del trabajador ──
-function _sugerirTipoContrato(t){
-  if(!t) return 'Indefinido';
-  const hrs=+(t.jornada)||44;
-  const cargo=(t.cargo||'').toLowerCase();
-  const contrato=(t.contrato||'').toLowerCase();
-  if(contrato.includes('obra')||contrato.includes('faena')) return 'Por obra';
-  if(contrato.includes('plazo')||contrato.includes('fijo')) return 'Plazo fijo';
-  if((cargo.includes('gerente')||cargo.includes('administrador')||cargo.includes('jefe'))&&hrs>=40) return 'Art. 22 (excluido jornada)';
-  if(hrs<=20) return 'Jornada parcial 20h (Art. 40 bis)';
-  if(hrs<=30) return 'Jornada parcial 30h (Art. 40 bis)';
-  return 'Indefinido';
-}
-const TIPOS_CONTRATO_DT=[
-  {v:'Indefinido',l:'Indefinido — Art. 159 N°1 CT'},
-  {v:'Plazo fijo',l:'Plazo Fijo — Art. 159 N°4 CT'},
-  {v:'Por obra',l:'Por Obra o Faena — Art. 159 N°5 CT'},
-  {v:'Jornada parcial 20h (Art. 40 bis)',l:'Jornada Parcial 20h — Art. 40 bis CT'},
-  {v:'Jornada parcial 30h (Art. 40 bis)',l:'Jornada Parcial 30h — Art. 40 bis CT'},
-  {v:'Art. 22 (excluido jornada)',l:'Excluido Jornada — Art. 22 CT'},
-];
 function abrirNuevoContrato(trabajadorId){
-  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo')||[];
-  const hoy=new Date().toISOString().slice(0,10);
-  const trabsChk=trabs.map(t=>{
-    const sug=_sugerirTipoContrato(t);
-    return `<div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
-      <input type="checkbox" id="nc_chk_${t.id}" value="${t.id}" ${trabajadorId===t.id||(!trabajadorId&&trabs.length===1)?'checked':''} style="accent-color:var(--acc);">
-      <label for="nc_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
-      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
-      <span style="font-size:8px;color:var(--acc);font-weight:700;">→ ${sug}</span>
-    </div>`;
-  }).join('');
-  const tipoOpts=TIPOS_CONTRATO_DT.map(x=>`<option value="${x.v}">${x.l}</option>`).join('');
+  const trabs=DB().trabajadores||[];
+  const empresa=DB().nombre||'';
+  const trabOpts=trabs.map(t=>`<option value="${t.id}" ${trabajadorId===t.id?'selected':''}>${esc(t.nombre)}</option>`).join('');
   const body=`
     <div style="display:flex;flex-direction:column;gap:10px;">
-      <div style="background:var(--blue2);border:1px solid var(--blue);border-radius:7px;padding:8px 10px;font-size:9px;color:var(--blue);">
-        💡 El sistema sugiere el tipo según cargo, jornada y contrato registrado. Puedes cambiarlo antes de generar.
-      </div>
-      <div>
-        <div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">TRABAJADORES</div>
-        <div style="display:flex;gap:6px;margin-bottom:4px;">
-          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
-          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=nc_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
-        </div>
-        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
-      </div>
       <div class="frow h2">
-        <div><div class="fl">Tipo de contrato *</div><select class="fi" id="nc_tipo" onchange="_ncActualizarTipo()">${tipoOpts}</select></div>
-        <div><div class="fl">Jornada semanal</div>
-          <select class="fi" id="nc_hrs">
-            <option value="44">44h — Jornada completa</option><option value="42">42h</option>
-            <option value="40">40h</option><option value="30">30h — Parcial 3/4</option>
-            <option value="20">20h — Media jornada</option><option value="10">10h — Parcial mínima</option>
+        <div><div class="fl">Trabajador *</div>
+          <select class="fi" id="nc_trab" onchange="_ncActualizarTipo()">${trabOpts}</select></div>
+        <div><div class="fl">Tipo de contrato *</div>
+          <select class="fi" id="nc_tipo" onchange="_ncActualizarTipo()">
+            <option>Indefinido</option><option>Plazo fijo</option><option>Por obra</option>
           </select></div>
       </div>
       <div class="frow h2">
-        <div><div class="fl">Fecha inicio *</div><input class="fi" type="date" id="nc_fi" value="${hoy}"></div>
-        <div id="nc_ft_wrap"><div class="fl">Fecha término (plazo fijo)</div><input class="fi" type="date" id="nc_ft"></div>
+        <div><div class="fl">Fecha inicio *</div><input class="fi" type="date" id="nc_fi"></div>
+        <div><div class="fl">Fecha término (solo plazo fijo)</div><input class="fi" type="date" id="nc_ft"></div>
       </div>
-      <div class="frow h2">
-        <div><div class="fl">Ciudad</div><input class="fi" id="nc_ciudad" value="Linares"></div>
-        <div><div class="fl">Forma de pago</div>
-          <select class="fi" id="nc_fpago"><option>depósito en cuenta bancaria</option><option>cheque</option><option>efectivo</option></select></div>
-      </div>
-      <div class="frow h2">
-        <div><div class="fl">Representante legal</div><input class="fi" id="nc_rep" placeholder="Nombre representante legal"></div>
-        <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" placeholder="RUT empresa"></div>
-      </div>
+      <div><div class="fl">Ciudad</div><input class="fi" id="nc_ciudad" value="Linares" placeholder="Ciudad donde se firma"></div>
+      <div><div class="fl">Representante legal empleador</div><input class="fi" id="nc_rep" placeholder="Nombre representante legal"></div>
+      <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" placeholder="RUT empresa"></div>
       <div><div class="fl">Dirección empresa</div><input class="fi" id="nc_dir" placeholder="Dirección del lugar de trabajo"></div>
+      <div><div class="fl">Forma de pago</div>
+        <select class="fi" id="nc_fpago">
+          <option>depósito en cuenta bancaria</option>
+          <option>cheque</option>
+          <option>efectivo</option>
+        </select>
+      </div>
     </div>`;
   $('addTitle').textContent='📄 Nuevo Contrato de Trabajo';
   $('addBody').innerHTML=body;
   $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cancelar</button>
-    <button class="btn primary" onclick="guardarNuevoContrato()">Crear Contrato(s) →</button>`;
+    <button class="btn primary" onclick="guardarNuevoContrato()">Crear Contrato →</button>`;
   openModal('addModal');
-  _ncActualizarTipo();
 }
+
+// ── Actualizar tipo en formulario nuevo contrato ──
 function _ncActualizarTipo(){
   const tipo=($('nc_tipo')||{}).value||'Indefinido';
-  const ftWrap=$('nc_ft_wrap');
-  if(ftWrap) ftWrap.style.opacity=tipo==='Plazo fijo'?'1':'0.4';
+  const ftDiv=$('nc_ft')?$('nc_ft').parentElement:null;
+  if(ftDiv) ftDiv.style.opacity=tipo==='Plazo fijo'?'1':'0.4';
 }
 
 // ── Guardar nuevo contrato ──
 function guardarNuevoContrato(){
-  const chks=[...document.querySelectorAll('[id^=nc_chk_]')].filter(x=>x.checked).map(x=>+x.value);
+  const trabId=+($('nc_trab')||{}).value;
   const tipo=($('nc_tipo')||{}).value||'Indefinido';
-  const hrs=($('nc_hrs')||{}).value||'44';
   const fi=($('nc_fi')||{}).value||'';
   const ft=($('nc_ft')||{}).value||'';
   const ciudad=($('nc_ciudad')||{}).value||'';
@@ -2014,42 +2242,53 @@ function guardarNuevoContrato(){
   const rute=($('nc_rute')||{}).value||'';
   const dir=($('nc_dir')||{}).value||'';
   const fpago=($('nc_fpago')||{}).value||'depósito en cuenta bancaria';
-  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
-  if(!fi){alert('Ingresa la fecha de inicio.');return;}
-  if(tipo==='Plazo fijo'&&!ft){alert('Ingresa fecha de término para contrato a plazo fijo.');return;}
-  if(!DB().contratosDoc) DB().contratosDoc=[];
+  if(!trabId||!fi){ alert('Completa trabajador y fecha de inicio.'); return; }
+  if(tipo==='Plazo fijo'&&!ft){ alert('Ingresa fecha de término para contrato a plazo fijo.'); return; }
+  const t=DB().trabajadores.find(x=>x.id===trabId)||{};
   const emp=DB();
-  const horarios={44:{e:'08:00',s:'18:00',c:'60'},42:{e:'08:00',s:'17:48',c:'60'},40:{e:'08:00',s:'17:36',c:'60'},30:{e:'08:00',s:'14:00',c:'30'},20:{e:'08:00',s:'13:00',c:'0'},10:{e:'08:00',s:'10:00',c:'0'}};
-  const h=horarios[hrs]||horarios[44];
-  const tipoBase=tipo.includes('Plazo')?'Plazo fijo':tipo.includes('obra')||tipo.includes('Faena')?'Por obra':'Indefinido';
-  let creados=0;
-  chks.forEach((trabId,idx)=>{
-    const t=DB().trabajadores.find(x=>x.id===trabId)||{};
-    const clausulas=(CLAUSULAS_BASE[tipoBase]||CLAUSULAS_BASE['Indefinido']).map(cl=>({
-      ...cl,
-      texto:cl.texto
-        .replace(/{nombre_trabajador}/g,t.nombre||'').replace(/{rut_trabajador}/g,t.rut||'')
-        .replace(/{cargo}/g,t.cargo||'').replace(/{sueldo_base}/g,t.sb?fmt(t.sb):'')
-        .replace(/{afp}/g,t.afp||'').replace(/{salud}/g,t.salud||'')
-        .replace(/{horas_semana}/g,hrs).replace(/{fecha_inicio}/g,fi)
-        .replace(/{fecha_termino}/g,ft||'_______________').replace(/{ciudad}/g,ciudad)
-        .replace(/{nombre_empresa}/g,emp.nombre||'').replace(/{rut_empresa}/g,rute)
-        .replace(/{representante}/g,rep).replace(/{direccion_empresa}/g,dir)
-        .replace(/{forma_pago}/g,fpago).replace(/{dia_inicio}/g,'lunes')
-        .replace(/{dia_fin}/g,'sábado').replace(/{hora_entrada}/g,h.e)
-        .replace(/{hora_salida}/g,h.s).replace(/{colacion}/g,h.c)
-        .replace(/{fnac}/g,t.fnac||'').replace(/{nac}/g,t.nac||'')
-        .replace(/{ecivil}/g,t.ecivil||'').replace(/{dir_trab}/g,t.dir||'')
-        .replace(/{email}/g,t.email||'').replace(/{tel}/g,t.tel||'')
-    }));
-    DB().contratosDoc.push({id:'ct'+Date.now()+idx,trabajadorId:trabId,tipo,fechaInicio:fi,fechaTermino:ft||null,estado:'Vigente',clausulas,anexos:[],creado:new Date().toISOString(),modificado:new Date().toISOString()});
-    creados++;
-  });
+  // Prellenar cláusulas con datos del trabajador
+  const clausulas=(CLAUSULAS_BASE[tipo]||CLAUSULAS_BASE['Indefinido']).map(cl=>({
+    ...cl,
+    texto: cl.texto
+      .replace(/{nombre_trabajador}/g, t.nombre||'')
+      .replace(/{rut_trabajador}/g, t.rut||'')
+      .replace(/{cargo}/g, t.cargo||'')
+      .replace(/{sueldo_base}/g, t.sb?fmt(t.sb):'')
+      .replace(/{afp}/g, t.afp||'')
+      .replace(/{salud}/g, t.salud||'')
+      .replace(/{horas_semana}/g, t.jornada||44)
+      .replace(/{fecha_inicio}/g, fi)
+      .replace(/{fecha_termino}/g, ft||'_______________')
+      .replace(/{ciudad}/g, ciudad)
+      .replace(/{nombre_empresa}/g, emp.nombre||'')
+      .replace(/{rut_empresa}/g, rute)
+      .replace(/{representante}/g, rep)
+      .replace(/{direccion_empresa}/g, dir)
+      .replace(/{forma_pago}/g, fpago)
+      .replace(/{dia_inicio}/g, 'lunes')
+      .replace(/{dia_fin}/g, 'sábado')
+      .replace(/{hora_entrada}/g, '08:00')
+      .replace(/{hora_salida}/g, '18:00')
+      .replace(/{colacion}/g, '30')
+  }));
+  const nuevo={
+    id:'ct'+Date.now(),
+    trabajadorId:trabId,
+    tipo,
+    fechaInicio:fi,
+    fechaTermino:ft||null,
+    estado:'Vigente',
+    clausulas,
+    anexos:[],
+    creado:new Date().toISOString(),
+    modificado:new Date().toISOString()
+  };
+  if(!DB().contratosDoc) DB().contratosDoc=[];
+  DB().contratosDoc.push(nuevo);
   saveDB();
   closeModal('addModal');
   window._trab.sub='contratos';
   go('trab');
-  if(creados>1) setTimeout(()=>toast(`✅ ${creados} contratos generados`,'ok'),200);
 }
 
 // ── Editor de contrato (cláusulas) ──
@@ -2194,268 +2433,47 @@ function guardarAnexo(contratoId){
 }
 
 // ── Imprimir / PDF del contrato ──
-function _htmlContrato(contratoId,autoprint){
+function imprimirContrato(contratoId){
   const c=DB().contratosDoc.find(x=>x.id===contratoId);
-  if(!c) return null;
+  if(!c){ alert('Contrato no encontrado.'); return; }
   const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
   const emp=DB();
   const clausulasHTML=c.clausulas.map((cl,i)=>`
-    <div style="margin-bottom:20px;page-break-inside:avoid;">
-      <div style="font-size:11pt;font-weight:bold;margin-bottom:6px;text-decoration:underline;">${i+1}. ${cl.titulo.toUpperCase()}</div>
-      <div style="font-size:10pt;line-height:1.8;white-space:pre-wrap;text-align:justify;">${cl.texto}</div>
+    <div style="margin-bottom:18px;">
+      <div style="font-size:11pt;font-weight:bold;margin-bottom:6px;">${i+1}. ${cl.titulo}</div>
+      <div style="font-size:10pt;line-height:1.7;white-space:pre-wrap;">${cl.texto}</div>
     </div>`).join('');
   const anexosHTML=c.anexos&&c.anexos.length?`
     <div style="margin-top:30px;border-top:2px solid #333;padding-top:16px;">
-      <div style="font-size:13pt;font-weight:bold;margin-bottom:12px;text-align:center;">ANEXOS AL CONTRATO</div>
+      <div style="font-size:13pt;font-weight:bold;margin-bottom:12px;">ANEXOS AL CONTRATO</div>
       ${c.anexos.map((a,i)=>`
-        <div style="margin-bottom:14px;padding:12px;border:1px solid #999;">
-          <div style="font-weight:bold;font-size:10pt;">ANEXO N°${i+1} — ${a.tipo} — ${a.fecha}</div>
-          <div style="font-size:10pt;margin-top:8px;white-space:pre-wrap;">${a.desc}</div>
+        <div style="margin-bottom:14px;padding:10px;border:1px solid #ccc;border-radius:4px;">
+          <div style="font-weight:bold;font-size:10pt;">Anexo N°${i+1} — ${a.tipo} — ${a.fecha}</div>
+          <div style="font-size:10pt;margin-top:6px;white-space:pre-wrap;">${a.desc}</div>
         </div>`).join('')}
-    </div>`:'';
-  const printScript=autoprint?'<script>window.onload=()=>window.print();<\/script>':'';
-  return `<!DOCTYPE html><html><head><meta charset="utf-8">
-    <title>Contrato — ${t.nombre||''}</title>
-    <style>body{font-family:'Times New Roman',serif;font-size:11pt;color:#111;max-width:780px;margin:30px auto;padding:30px;}
-    @media print{body{margin:15mm;padding:0;max-width:100%;}}
-    h1{font-size:15pt;text-align:center;font-weight:bold;margin-bottom:4px;}
-    .header{text-align:center;margin-bottom:28px;border-bottom:2px solid #111;padding-bottom:14px;}
-    .nota-dt{font-size:8pt;color:#777;border:1px solid #ccc;padding:6px 10px;margin-bottom:20px;}</style>
-    </head><body>
+    </div>`:'' ;
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+    <title>Contrato — ${t.nombre}</title>
+    <style>
+      body{font-family:'Times New Roman',serif;font-size:11pt;color:#111;max-width:750px;margin:30px auto;padding:20px;}
+      h1{font-size:14pt;text-align:center;margin-bottom:4px;}
+      h2{font-size:12pt;text-align:center;color:#444;margin-bottom:20px;}
+      .header{text-align:center;margin-bottom:24px;border-bottom:2px solid #333;padding-bottom:12px;}
+      @media print{body{margin:10px;}}
+    </style></head><body>
     <div class="header">
-      <h1>CONTRATO INDIVIDUAL DE TRABAJO</h1>
-      <div style="font-size:12pt;font-weight:bold;">${c.tipo.toUpperCase()}</div>
-      <div style="font-size:10pt;margin-top:6px;">${esc(emp.nombre||'')} — RUT: ${esc(emp.cfg&&emp.cfg.rut||'')}</div>
-      <div style="font-size:9pt;color:#555;">Inicio: ${c.fechaInicio||'—'} ${c.fechaTermino?' | Término: '+c.fechaTermino:''} | Estado: ${c.estado||'Vigente'}</div>
+      <h1>CONTRATO DE TRABAJO</h1>
+      <h2>${c.tipo.toUpperCase()}</h2>
+      <div style="font-size:10pt;">${esc(emp.nombre||'')} · RUT Empresa: ${esc(emp.rut||'')}</div>
+      <div style="font-size:9pt;color:#666;">Fecha: ${c.fechaInicio} ${c.fechaTermino?'| Término: '+c.fechaTermino:''} | Estado: ${c.estado}</div>
     </div>
-    <div class="nota-dt">Documento conforme al Art. 10 Código del Trabajo de Chile y Ley 21.561. Se extiende en dos ejemplares de igual valor.</div>
-    ${clausulasHTML}${anexosHTML}${printScript}
+    ${clausulasHTML}
+    ${anexosHTML}
+    <script>window.onload=()=>window.print();<\/script>
     </body></html>`;
-}
-function imprimirContrato(contratoId){
-  const html=_htmlContrato(contratoId,true);
-  if(!html){alert('Contrato no encontrado.');return;}
   const w=window.open('','_blank');
   w.document.write(html);
   w.document.close();
-}
-function descargarContratoWord(contratoId){
-  const c=DB().contratosDoc.find(x=>x.id===contratoId);
-  if(!c){alert('Contrato no encontrado.');return;}
-  const t=DB().trabajadores.find(x=>x.id===c.trabajadorId)||{};
-  const html=_htmlContrato(contratoId,false);
-  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Contrato</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2cm;}p{line-height:1.8;text-align:justify;}</style></head><body>${html.replace(/<script[\s\S]*?<\/script>/gi,'')}</body></html>`;
-  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=`Contrato_${(t.nombre||'trabajador').replace(/\s+/g,'_')}.doc`;
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-}
-
-
-// ══════════════════════════════════════════════════════════════════
-// ║    MÓDULO PLANTILLAS PROPIAS DE CONTRATO (Word/PDF usuario)   ║
-// ══════════════════════════════════════════════════════════════════
-const VARS_PLANTILLA=[
-  ['{{nombre}}','Nombre completo del trabajador'],
-  ['{{rut}}','RUT del trabajador'],
-  ['{{cargo}}','Cargo del trabajador'],
-  ['{{sueldo}}','Sueldo base formateado'],
-  ['{{afp}}','AFP del trabajador'],
-  ['{{salud}}','Sistema de salud'],
-  ['{{fecha_inicio}}','Fecha de inicio del contrato'],
-  ['{{fecha_termino}}','Fecha de término (plazo fijo)'],
-  ['{{jornada}}','Horas semanales de jornada'],
-  ['{{empresa}}','Nombre de la empresa'],
-  ['{{rut_empresa}}','RUT de la empresa'],
-  ['{{direccion}}','Dirección de la empresa'],
-  ['{{ciudad}}','Ciudad'],
-  ['{{representante}}','Representante legal'],
-  ['{{banco}}','Banco del trabajador'],
-  ['{{cuenta}}','Número de cuenta'],
-  ['{{depto}}','Departamento'],
-  ['{{fnac}}','Fecha de nacimiento'],
-  ['{{nac}}','Nacionalidad'],
-  ['{{ecivil}}','Estado civil'],
-  ['{{dir_trab}}','Dirección particular del trabajador'],
-  ['{{email}}','Correo electrónico'],
-  ['{{tel}}','Teléfono'],
-];
-function abrirGestorPlantillas(){
-  const plantillas=DB().plantillasContrato||[];
-  const lista=plantillas.length?plantillas.map(p=>`
-    <div style="background:var(--s3);border:1px solid var(--border);border-radius:8px;padding:9px 12px;margin-bottom:6px;display:flex;align-items:center;gap:8px;">
-      <div style="font-size:18px;">${p.tipo==='pdf'?'📕':'📘'}</div>
-      <div style="flex:1;"><div style="font-size:11px;font-weight:800;">${esc(p.nombre)}</div>
-      <div style="font-size:9px;color:var(--muted);">${(p.creado||'').slice(0,10)} · ${p.tipo.toUpperCase()}</div></div>
-      <button class="btn sm primary" style="font-size:9px;" onclick="closeModal('addModal');usarPlantilla('${p.id}')">📋 Usar</button>
-      <button class="btn sm err" style="font-size:9px;" onclick="eliminarPlantilla('${p.id}')">🗑</button>
-    </div>`).join('')
-    :'<div style="text-align:center;padding:16px;color:var(--muted);font-size:10px;">Sin plantillas guardadas.</div>';
-  const varsHTML=VARS_PLANTILLA.map(([v,d])=>`
-    <div style="display:flex;gap:6px;padding:2px 0;border-bottom:1px solid var(--border);">
-      <code style="font-size:9px;color:var(--acc);min-width:130px;">${v}</code>
-      <span style="font-size:9px;color:var(--muted);">${d}</span></div>`).join('');
-  const body=`
-    <div style="display:flex;flex-direction:column;gap:12px;">
-      <div style="background:var(--teal2);border:1px solid var(--teal);border-radius:7px;padding:9px 12px;font-size:9px;color:var(--teal);">
-        💡 Sube tu propio contrato en Word (.docx). El sistema reemplazará las variables como <code>{{nombre}}</code>, <code>{{rut}}</code>, etc. con los datos de cada trabajador.
-      </div>
-      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">VARIABLES DISPONIBLES EN TU PLANTILLA</div>
-        <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px;max-height:150px;overflow-y:auto;">${varsHTML}</div>
-      </div>
-      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">SUBIR NUEVA PLANTILLA</div>
-        <div style="display:flex;gap:8px;align-items:flex-end;">
-          <div style="flex:1;"><div class="fl">Nombre de la plantilla</div>
-            <input class="fi" id="plt_nombre" placeholder="Ej: Contrato Indefinido Transportista"></div>
-          <div><input type="file" id="plt_file" accept=".docx,.pdf" style="display:none;" onchange="_pltArchivo(this)">
-            <button class="btn success" onclick="$('plt_file').click()">📎 Seleccionar (.docx / .pdf)</button></div>
-        </div>
-        <div id="plt_prev" style="margin-top:5px;font-size:9px;color:var(--muted);min-height:16px;"></div>
-        <button class="btn primary" style="margin-top:6px;width:100%;" onclick="subirPlantilla()">⬆️ Guardar plantilla</button>
-      </div>
-      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:6px;">MIS PLANTILLAS</div>${lista}</div>
-    </div>`;
-  $('addTitle').textContent='📂 Plantillas Propias de Contrato';
-  $('addBody').innerHTML=body;
-  $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cerrar</button>`;
-  openModal('addModal');
-}
-function _pltArchivo(input){
-  const file=input.files[0]; if(!file) return;
-  const prev=$('plt_prev');
-  if(prev) prev.textContent=`✅ ${file.name} (${(file.size/1024).toFixed(1)} KB)`;
-  if(!$('plt_nombre').value) $('plt_nombre').value=file.name.replace(/\.(docx|pdf)$/i,'');
-}
-function subirPlantilla(){
-  const nombre=($('plt_nombre')||{}).value?.trim();
-  const fileInput=$('plt_file');
-  const file=fileInput?.files[0];
-  if(!nombre){alert('Ingresa un nombre para la plantilla.');return;}
-  if(!file){alert('Selecciona un archivo .docx o .pdf.');return;}
-  const tipo=file.name.toLowerCase().endsWith('.pdf')?'pdf':'docx';
-  const reader=new FileReader();
-  reader.onload=function(e){
-    if(!DB().plantillasContrato) DB().plantillasContrato=[];
-    DB().plantillasContrato.push({id:'plt'+Date.now(),nombre,tipo,base64:e.target.result,creado:new Date().toISOString()});
-    saveDB(); abrirGestorPlantillas();
-  };
-  reader.readAsDataURL(file);
-}
-function eliminarPlantilla(id){
-  if(!confirm('¿Eliminar esta plantilla?')) return;
-  DB().plantillasContrato=(DB().plantillasContrato||[]).filter(p=>p.id!==id);
-  saveDB(); abrirGestorPlantillas();
-}
-function usarPlantilla(plantillaId){
-  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
-  if(!plt){alert('Plantilla no encontrada.');return;}
-  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo');
-  const hoy=new Date().toISOString().slice(0,10);
-  const trabsChk=trabs.map(t=>`
-    <div style="display:flex;align-items:center;gap:6px;padding:4px 6px;background:var(--s3);border-radius:6px;margin-bottom:3px;">
-      <input type="checkbox" id="up_chk_${t.id}" value="${t.id}" style="accent-color:var(--acc);">
-      <label for="up_chk_${t.id}" style="font-size:10px;flex:1;cursor:pointer;">${esc(t.nombre)}</label>
-      <span style="font-size:8px;color:var(--muted);">${esc(t.cargo||'')} · ${t.jornada||44}h</span>
-    </div>`).join('');
-  const body=`
-    <div style="display:flex;flex-direction:column;gap:10px;">
-      <div style="background:var(--s3);border:1px solid var(--border);border-radius:7px;padding:8px 10px;font-size:9px;">
-        📋 Plantilla: <b>${esc(plt.nombre)}</b> (${plt.tipo.toUpperCase()})
-      </div>
-      <div><div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:4px;">SELECCIONA TRABAJADORES</div>
-        <div style="display:flex;gap:6px;margin-bottom:4px;">
-          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=true)">✅ Todos</button>
-          <button class="btn sm secondary" style="font-size:8px;" onclick="document.querySelectorAll('[id^=up_chk_]').forEach(x=>x.checked=false)">☐ Ninguno</button>
-        </div>
-        <div style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:7px;padding:6px;">${trabsChk}</div>
-      </div>
-      <div class="frow h2">
-        <div><div class="fl">Fecha inicio</div><input class="fi" type="date" id="up_fi" value="${hoy}"></div>
-        <div><div class="fl">Fecha término (si aplica)</div><input class="fi" type="date" id="up_ft"></div>
-      </div>
-      <div class="frow h2">
-        <div><div class="fl">Ciudad</div><input class="fi" id="up_ciudad" value="Linares"></div>
-        <div><div class="fl">Representante legal</div><input class="fi" id="up_rep" placeholder="Nombre representante"></div>
-      </div>
-      <div style="font-size:9px;color:var(--muted);">ℹ️ Se genera un .doc por trabajador con sus datos completados. Si son varios, también se genera un Excel resumen.</div>
-    </div>`;
-  $('addTitle').textContent=`📋 Usar: ${esc(plt.nombre)}`;
-  $('addBody').innerHTML=body;
-  $('addFooter').innerHTML=`<button class="btn secondary" onclick="abrirGestorPlantillas()">← Volver</button>
-    <button class="btn primary" onclick="generarDesPlantilla('${plantillaId}')">⚙️ Generar Contrato(s)</button>`;
-  openModal('addModal');
-}
-function generarDesPlantilla(plantillaId){
-  const plt=(DB().plantillasContrato||[]).find(p=>p.id===plantillaId);
-  if(!plt){alert('Plantilla no encontrada.');return;}
-  const chks=[...document.querySelectorAll('[id^=up_chk_]')].filter(x=>x.checked).map(x=>+x.value);
-  if(!chks.length){alert('Selecciona al menos un trabajador.');return;}
-  const fi=($('up_fi')||{}).value||'';
-  const ft=($('up_ft')||{}).value||'';
-  const ciudad=($('up_ciudad')||{}).value||'';
-  const rep=($('up_rep')||{}).value||'';
-  const emp=DB();
-  const trabs=chks.map(id=>emp.trabajadores.find(t=>t.id===id)).filter(Boolean);
-  function reemplazar(txt,t){
-    return txt
-      .replace(/\{\{nombre\}\}/g,t.nombre||'').replace(/\{\{rut\}\}/g,t.rut||'')
-      .replace(/\{\{cargo\}\}/g,t.cargo||'').replace(/\{\{sueldo\}\}/g,t.sb?fmt(t.sb):'')
-      .replace(/\{\{afp\}\}/g,t.afp||'').replace(/\{\{salud\}\}/g,t.salud||'')
-      .replace(/\{\{fecha_inicio\}\}/g,fi).replace(/\{\{fecha_termino\}\}/g,ft||'_______________')
-      .replace(/\{\{jornada\}\}/g,t.jornada||44).replace(/\{\{empresa\}\}/g,emp.nombre||'')
-      .replace(/\{\{rut_empresa\}\}/g,emp.cfg&&emp.cfg.rut||'')
-      .replace(/\{\{direccion\}\}/g,emp.cfg&&emp.cfg.dir||'')
-      .replace(/\{\{ciudad\}\}/g,ciudad).replace(/\{\{representante\}\}/g,rep||emp.cfg&&emp.cfg.rep||'')
-      .replace(/\{\{banco\}\}/g,t.banco||'').replace(/\{\{cuenta\}\}/g,t.cuenta||'')
-      .replace(/\{\{depto\}\}/g,t.depto||'').replace(/\{\{fnac\}\}/g,t.fnac||'')
-      .replace(/\{\{nac\}\}/g,t.nac||'').replace(/\{\{ecivil\}\}/g,t.ecivil||'')
-      .replace(/\{\{dir_trab\}\}/g,t.dir||'').replace(/\{\{email\}\}/g,t.email||'')
-      .replace(/\{\{tel\}\}/g,t.tel||'');
-  }
-  if(plt.tipo==='docx'){
-    if(typeof mammoth==='undefined'){alert('Librería mammoth no disponible. Verifica conexión a internet.');return;}
-    const base64Data=plt.base64.split(',')[1];
-    const binary=atob(base64Data);
-    const bytes=new Uint8Array(binary.length);
-    for(let i=0;i<binary.length;i++) bytes[i]=binary.charCodeAt(i);
-    mammoth.extractRawText({arrayBuffer:bytes.buffer}).then(result=>{
-      const textoBase=result.value;
-      closeModal('addModal');
-      trabs.forEach((t,i)=>{
-        setTimeout(()=>{
-          const textoFinal=reemplazar(textoBase,t);
-          _descargarComoWord(textoFinal,`Contrato_${(t.nombre||'').replace(/\s+/g,'_')}`);
-        },i*400);
-      });
-      if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
-    }).catch(err=>alert('Error al leer Word: '+err.message));
-  } else {
-    closeModal('addModal');
-    trabs.forEach((t,i)=>{
-      setTimeout(()=>{
-        const texto=`CONTRATO DE TRABAJO\nPlantilla: ${plt.nombre}\n\nTrabajador: ${t.nombre||''}\nRUT: ${t.rut||''}\nFecha Nac: ${t.fnac||''}\nNacionalidad: ${t.nac||''}\nEstado Civil: ${t.ecivil||''}\nDirección: ${t.dir||''}\nTeléfono: ${t.tel||''}\nCorreo: ${t.email||''}\nCargo: ${t.cargo||''}\nSueldo: ${t.sb?fmt(t.sb):''}\nAFP: ${t.afp||''}\nSalud: ${t.salud||''}\nJornada: ${t.jornada||44}h/sem\nFecha inicio: ${fi}\n${ft?'Fecha término: '+ft+'\n':''}\nEmpresa: ${emp.nombre||''}\nCiudad: ${ciudad}\nRepresentante: ${rep||''}`;
-        _descargarComoWord(texto,`Datos_${(t.nombre||'').replace(/\s+/g,'_')}`);
-      },i*400);
-    });
-    if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
-  }
-}
-function _descargarComoWord(texto,nombreArchivo){
-  const htmlContenido=texto.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('');
-  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${nombreArchivo}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2.5cm;line-height:1.8;}p{margin:0 0 6pt 0;text-align:justify;}</style></head><body>${htmlContenido}</body></html>`;
-  const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download=nombreArchivo+'.doc';
-  document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
-}
-function _generarExcelResumen(trabs,fi,ft,nombrePlantilla){
-  const datos=trabs.map(t=>({'Nombre':t.nombre||'','RUT':t.rut||'','Cargo':t.cargo||'','Fecha Nac':t.fnac||'','Nacionalidad':t.nac||'','Estado Civil':t.ecivil||'','Dirección':t.dir||'','Teléfono':t.tel||'','Correo':t.email||'','Sueldo Base':t.sb||0,'AFP':t.afp||'','Salud':t.salud||'','Jornada h/sem':t.jornada||44,'Fecha Inicio':fi,'Fecha Término':ft||'Indefinido','Plantilla':nombrePlantilla,'Generado':new Date().toLocaleDateString('es-CL')}));
-  const ws=XLSX.utils.json_to_sheet(datos);
-  const wb=XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Contratos');
-  XLSX.writeFile(wb,`Resumen_Contratos_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ── Sub-vista: Importar Excel ── (100% reactiva, sin getElementById en lógica)
@@ -3199,9 +3217,6 @@ function openAddTrab(id){
   $('addBody').innerHTML=`
     <div class="frow h2"><div><div class="fl">Nombre completo</div><input class="fi" id="f_nombre" value="${t.nombre||''}"></div><div><div class="fl">RUT</div><input class="fi" id="f_rut" value="${t.rut||''}" placeholder="XX.XXX.XXX-X"></div></div>
     <div class="frow h2"><div><div class="fl">Cargo</div><input class="fi" id="f_cargo" value="${t.cargo||''}"></div><div><div class="fl">Fecha ingreso</div><input class="fi" type="date" id="f_fi" value="${t.fi||''}"></div></div>
-    <div class="frow h2"><div><div class="fl">Fecha de nacimiento</div><input class="fi" type="date" id="f_fnac" value="${t.fnac||''}"></div><div><div class="fl">Nacionalidad</div><input class="fi" id="f_nac" value="${t.nac||''}" placeholder="Ej: Chilena"></div></div>
-    <div class="frow h2"><div><div class="fl">Estado civil</div><select class="fi" id="f_ecivil"><option ${t.ecivil==='Soltero/a'?'selected':''}>Soltero/a</option><option ${t.ecivil==='Casado/a'?'selected':''}>Casado/a</option><option ${t.ecivil==='Divorciado/a'?'selected':''}>Divorciado/a</option><option ${t.ecivil==='Viudo/a'?'selected':''}>Viudo/a</option><option ${t.ecivil==='Conviviente civil'?'selected':''}>Conviviente civil</option></select></div><div><div class="fl">Dirección particular</div><input class="fi" id="f_dir" value="${t.dir||''}" placeholder="Calle, número, comuna"></div></div>
-    <div class="frow h2"><div><div class="fl">Correo electrónico</div><input class="fi" type="email" id="f_email" value="${t.email||''}" placeholder="correo@ejemplo.com"></div><div><div class="fl">Teléfono</div><input class="fi" id="f_tel" value="${t.tel||''}" placeholder="+56 9 XXXX XXXX"></div></div>
     <div class="frow h2"><div><div class="fl">Sueldo base</div><input class="fi" type="number" id="f_sb" value="${t.sb||''}"></div><div><div class="fl">Tipo contrato</div><select class="fi" id="f_contrato"><option ${t.contrato==='Indefinido'?'selected':''}>Indefinido</option><option ${t.contrato==='Plazo fijo'?'selected':''}>Plazo fijo</option><option ${t.contrato==='Por obra'?'selected':''}>Por obra</option></select></div></div>
     <div class="frow h2">
       <div><div class="fl">🕐 Jornada semanal (hrs/sem)</div>
@@ -3237,7 +3252,7 @@ function openAddTrab(id){
   $('addOk').onclick=()=>{
     const jornadaSel=document.getElementById('f_jornada')?.value;
     const jornadaVal=jornadaSel==='custom'?fv(document.getElementById('f_jornada_custom')?.value||42):parseInt(jornadaSel)||42;
-    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),fnac:f$('fnac'),nac:f$('nac'),ecivil:f$('ecivil'),dir:f$('dir'),email:f$('email'),tel:f$('tel'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
+    const item={id:id||nid(DB().trabajadores),nombre:f$('nombre'),rut:f$('rut'),cargo:f$('cargo'),depto:f$('depto'),area:f$('area'),fi:f$('fi'),sb:fv(f$('sb')),contrato:f$('contrato'),afp:f$('afp'),salud:f$('salud'),banco:f$('banco'),cuenta:f$('cuenta'),estado:f$('estado'),obs:f$('obs'),jornada:jornadaVal};
     if(!item.nombre){toast('Ingresa nombre','err');return;}
     if(!validRutToast(item.rut,'Trabajador'))return;
     if(id){const ix=DB().trabajadores.findIndex(x=>x.id===id);if(ix>=0)DB().trabajadores[ix]=item;}
