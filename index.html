@@ -2396,7 +2396,7 @@ const CLAUSULAS_BASE = {
     {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador dentro del giro de la empresa, de conformidad con lo establecido en el Reglamento Interno.'},
     {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}, o en cualquier otro lugar que El Empleador determine dentro de la misma ciudad, conforme a las necesidades operativas de la empresa.'},
     {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación no imputables a la jornada. A partir del año 2028 la jornada máxima será de 40 horas semanales conforme a la Ley 21.561.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de ${sueldo_base} brutos (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Dicha remuneración incluye la gratificación legal, si correspondiere, conforme al Art. 50 CT.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de {sueldo_base} brutos (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Dicha remuneración incluye la gratificación legal, si correspondiere, conforme al Art. 50 CT.'},
     {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones y pagos correspondientes a AFP {afp}, sistema de salud {salud}, AFC y demás descuentos legales conforme a la normativa vigente.'},
     {id:'c7', titulo:'Duración del contrato (Art. 159 N°1 CT)', editable:true, texto:'El presente contrato tendrá duración indefinida, iniciándose la relación laboral el {fecha_inicio}.'},
     {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El presente contrato podrá terminar por las causales establecidas en los artículos 159, 160 y 161 del Código del Trabajo, con las formalidades y plazos que la ley establece, incluyendo el pago de indemnizaciones que correspondan.'},
@@ -2408,7 +2408,7 @@ const CLAUSULAS_BASE = {
     {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador.'},
     {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}.'},
     {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de ${sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de {sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
     {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones correspondientes a AFP {afp}, sistema de salud {salud} y demás descuentos legales.'},
     {id:'c7', titulo:'Duración y plazo (Art. 159 N°4 CT)', editable:true, texto:'El presente contrato tendrá una duración desde el {fecha_inicio} hasta el {fecha_termino}. Si el Trabajador continúa prestando servicios con conocimiento del Empleador una vez vencido el plazo, el contrato se transformará en indefinido conforme al Art. 159 N°4 CT. El plazo no podrá exceder de 1 año (2 años para gerentes y personas con título profesional o técnico).'},
     {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El contrato terminará al vencimiento del plazo pactado o por las causales de los artículos 159, 160 y 161 del Código del Trabajo.'},
@@ -2420,7 +2420,7 @@ const CLAUSULAS_BASE = {
     {id:'c2', titulo:'Obra o faena (Art. 10 N°3 — Art. 159 N°5 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo} para la ejecución de la siguiente obra o faena específica: [DESCRIBIR OBRA O FAENA]. El contrato terminará al concluir la obra o faena encomendada.'},
     {id:'c3', titulo:'Lugar de trabajo', editable:true, texto:'Los servicios se prestarán en {direccion_empresa} o en el lugar donde se ejecute la obra o faena.'},
     {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT)', editable:true, texto:'La jornada será de {horas_semana} horas semanales en horario de {hora_entrada} a {hora_salida}.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará remuneración mensual de ${sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará remuneración mensual de {sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
     {id:'c6', titulo:'Previsión y salud', editable:true, texto:'Se efectuarán retenciones a AFP {afp} y salud {salud} conforme a la ley.'},
     {id:'c7', titulo:'Término (Art. 159 N°5 CT)', editable:true, texto:'El contrato termina al concluir la obra o faena. El empleador deberá comunicar el término con 30 días de anticipación o pagar indemnización sustitutiva.'},
     {id:'c8', titulo:'Reglamento interno', editable:true, texto:'El Trabajador acepta cumplir el Reglamento Interno de la empresa.'},
@@ -2497,6 +2497,7 @@ function _rTrabContratos(){
         <button class="abt edit" title="Editar contrato" onclick="abrirEditorContrato('${c.id}')">✏️</button>
         <button class="abt ok" title="Agregar anexo" onclick="abrirAnexoContrato('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📎</button>
         <button class="abt ok" title="Ver cláusulas" onclick="verClausulasContrato('${c.id}')" style="background:var(--purple2);color:var(--purple);font-size:10px;">👁</button>
+        <button class="abt ok" title="Historial documentos" onclick="verHistorialContrato('${c.id}')" style="background:var(--s3);color:var(--muted);font-size:10px;">📂</button>
         <button class="abt ok" title="Imprimir/PDF" onclick="imprimirContrato('${c.id}')" style="background:var(--blue2);color:var(--blue);font-size:10px;">🖨️</button>
         <button class="abt ok" title="Descargar Word" onclick="descargarContratoWord('${c.id}')" style="background:var(--teal2);color:var(--teal);font-size:10px;">📝</button>
         <button class="abt del" title="Eliminar" onclick="if(confirm('¿Eliminar contrato?')){DB().contratosDoc=DB().contratosDoc.filter(x=>x.id!=='${c.id}');saveDB();go('trab');}">🗑</button>
@@ -2946,7 +2947,7 @@ function _htmlContrato(contratoId,autoprint){
     <div class="header">
       <div style="font-size:15pt;font-weight:bold;">CONTRATO INDIVIDUAL DE TRABAJO</div>
       <div style="font-size:12pt;font-weight:bold;margin-top:4px;">${c.tipo.toUpperCase()}</div>
-      <div style="font-size:10pt;margin-top:6px;">${esc(emp.nombre||'')} — RUT: ${esc(emp.cfg&&emp.cfg.rut||emp.rut||'')}</div>
+      <div style="font-size:10pt;margin-top:6px;">${esc(emp.cfg&&emp.cfg.emp||'')} — RUT: ${esc(emp.cfg&&emp.cfg.rut||'')}</div>
       <div style="font-size:9pt;color:#555;">Inicio: ${c.fechaInicio||'—'} ${c.fechaTermino?' | Término: '+c.fechaTermino:''} | Estado: ${c.estado||'Vigente'}</div>
     </div>
     <div class="nota-dt">Documento conforme al Art. 10 Código del Trabajo de Chile y Ley 21.561. Se extiende en dos ejemplares de igual valor.</div>
@@ -2964,12 +2965,79 @@ function descargarContratoWord(contratoId){
   if(!ct){alert('Contrato no encontrado.');return;}
   const t=DB().trabajadores.find(x=>x.id===ct.trabajadorId)||{};
   const html=_htmlContrato(contratoId,false);
-  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Contrato</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2cm;}p{line-height:1.8;text-align:justify;}</style></head><body>${html.replace(/<script[\s\S]*?<\/script>/gi,'')}</body></html>`;
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>Contrato</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--><!--[if gte mso 9]><xml><w:PageMargins w:top='1701' w:right='1276' w:bottom='1701' w:left='1276' w:header='709' w:footer='709' w:gutter='0'/></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:0;padding:2.5cm;}p{line-height:1.8;text-align:justify;margin:0 0 6pt 0;}@page{margin:3cm 2.25cm;}</style></head><body>${html.replace(/<script[\s\S]*?<\/script>/gi,'')}</body></html>`;
   const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
   a.href=url;a.download=`Contrato_${(t.nombre||'trabajador').replace(/\s+/g,'_')}.doc`;
   document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  // Guardar referencia en historial del contrato para visualizar después
+  const idx=DB().contratosDoc.findIndex(x=>x.id===contratoId);
+  if(idx>=0){
+    if(!DB().contratosDoc[idx].historial) DB().contratosDoc[idx].historial=[];
+    DB().contratosDoc[idx].historial.push({
+      tipo:'word',fecha:new Date().toISOString(),
+      nombre:`Contrato_${(t.nombre||'trabajador').replace(/\s+/g,'_')}.doc`,
+      htmlBase64: btoa(unescape(encodeURIComponent(wordHtml)))
+    });
+    DB().contratosDoc[idx].modificado=new Date().toISOString();
+    saveDB();
+  }
+  toast('📝 Word descargado y guardado en historial','ok');
+}
+
+// ── Ver historial de documentos generados de un contrato ──
+function verHistorialContrato(contratoId){
+  const ct=DB().contratosDoc.find(x=>x.id===contratoId);
+  if(!ct){toast('Contrato no encontrado','err');return;}
+  const t=DB().trabajadores.find(x=>x.id===ct.trabajadorId)||{};
+  const hist=ct.historial||[];
+  const histHTML=hist.length?hist.map((h,i)=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px;background:var(--s3);border:1px solid var(--border);border-radius:7px;margin-bottom:6px;">
+      <div style="font-size:20px;">${h.tipo==='word'?'📝':'🖨️'}</div>
+      <div style="flex:1;">
+        <div style="font-size:11px;font-weight:700;">${h.nombre||'Documento'}</div>
+        <div style="font-size:9px;color:var(--muted);">${(h.fecha||'').slice(0,16).replace('T',' ')}</div>
+      </div>
+      <button class="btn sm primary" style="font-size:9px;" onclick="
+        const h=DB().contratosDoc.find(x=>x.id==='${contratoId}')?.historial?.[${i}];
+        if(!h)return;
+        if(h.tipo==='word'){
+          const dec=decodeURIComponent(escape(atob(h.htmlBase64)));
+          const b=new Blob(['\ufeff'+dec],{type:'application/msword'});
+          const u=URL.createObjectURL(b);
+          const a=document.createElement('a');a.href=u;a.download=h.nombre;
+          document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(u);
+        }
+      ">⬇️ Descargar</button>
+      <button class="btn sm secondary" style="font-size:9px;" onclick="
+        const h=DB().contratosDoc.find(x=>x.id==='${contratoId}')?.historial?.[${i}];
+        if(!h)return;
+        const dec=decodeURIComponent(escape(atob(h.htmlBase64)));
+        const w=window.open('','_blank');
+        if(w){w.document.write(dec);w.document.close();}
+      ">👁 Ver</button>
+      <button class="btn sm err" style="font-size:9px;" onclick="
+        if(!confirm('¿Eliminar del historial?'))return;
+        const ix=DB().contratosDoc.findIndex(x=>x.id==='${contratoId}');
+        if(ix<0)return;
+        DB().contratosDoc[ix].historial.splice(${i},1);
+        saveDB();verHistorialContrato('${contratoId}');
+      ">🗑</button>
+    </div>`).join('')
+  :`<div style="text-align:center;padding:20px;color:var(--muted);font-size:10px;">
+    Sin documentos generados aún.<br>Usa 🖨️ PDF o 📝 Word para generar y guardar aquí.
+  </div>`;
+  $('addTitle').textContent=`📂 Historial — ${esc(t.nombre||'Trabajador')}`;
+  $('addBody').innerHTML=`
+    <div style="font-size:9px;color:var(--muted);margin-bottom:10px;">
+      Documentos generados del contrato. Se guardan automáticamente al generar Word.
+    </div>${histHTML}`;
+  $('addFooter').innerHTML=`
+    <button class="btn secondary" onclick="closeModal('addModal')">Cerrar</button>
+    <button class="btn primary" onclick="closeModal('addModal');imprimirContrato('${contratoId}')">🖨️ Nuevo PDF</button>
+    <button class="btn success" onclick="closeModal('addModal');descargarContratoWord('${contratoId}')">📝 Nuevo Word</button>`;
+  openModal('addModal');
 }
 
 
@@ -3143,7 +3211,7 @@ function generarDesPlantilla(plantillaId){
 }
 function _descargarComoWord(texto,nombreArchivo){
   const htmlContenido=texto.split('\n').map(l=>`<p>${l||'&nbsp;'}</p>`).join('');
-  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${nombreArchivo}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View></w:WordDocument></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:2.5cm;line-height:1.8;}p{margin:0 0 6pt 0;text-align:justify;}</style></head><body>${htmlContenido}</body></html>`;
+  const wordHtml=`<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'><head><meta charset='utf-8'><title>${nombreArchivo}</title><!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom><w:DoNotOptimizeForBrowser/></w:WordDocument></xml><![endif]--><!--[if gte mso 9]><xml><w:PageMargins w:top='1701' w:right='1276' w:bottom='1701' w:left='1276' w:header='709' w:footer='709' w:gutter='0'/></xml><![endif]--><style>body{font-family:'Times New Roman',serif;font-size:12pt;margin:0;padding:2.5cm;}p{line-height:1.8;text-align:justify;margin:0 0 6pt 0;}@page{margin:3cm 2.25cm;}</style></head><body>${htmlContenido}</body></html>`;
   const blob=new Blob(['\ufeff'+wordHtml],{type:'application/msword'});
   const url=URL.createObjectURL(blob);
   const a=document.createElement('a');
