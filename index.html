@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>ContaMaster Pro v5 — Sistema Contable & RRHH Chile · Norma 2026 · Auditado</title>
+<title>ContaMaster Pro v6 — Sistema Contable & RRHH Chile · Norma 2026</title>
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="mobile-web-app-capable" content="yes">
@@ -11,7 +11,6 @@
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  GOOGLE DRIVE SYNC — ContaMaster Pro                                    ║
@@ -41,164 +40,33 @@ const CLIENT_CONFIG = {
 function adminSaveConfig(){try{localStorage.setItem('clientConfig',JSON.stringify(CLIENT_CONFIG));}catch(e){}}
 //@@CONFIG_FIN@@
 
-const GDRIVE_CLIENT_ID = '1004463196082-mqsdqttmcf6hahp0p79ucpg9p0c8d5vq.apps.googleusercontent.com';
-const GDRIVE_SCOPE     = 'https://www.googleapis.com/auth/drive.file';
-const GDRIVE_FILE_NAME = 'ContaMasterPro_data.json';
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  MANEJO DE ERRORES AMIGABLE — muestra toast en vez de       ║
+// ║  dejar al usuario con pantalla rota o consola vacía         ║
+// ╚══════════════════════════════════════════════════════════════╝
+window.addEventListener('error', function(e) {
+  // Solo mostrar si el toast ya existe en el DOM
+  const tw = document.getElementById('tw');
+  if (!tw) return;
+  // Ignorar errores de scripts externos (extensiones del navegador, etc.)
+  if (e.filename && !e.filename.includes(location.hostname) && e.filename !== '') return;
+  const msg = e.message || 'Error inesperado';
+  // No molestar con errores menores de autocomplete del navegador
+  if (msg.toLowerCase().includes('script error')) return;
+  toast('⚠️ ' + msg.substring(0, 80), 'err');
+  console.error('[ContaMaster]', e.message, e.filename, e.lineno);
+});
 
-let _gdriveToken   = null;
-let _gdriveFileId  = null;
-let _gdriveSyncing = false;
-let _gdriveEnabled = false;
+window.addEventListener('unhandledrejection', function(e) {
+  const tw = document.getElementById('tw');
+  if (!tw) return;
+  const msg = (e.reason && e.reason.message) ? e.reason.message : String(e.reason || 'Error en proceso asíncrono');
+  if (msg.length < 2) return;
+  toast('⚠️ ' + msg.substring(0, 80), 'err');
+  console.error('[ContaMaster async]', e.reason);
+});
 
-function gdriveInit() {
-  if (typeof google === 'undefined') return;
-  const saved  = localStorage.getItem('gdrive_token');
-  const expiry = localStorage.getItem('gdrive_token_expiry');
-  if (saved && expiry && Date.now() < parseInt(expiry)) {
-    _gdriveToken   = saved;
-    _gdriveFileId  = localStorage.getItem('gdrive_file_id') || null;
-    _gdriveEnabled = true;
-    gdriveUpdateUI(true);
-    gdriveLoad().catch(()=>{});
-  }
-}
 
-function gdriveConnect() {
-  if (typeof google === 'undefined') { toast('⚠️ Google no cargó. Verifica tu conexión.','err'); return; }
-  const client = google.accounts.oauth2.initTokenClient({
-    client_id: GDRIVE_CLIENT_ID,
-    scope: GDRIVE_SCOPE,
-    callback: async (resp) => {
-      if (resp.error) { toast('❌ Error Google: ' + resp.error,'err'); return; }
-      _gdriveToken   = resp.access_token;
-      _gdriveEnabled = true;
-      localStorage.setItem('gdrive_token', _gdriveToken);
-      localStorage.setItem('gdrive_token_expiry', Date.now() + (resp.expires_in||3600)*1000);
-      gdriveUpdateUI(true);
-      toast('✅ Google Drive conectado','ok');
-      await gdriveFindOrCreateFile();
-      const hayData = await gdriveHasData();
-      if (hayData) {
-        if (confirm('📂 Se encontraron datos en Google Drive.\n\n¿Cargar datos desde Drive?\n\nOK = Cargar desde Drive\nCancelar = Subir datos locales a Drive')) {
-          await gdriveLoad(); toast('📥 Datos cargados desde Drive','ok');
-        } else {
-          await gdriveSave(); toast('📤 Datos locales subidos a Drive','ok');
-        }
-      } else {
-        await gdriveSave(); toast('📤 Datos subidos a Drive por primera vez','ok');
-      }
-    },
-  });
-  client.requestAccessToken();
-}
-
-function gdriveDisconnect() {
-  if (!confirm('¿Desconectar Google Drive?\n\nTus datos locales se mantienen intactos.')) return;
-  _gdriveToken=null; _gdriveFileId=null; _gdriveEnabled=false;
-  localStorage.removeItem('gdrive_token');
-  localStorage.removeItem('gdrive_token_expiry');
-  localStorage.removeItem('gdrive_file_id');
-  gdriveUpdateUI(false);
-  toast('🔌 Google Drive desconectado','ok');
-}
-
-async function gdriveFindOrCreateFile() {
-  if (!_gdriveToken) return;
-  const search = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=name='${GDRIVE_FILE_NAME}' and trashed=false&fields=files(id,name)`,
-    { headers:{Authorization:'Bearer '+_gdriveToken} }
-  );
-  const data = await search.json();
-  if (data.files && data.files.length > 0) {
-    _gdriveFileId = data.files[0].id;
-    localStorage.setItem('gdrive_file_id', _gdriveFileId);
-    return;
-  }
-  const create = await fetch('https://www.googleapis.com/drive/v3/files',{
-    method:'POST',
-    headers:{Authorization:'Bearer '+_gdriveToken,'Content-Type':'application/json'},
-    body:JSON.stringify({name:GDRIVE_FILE_NAME,mimeType:'application/json'})
-  });
-  const file = await create.json();
-  _gdriveFileId = file.id;
-  localStorage.setItem('gdrive_file_id', _gdriveFileId);
-}
-
-async function gdriveHasData() {
-  if (!_gdriveToken||!_gdriveFileId) return false;
-  try {
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${_gdriveFileId}?alt=media`,
-      {headers:{Authorization:'Bearer '+_gdriveToken}});
-    const txt = await r.text();
-    return txt && txt.length > 10;
-  } catch { return false; }
-}
-
-async function gdriveSave() {
-  if (!_gdriveEnabled||!_gdriveToken||_gdriveSyncing) return;
-  _gdriveSyncing = true;
-  gdriveSyncIndicator('saving');
-  try {
-    if (!_gdriveFileId) await gdriveFindOrCreateFile();
-    const json = JSON.stringify(MASTER);
-    const boundary = 'conta_bdry_' + Date.now();
-    const body =
-      `--${boundary}\r\nContent-Type: application/json\r\n\r\n{"name":"${GDRIVE_FILE_NAME}"}\r\n` +
-      `--${boundary}\r\nContent-Type: application/json\r\n\r\n${json}\r\n--${boundary}--`;
-    await fetch(`https://www.googleapis.com/upload/drive/v3/files/${_gdriveFileId}?uploadType=multipart`,{
-      method:'PATCH',
-      headers:{Authorization:'Bearer '+_gdriveToken,'Content-Type':`multipart/related; boundary=${boundary}`},
-      body
-    });
-    gdriveSyncIndicator('ok');
-  } catch(e) {
-    gdriveSyncIndicator('err');
-    console.error('GDrive save error:',e);
-  } finally { _gdriveSyncing=false; }
-}
-
-async function gdriveLoad() {
-  if (!_gdriveEnabled||!_gdriveToken) return;
-  if (!_gdriveFileId) await gdriveFindOrCreateFile();
-  if (!_gdriveFileId) return;
-  try {
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files/${_gdriveFileId}?alt=media`,
-      {headers:{Authorization:'Bearer '+_gdriveToken}});
-    const txt = await r.text();
-    if (!txt||txt.length<10) return;
-    const parsed = JSON.parse(txt);
-    if (parsed&&parsed.empresas) {
-      MASTER = parsed;
-      await saveIDB();
-      try{localStorage.setItem('contaAppProV4',txt);}catch(e){}
-      go(TABS[0]);
-    }
-  } catch(e){console.error('GDrive load error:',e);}
-}
-
-function gdriveSyncIndicator(state) {
-  const el = document.getElementById('gdriveSyncDot');
-  if (!el) return;
-  const s = {ok:{c:'var(--green)'},saving:{c:'var(--acc)'},err:{c:'var(--red)'},off:{c:'var(--muted2)'}}[state]||{c:'var(--muted2)'};
-  el.style.background = s.c;
-}
-
-function gdriveUpdateUI(connected) {
-  const btn = document.getElementById('gdriveBtnHdr');
-  const dot = document.getElementById('gdriveSyncDot');
-  if (!btn) return;
-  if (connected) {
-    btn.title='Google Drive conectado — clic para desconectar';
-    btn.style.color='var(--green)'; btn.style.borderColor='var(--green)'; btn.style.background='rgba(32,184,106,.15)';
-    btn.onclick=gdriveDisconnect;
-    if(dot){dot.style.display='block';dot.style.background='var(--green)';}
-  } else {
-    btn.title='Conectar Google Drive';
-    btn.style.color=''; btn.style.borderColor=''; btn.style.background='';
-    btn.onclick=gdriveConnect;
-    if(dot) dot.style.display='none';
-  }
-}
 </script>
 <style>
 :root{
@@ -216,7 +84,7 @@ function gdriveUpdateUI(connected) {
   --pink:#ec4899;--pink2:rgba(236,72,153,.1);
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;touch-action:pan-y;}
+html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);font-family:'Syne',sans-serif;}
 /* LOGIN */
 .login-screen{position:fixed;inset:0;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9000;padding:20px;background-image:radial-gradient(ellipse at 20% 30%,rgba(200,168,75,.07) 0%,transparent 55%),radial-gradient(ellipse at 80% 70%,rgba(74,143,245,.05) 0%,transparent 55%);}
 .login-screen.hidden{display:none;}
@@ -247,11 +115,30 @@ html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);fon
 .nav::-webkit-scrollbar{display:none;}
 .ntab{padding:5px 11px;border-radius:16px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;transition:all .15s;flex-shrink:0;font-family:'Syne',sans-serif;letter-spacing:.5px;}
 .ntab.active{background:var(--acc3);border-color:var(--acc);color:var(--acc);}
+/* ── SISTEMA DE ÁREAS ── */
+.area-selector{flex:1;overflow-y:auto;overflow-x:hidden;padding:14px 10px;display:flex;flex-direction:column;gap:10px;min-height:0;}
+.area-card{display:flex;align-items:center;gap:14px;padding:14px 16px;border-radius:14px;border:1.5px solid var(--area-color,var(--acc));background:rgba(255,255,255,.03);cursor:pointer;transition:all .15s;-webkit-tap-highlight-color:transparent;}
+.area-card:active{transform:scale(.97);background:rgba(255,255,255,.07);}
+.area-card-ico{font-size:30px;flex-shrink:0;line-height:1;}
+.area-card-info{flex:1;}
+.area-card-name{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;letter-spacing:1px;color:var(--area-color,var(--acc));}
+.area-card-sub{font-size:10px;color:var(--muted);margin-top:2px;}
+.area-card-count{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:var(--area-color,var(--acc));opacity:.6;flex-shrink:0;}
+.area-badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:10px;font-size:9px;font-weight:900;letter-spacing:.8px;border:1px solid var(--area-color,var(--acc));color:var(--area-color,var(--acc));background:rgba(255,255,255,.04);cursor:pointer;white-space:nowrap;transition:all .15s;}
+.area-badge:hover{background:rgba(255,255,255,.08);}
+.nav-area{display:flex;gap:4px;padding:6px 10px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;align-items:center;}
+.nav-area #nav{flex:1;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;border:none!important;padding:2px 0!important;}
+.nav-area #nav::-webkit-scrollbar{display:none;}
+@media(max-width:600px){.nav-area{flex-wrap:wrap;}.nav-area #nav{flex-basis:100%;}}
+@media(min-width:601px){#navAreaDesc{flex-basis:auto!important;max-width:260px;}}
 .main{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:10px;display:flex;flex-direction:column;gap:10px;min-height:0;}
+div[style*="overflow-x:auto"]{-webkit-overflow-scrolling:touch;}
 .main::-webkit-scrollbar{width:2px;}
+#mc{display:block;}
+@media(hover:hover){.main::-webkit-scrollbar{width:6px;}}
 .main::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px;}
 /* CARDS */
-.card{background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:clip;}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:14px;overflow:hidden;}
 .card-hdr{display:flex;align-items:center;gap:9px;padding:10px 13px;border-bottom:1px solid var(--border);}
 .ci{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0;}
 .ct{font-size:12px;font-weight:700;color:var(--text);}
@@ -298,13 +185,14 @@ textarea.fi{resize:vertical;min-height:50px;}
 .btn:active{opacity:.8;transform:scale(.97);}
 .btn.sm{padding:5px 9px;font-size:10px;}
 /* TABLES */
-.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
-.tbl{width:100%;border-collapse:collapse;font-size:10px;min-width:380px;}
+.tw{overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;}
+.tbl{width:100%;border-collapse:collapse;font-size:10px;min-width:420px;}
 .tbl th{padding:6px 8px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.8px;color:var(--muted);border-bottom:1px solid var(--border);white-space:nowrap;}
 .tbl td{padding:6px 8px;border-bottom:1px solid var(--border);color:var(--text);vertical-align:middle;font-family:'JetBrains Mono',monospace;font-size:10px;}
 .tbl td.lbl{font-family:'Syne',sans-serif;font-size:11px;}
 .tbl tr:last-child td{border-bottom:none;}
 .tbl tr:hover td{background:rgba(255,255,255,.015);}
+@media(max-width:600px){.tbl{font-size:9px;min-width:360px;}.tbl th{font-size:8px;padding:5px 6px;}.tbl td{font-size:9px;padding:5px 6px;}}
 .num{text-align:right;}
 .tbl .green{color:var(--green);}.tbl .red{color:var(--red);}.tbl .acc{color:var(--acc);font-weight:700;}
 .tbl .blue{color:var(--blue);}.tbl .orange{color:var(--orange);}.tbl .muted{color:var(--muted);}
@@ -319,9 +207,11 @@ textarea.fi{resize:vertical;min-height:50px;}
 .badge.teal{background:var(--teal2);color:var(--teal);}
 .badge.purple{background:var(--purple2);color:var(--purple);}
 /* MODAL */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;display:none;align-items:flex-end;justify-content:center;}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:8000;display:none;align-items:center;justify-content:center;}
 .overlay.open{display:flex;}
-.modal{background:var(--s1);border:1px solid var(--border);border-radius:18px 18px 0 0;padding:18px 15px;width:100%;max-width:540px;max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+@media(max-width:600px){.overlay{align-items:flex-end;}}
+.modal{background:var(--s1);border:1px solid var(--border);border-radius:18px;padding:18px 15px;width:100%;max-width:540px;max-height:88vh;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;}
+@media(max-width:600px){.modal{border-radius:18px 18px 0 0;max-height:94vh;}}
 .modal-title{font-size:14px;font-weight:800;margin-bottom:3px;}
 .modal-sub{font-size:10px;color:var(--muted);margin-bottom:12px;}
 .mbtns{display:flex;gap:7px;margin-top:12px;}
@@ -430,9 +320,10 @@ textarea.fi{resize:vertical;min-height:50px;}
 <!-- ═══════════════════════════════ LOGIN ═══════════════════════════════ -->
 <div class="login-screen" id="loginScreen">
   <div class="login-brand">
-    <div class="login-brand-main">CONTA MASTER PRO v3</div>
+    <div style="font-size:52px;margin-bottom:6px;filter:drop-shadow(0 0 18px rgba(200,168,75,.35));">🏛️</div>
+    <div class="login-brand-main">CONTA MASTER PRO</div>
     <div class="login-brand-sub">SISTEMA CONTABLE · TRIBUTARIO · CHILE</div>
-    <div class="login-ver">VERSIÓN 12.0 — IA CONTABLE · CENTRALIZACIÓN 1-CLIC · CALENDAR TRIBUTARIO · AUTOMATIZACIÓN TOTAL · 2025</div>
+
   </div>
   <div class="login-box">
     <div style="font-size:10px;font-weight:700;letter-spacing:2px;color:var(--muted);text-align:center;margin-bottom:14px;">🔐 CLAVE DE ACCESO</div>
@@ -444,7 +335,9 @@ textarea.fi{resize:vertical;min-height:50px;}
     </div>
     <button class="btn primary full" onclick="checkPin()" style="padding:12px;font-size:13px;">▶ INGRESAR</button>
     <div style="font-size:10px;color:var(--red);text-align:center;margin-top:8px;min-height:14px;" id="lerr"></div>
-
+  </div>
+  <div style="margin-top:20px;font-size:8px;color:var(--muted2);letter-spacing:1.5px;text-align:center;opacity:.6;">
+    © 2026 ContaMaster Pro · Todos los derechos reservados
   </div>
 </div>
 
@@ -452,83 +345,109 @@ textarea.fi{resize:vertical;min-height:50px;}
 <div class="app hidden" id="app">
   <div class="hdr">
     <div style="flex:1;min-width:0;">
-      <div class="hdr-logo" id="hdrLogo">CONTA MASTER PRO v5</div>
+      <div class="hdr-logo" id="hdrLogo">CONTA MASTER PRO v6</div>
       <span class="hdr-sub" id="hdrSub">CONTABILIDAD · RRHH · TRIBUTARIO · IA · NORMA 2026</span>
     </div>
     <button class="ibtn" onclick="openModal('empresasModal')" title="Gestionar empresas" style="color:var(--acc);">🏢</button>
     <button class="ibtn" onclick="mostrarSelectorMes()" title="Período tributario mensual" style="color:var(--cyan);">📅</button>
-    <button class="ibtn" onclick="openIAModal()" title="Asistente IA Contable" style="color:var(--purple);border-color:var(--purple);background:var(--purple2);">🤖</button>
-    <button class="ibtn" onclick="centralizarTodo()" title="Centralización 1-clic" style="color:var(--green);border-color:var(--green);">⚡</button>
+
     <button class="ibtn" onclick="openModal('calendarioModal')" title="Calendario Tributario" style="color:var(--orange);border-color:var(--orange);">🗓</button>
     <button class="ibtn" onclick="openModal('exportModal')" title="Exportar">📊</button>
     <button class="ibtn" onclick="openModal('syncModal')" title="Backup/Restaurar" style="color:var(--teal);">🔄</button>
     <button class="ibtn" onclick="openModal('cfgModal')" title="Configuración">⚙️</button>
     <button class="ibtn" onclick="openLimpiezaModal()" title="Limpiar módulos" style="color:var(--orange);">🧹</button>
-    <button class="ibtn" id="gdriveBtnHdr" onclick="gdriveConnect()" title="Conectar Google Drive" style="position:relative;">☁️<span id="gdriveSyncDot" style="display:none;position:absolute;top:3px;right:3px;width:7px;height:7px;border-radius:50%;background:var(--green);border:1px solid var(--s1);"></span></button>
-    <button class="ibtn" id="btnDemo" onclick="activarDemo()" title="Modo Demo — datos de ejemplo para presentación" style="color:var(--yellow,#eab308);border-color:var(--yellow,#eab308);background:rgba(234,179,8,0.1);font-weight:900;font-size:11px;padding:5px 10px;letter-spacing:.5px;">🎯 DEMO</button>
     <button class="ibtn danger" onclick="logout()" title="Salir">🔒</button>
   </div>
-  <div id="navWrapper" style="display:flex;align-items:center;background:var(--s1);border-bottom:1px solid var(--border);">
-    <button id="navLeft" onclick="scrollNav(-200)" style="flex-shrink:0;width:30px;height:100%;min-height:36px;background:var(--s2);border:none;border-right:1px solid var(--border2);cursor:pointer;font-size:16px;color:var(--muted);display:none;align-items:center;justify-content:center;padding:0;">◀</button>
-  <div class="nav" id="nav" style="flex:1;min-width:0;">
-    <button class="ntab active" id="tab-dash" onclick="go('dash')">📊 RESUMEN</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(155,92,245,.15);color:var(--purple);border:1px solid var(--purple);">👥 RRHH</span>
-    <button class="ntab" id="tab-liq" onclick="go('liq')">🧾 LIQUIDACIÓN</button>
-    <button class="ntab" id="tab-trab" onclick="go('trab')">👥 TRABAJADORES</button>
-    <button class="ntab" id="tab-asist" onclick="go('asist')" style="border-color:var(--cyan);color:var(--cyan);">🕐 ASISTENCIA</button>
-    <button class="ntab" id="tab-horarios" onclick="go('horarios')" style="border-color:var(--purple);color:var(--purple);">📅 HORARIOS</button>
-    <button class="ntab" id="tab-finiq" onclick="go('finiq')" style="border-color:var(--blue);color:var(--blue);">📄 FINIQUITO</button>
-    <button class="ntab" id="tab-vacac" onclick="go('vacac')" style="border-color:var(--pink);color:var(--pink);">🌴 VACACIONES</button>
-    <button class="ntab" id="tab-ausencias" onclick="go('ausencias')" style="border-color:var(--orange);color:var(--orange);">🩺 AUSENCIAS</button>
-    <button class="ntab" id="tab-previred" onclick="go('previred')" style="border-color:var(--teal);color:var(--teal);">📤 PREVIRED</button>
-    <button class="ntab" id="tab-libroRemu" onclick="go('libroRemu')" style="border-color:var(--orange);color:var(--orange);">📑 LIBRO REMU.</button>
-    <button class="ntab" id="tab-creditos" onclick="go('creditos')" style="border-color:var(--orange);color:var(--orange);">💳 CRÉDITOS</button>
-    <button class="ntab" id="tab-certRemu" onclick="go('certRemu')" style="border-color:var(--green);color:var(--green);">📜 CERT. REMU.</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(245,158,11,.15);color:var(--orange);border:1px solid var(--orange);">📑 TRIBUTARIO</span>
-    <button class="ntab" id="tab-f29" onclick="go('f29')" style="border-color:var(--orange);color:var(--orange);">📑 F-29 / IVA</button>
-    <button class="ntab" id="tab-f22" onclick="go('f22')" style="border-color:var(--purple);color:var(--purple);">📑 F-22 / RENTA</button>
-    <button class="ntab" id="tab-f2121" onclick="go('f2121')" style="border-color:var(--cyan);color:var(--cyan);">📋 F-2121</button>
-    <button class="ntab" id="tab-dj" onclick="go('dj')" style="border-color:var(--pink);color:var(--pink);">📋 DJs SII</button>
-    <button class="ntab" id="tab-bhe" onclick="go('bhe')" style="border-color:var(--pink);color:var(--pink);">🧾 BHE PROPIAS</button>
-    <button class="ntab" id="tab-reg14a" onclick="go('reg14a')" style="border-color:var(--purple);color:var(--purple);">📋 REG. 14A</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(74,143,245,.15);color:var(--blue);border:1px solid var(--blue);">📒 CONTABILIDAD</span>
-    <button class="ntab" id="tab-contab" onclick="go('contab')" style="border-color:var(--blue);color:var(--blue);">📒 CONTABILIDAD</button>
-    <button class="ntab" id="tab-diario" onclick="go('diario')" style="border-color:var(--acc);color:var(--acc);">📔 LIBRO DIARIO</button>
-    <button class="ntab" id="tab-mayor" onclick="go('mayor')" style="border-color:var(--cyan);color:var(--cyan);">📖 LIBRO MAYOR</button>
-    <button class="ntab" id="tab-balance" onclick="go('balance')" style="border-color:var(--green);color:var(--green);">⚖️ BALANCE</button>
-    <button class="ntab" id="tab-librocaja14d" onclick="go('librocaja14d')" style="border-color:var(--orange);color:var(--orange);">📒 CAJA 14D</button>
-    <button class="ntab" id="tab-concilia" onclick="go('concilia')">🔄 CONCILIACIÓN</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(34,197,94,.15);color:var(--green);border:1px solid var(--green);">🛒 COMERCIAL</span>
-    <button class="ntab" id="tab-compras" onclick="go('compras')">🛒 COMPRAS</button>
-    <button class="ntab" id="tab-ventas" onclick="go('ventas')">💰 VENTAS</button>
-    <button class="ntab" id="tab-honorarios" onclick="go('honorarios')">📋 HONORARIOS</button>
-    <button class="ntab" id="tab-proveedores" onclick="go('proveedores')">🏢 PROVEEDORES</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(6,182,212,.15);color:var(--cyan);border:1px solid var(--cyan);">💧 FINANZAS</span>
-    <button class="ntab" id="tab-estfin" onclick="go('estfin')" style="border-color:var(--teal);color:var(--teal);">📋 EST. FINANCIERO</button>
-    <button class="ntab" id="tab-estfinm" onclick="go('estfinm')" style="border-color:var(--teal);color:var(--teal);">📆 EST. FIN. MENSUAL</button>
-    <button class="ntab" id="tab-flujo" onclick="go('flujo')" style="border-color:var(--cyan);color:var(--cyan);">💧 FLUJO DE CAJA</button>
-    <button class="ntab" id="tab-tesoreria" onclick="go('tesoreria')" style="border-color:var(--cyan);color:var(--cyan);">🏦 TESORERÍA</button>
-    <button class="ntab" id="tab-caja" onclick="go('caja')">💵 CAJA/BANCOS</button>
-    <button class="ntab" id="tab-retiros" onclick="go('retiros')" style="border-color:var(--purple);color:var(--purple);">🏦 RETIROS/MULTAS</button>
-    <button class="ntab" id="tab-leasing" onclick="go('leasing')" style="border-color:var(--purple);color:var(--purple);">🏢 LEASING</button>
-    <button class="ntab" id="tab-informe" onclick="go('informe')" style="border-color:var(--green);color:var(--green);">📊 INFORME MENSUAL</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(20,184,166,.15);color:var(--teal);border:1px solid var(--teal);">🏗 GESTIÓN</span>
-    <button class="ntab" id="tab-actfijo" onclick="go('actfijo')" style="border-color:var(--teal);color:var(--teal);">🏗 ACTIVO FIJO</button>
-    <button class="ntab" id="tab-obra" onclick="go('obra')" style="border-color:var(--teal);color:var(--teal);">🏗 OBRA/PROYECTOS</button>
-    <button class="ntab" id="tab-diesel" onclick="go('diesel')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">⛽ DIESEL</button>
-    <button class="ntab" id="tab-fondos" onclick="go('fondos')" style="border-color:var(--orange);color:var(--orange);">📂 FONDOS X RENDIR</button>
-    <span style="display:inline-flex;align-items:center;padding:2px 8px;font-size:8px;font-weight:900;letter-spacing:1px;white-space:nowrap;flex-shrink:0;border-radius:10px;margin:0 2px;background:rgba(100,116,139,.15);color:var(--muted);border:1px solid var(--border2);">🗂 OFICINA</span>
-    <button class="ntab" id="tab-cajachica" onclick="go('cajachica')" style="border-color:var(--purple);color:var(--purple);">💼 CAJA CHICA</button>
-    <button class="ntab" id="tab-comprobantes" onclick="go('comprobantes')" style="border-color:var(--green);color:var(--green);">🧾 COMPROBANTES</button>
-    <button class="ntab" id="tab-cuentasfijas" onclick="go('cuentasfijas')" style="border-color:var(--orange);color:var(--orange);">🏦 CTAS. FIJAS</button>
-    <button class="ntab" id="tab-archivador" onclick="go('archivador')" style="border-color:var(--teal);color:var(--teal);">📁 ARCHIVADOR</button>
-    <button class="ntab" id="tab-notas" onclick="go('notas')" style="border-color:var(--yellow,#eab308);color:var(--yellow,#eab308);">📝 NOTAS</button>
-    <button class="ntab" id="tab-auditoria" onclick="go('auditoria')" style="border-color:var(--orange);color:var(--orange);">🔍 AUDITORÍA</button>
-    <button class="ntab" id="tab-conv" onclick="go('conv')">🔢 CONVERSORES</button>
+  <!-- ── BARRA DE ÁREA ACTIVA (se muestra cuando hay área seleccionada) ── -->
+  <div id="navAreaBar" style="display:none;background:var(--s1);border-bottom:1px solid var(--border);">
+    <div class="nav-area">
+      <button id="navAreaBack" onclick="areaVolver()" style="flex-shrink:0;padding:4px 10px;border-radius:10px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);font-size:10px;font-weight:700;cursor:pointer;white-space:nowrap;font-family:'Syne',sans-serif;">← ÁREAS</button>
+      <div id="navAreaBadge" class="area-badge" style="flex-shrink:0;"></div>
+      <button id="navLeft" onclick="scrollNav(-120)" style="display:none;flex-shrink:0;width:24px;height:24px;border-radius:6px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);font-size:13px;cursor:pointer;align-items:center;justify-content:center;padding:0;font-family:'Syne',sans-serif;">‹</button>
+      <div class="nav" id="nav" style="flex:1;min-width:0;border:none;padding:0 4px;">
+        <!-- tabs se inyectan por JS según área activa -->
+      </div>
+      <button id="navRight" onclick="scrollNav(120)" style="display:none;flex-shrink:0;width:24px;height:24px;border-radius:6px;border:1px solid var(--border2);background:var(--s2);color:var(--muted);font-size:13px;cursor:pointer;align-items:center;justify-content:center;padding:0;font-family:'Syne',sans-serif;">›</button>
+      <div id="navAreaDesc" style="display:none;flex-basis:100%;font-size:9px;color:var(--muted);letter-spacing:.5px;padding:0 4px 2px;font-family:'Syne',sans-serif;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;"></div>
+    </div>
   </div>
-    <button id="navRight" onclick="scrollNav(200)" style="flex-shrink:0;width:30px;height:100%;min-height:36px;background:var(--s2);border:none;border-left:1px solid var(--border2);cursor:pointer;font-size:16px;color:var(--muted);display:none;align-items:center;justify-content:center;padding:0;">▶</button>
+
+  <!-- ── SELECTOR DE ÁREAS (pantalla principal) ── -->
+  <div id="areaSelectorWrap" class="area-selector">
+    <div style="padding:4px 4px 2px;font-family:'Syne',sans-serif;font-size:9px;font-weight:900;letter-spacing:2px;color:var(--muted);">SELECCIONAR ÁREA DE TRABAJO</div>
+
+    <!-- RESUMEN siempre visible -->
+    <div onclick="goResumen()" style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-radius:12px;border:1.5px solid var(--acc);background:var(--acc3);cursor:pointer;transition:all .15s;" onmousedown="this.style.transform='scale(.97)'" onmouseup="this.style.transform=''">
+      <span style="font-size:24px;">📊</span>
+      <div style="flex:1;">
+        <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;color:var(--acc);">RESUMEN GENERAL</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:1px;">Dashboard · KPIs · F-29 en vivo · Alertas</div>
+      </div>
+    </div>
+
+    <!-- RRHH -->
+    <div class="area-card" style="--area-color:var(--purple);" onclick="areaSeleccionar('rrhh')">
+      <div class="area-card-ico">👥</div>
+      <div class="area-card-info">
+        <div class="area-card-name">RECURSOS HUMANOS</div>
+        <div class="area-card-sub">Liquidaciones · Trabajadores · Asistencia · Horarios · Finiquito · Vacaciones · Previred</div>
+      </div>
+      <div class="area-card-count">11</div>
+    </div>
+
+    <!-- TRIBUTARIO -->
+    <div class="area-card" style="--area-color:var(--orange);" onclick="areaSeleccionar('tributario')">
+      <div class="area-card-ico">📑</div>
+      <div class="area-card-info">
+        <div class="area-card-name">TRIBUTARIO</div>
+        <div class="area-card-sub">F-29 · F-22 · F-2121 · DJs SII · BHE · Compras · Ventas · Honorarios · Reg. 14A</div>
+      </div>
+      <div class="area-card-count">9</div>
+    </div>
+
+    <!-- CONTABILIDAD -->
+    <div class="area-card" style="--area-color:var(--blue);" onclick="areaSeleccionar('contabilidad')">
+      <div class="area-card-ico">📒</div>
+      <div class="area-card-info">
+        <div class="area-card-name">CONTABILIDAD</div>
+        <div class="area-card-sub">Plan de cuentas · Libro Diario · Libro Mayor · Balance · Caja 14D · Conciliación · Activo Fijo</div>
+      </div>
+      <div class="area-card-count">7</div>
+    </div>
+
+    <!-- FINANZAS -->
+    <div class="area-card" style="--area-color:var(--cyan);" onclick="areaSeleccionar('finanzas')">
+      <div class="area-card-ico">💧</div>
+      <div class="area-card-info">
+        <div class="area-card-name">FINANZAS</div>
+        <div class="area-card-sub">Est. Financiero · Flujo de Caja · Tesorería · Caja/Bancos · Retiros · Leasing · Informe Mensual</div>
+      </div>
+      <div class="area-card-count">8</div>
+    </div>
+
+    <!-- COMERCIAL -->
+    <div class="area-card" style="--area-color:var(--green);" onclick="areaSeleccionar('comercial')">
+      <div class="area-card-ico">🛒</div>
+      <div class="area-card-info">
+        <div class="area-card-name">COMERCIAL</div>
+        <div class="area-card-sub">Proveedores · Obra/Proyectos · Diesel · Fondos x Rendir</div>
+      </div>
+      <div class="area-card-count">4</div>
+    </div>
+
+    <!-- OFICINA -->
+    <div class="area-card" style="--area-color:var(--teal);" onclick="areaSeleccionar('oficina')">
+      <div class="area-card-ico">🗂</div>
+      <div class="area-card-info">
+        <div class="area-card-name">OFICINA</div>
+        <div class="area-card-sub">Caja Chica · Comprobantes · Ctas. Fijas · Archivador · Notas · Auditoría · Conversores</div>
+      </div>
+      <div class="area-card-count">7</div>
+    </div>
   </div>
-  <div class="main" id="mc"></div>
+
+  <!-- ── CONTENIDO DE MÓDULOS ── -->
+  <div class="main" id="mc" style="display:none;"></div>
 </div>
 
 <!-- ═══════════════════════ MODALES ═══════════════════════ -->
@@ -646,6 +565,115 @@ textarea.fi{resize:vertical;min-height:50px;}
   </div>
 </div>
 
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- WIZARD PRIMER USO                                             -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+<div class="overlay" id="wizardModal" style="align-items:center;">
+  <div class="modal" style="max-width:400px;width:100%;padding:0;border-radius:20px;overflow:hidden;">
+
+    <!-- Paso 1: Bienvenida -->
+    <div id="wiz_step1" style="padding:28px 24px 24px;">
+      <div style="text-align:center;margin-bottom:20px;">
+        <div style="font-size:48px;margin-bottom:10px;filter:drop-shadow(0 0 16px rgba(200,168,75,.4));">🏛️</div>
+        <div style="font-family:'Syne',sans-serif;font-size:18px;font-weight:900;letter-spacing:2px;color:var(--acc);">¡BIENVENIDO!</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:4px;letter-spacing:1px;">CONTA MASTER PRO v6</div>
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:18px;">
+        <div style="font-size:12px;color:var(--text);line-height:1.7;">
+          En <b style="color:var(--acc);">3 pasos rápidos</b> configuramos tu empresa y quedas listo para trabajar.<br><br>
+          📌 Solo necesitas: <b>Razón social, RUT y régimen tributario.</b>
+        </div>
+      </div>
+      <!-- Indicador de pasos -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:20px;">
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--acc);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+      </div>
+      <button class="btn primary full" onclick="wizGo(2)" style="padding:13px;font-size:13px;font-weight:800;">Comenzar →</button>
+    </div>
+
+    <!-- Paso 2: Datos empresa -->
+    <div id="wiz_step2" style="display:none;padding:24px;">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;color:var(--acc);margin-bottom:16px;">🏢 Paso 1 de 2 — Tu empresa</div>
+      <div class="fgrid" style="gap:10px;">
+        <div class="frow">
+          <div class="fl">Razón Social *</div>
+          <input class="fi" id="wiz_emp" placeholder="Ej: EMPRESA EJEMPLO SpA" style="font-size:13px;">
+        </div>
+        <div class="frow">
+          <div class="fl">RUT Empresa *</div>
+          <input class="fi" id="wiz_rut" placeholder="76.123.456-7" style="font-size:13px;">
+        </div>
+        <div class="frow">
+          <div class="fl">Giro / Actividad</div>
+          <input class="fi" id="wiz_giro" placeholder="Ej: Transporte de carga" style="font-size:13px;">
+        </div>
+        <div class="frow">
+          <div class="fl">Régimen Tributario</div>
+          <select class="fi" id="wiz_regimen" style="font-size:13px;">
+            <option value="">Seleccionar...</option>
+            <option>14A - General Semi-Integrado</option>
+            <option>14D3 - Pro Pyme General</option>
+            <option>14D8 - Pro Pyme Transparente</option>
+            <option>Segunda Categoría</option>
+            <option>Microempresa Familiar</option>
+          </select>
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--muted);margin:10px 0 16px;">* Campos obligatorios. Los demás datos los puedes completar después en ⚙️ Configuración.</div>
+      <!-- Indicador de pasos -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin-bottom:16px;">
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--acc);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn secondary" onclick="wizGo(1)" style="flex:1;padding:12px;">← Volver</button>
+        <button class="btn primary" onclick="wizGuardarEmpresa()" style="flex:2;padding:12px;font-weight:800;">Guardar y continuar →</button>
+      </div>
+    </div>
+
+    <!-- Paso 3: Período tributario -->
+    <div id="wiz_step3" style="display:none;padding:24px;">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:800;letter-spacing:1px;color:var(--acc);margin-bottom:16px;">📅 Paso 2 de 2 — Período de trabajo</div>
+      <div style="background:var(--s2);border:1px solid var(--border2);border-radius:12px;padding:14px 16px;margin-bottom:14px;font-size:12px;color:var(--muted);line-height:1.6;">
+        ¿En qué <b style="color:var(--text);">mes y año</b> vas a trabajar primero? Esto afecta el F-29, compras, ventas y todos los reportes.
+      </div>
+      <div class="fgrid" style="gap:10px;">
+        <div class="frow h2">
+          <div>
+            <div class="fl">Mes tributario</div>
+            <select class="fi" id="wiz_mes" style="font-size:13px;">
+              <option value="0">Enero</option><option value="1">Febrero</option><option value="2">Marzo</option>
+              <option value="3">Abril</option><option value="4">Mayo</option><option value="5">Junio</option>
+              <option value="6">Julio</option><option value="7">Agosto</option><option value="8">Septiembre</option>
+              <option value="9">Octubre</option><option value="10">Noviembre</option><option value="11">Diciembre</option>
+            </select>
+          </div>
+          <div>
+            <div class="fl">Año</div>
+            <select class="fi" id="wiz_año" style="font-size:13px;">
+              <option value="2024">2024</option>
+              <option value="2025">2025</option>
+              <option value="2026" selected>2026</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <!-- Indicador de pasos -->
+      <div style="display:flex;align-items:center;justify-content:center;gap:6px;margin:16px 0;">
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--s3);"></div>
+        <div style="width:28px;height:4px;border-radius:4px;background:var(--acc);"></div>
+      </div>
+      <button class="btn primary full" onclick="wizFinalizar()" style="padding:13px;font-size:13px;font-weight:800;">✅ ¡Listo! Empezar a usar</button>
+    </div>
+
+  </div>
+</div>
+
+
 <!-- CFG -->
 <div class="overlay" id="cfgModal">
   <div class="modal">
@@ -669,41 +697,6 @@ textarea.fi{resize:vertical;min-height:50px;}
   </div>
 </div>
 
-<!-- ═══════════════════ MODAL IA ASISTENTE CONTABLE ═══════════════════ -->
-<div class="overlay" id="iaModal">
-  <div class="modal" style="max-height:95vh;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-      <div>
-        <div class="modal-title" style="color:var(--purple);">🤖 Asistente IA Contable</div>
-        <div class="modal-sub">Describe una operación → genera el asiento contable automáticamente</div>
-      </div>
-      <button onclick="closeModal('iaModal')" style="background:var(--s3);border:1px solid var(--border2);color:var(--text);font-size:18px;cursor:pointer;border-radius:50%;width:36px;height:36px;display:flex;align-items:center;justify-content:center;">✕</button>
-    </div>
-    <div style="background:var(--s2);border:1px solid var(--border2);border-radius:10px;padding:10px;margin-bottom:10px;font-size:9px;color:var(--muted);line-height:1.8;">
-      💡 <b style="color:var(--text);">Ejemplos:</b> "Pagué arriendo de oficina $450.000 con transferencia", 
-      "Recibí factura de proveedor por $200.000 neto más IVA", 
-      "Registrar depreciación mensual de equipos por $85.000",
-      "Socio retiró $500.000 de la empresa", "Pago de AFP del mes por $320.000"
-    </div>
-    <div style="position:relative;margin-bottom:10px;">
-      <textarea class="fi" id="ia_input" rows="3" placeholder="Describe la operación contable en lenguaje natural..." style="resize:none;padding-right:80px;"></textarea>
-      <button onclick="iaGenerarAsiento()" id="ia_btn" style="position:absolute;right:8px;bottom:8px;background:var(--purple2);border:1px solid rgba(155,92,245,.4);color:var(--purple);padding:6px 12px;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;">✨ Generar</button>
-    </div>
-    <div id="ia_resultado" style="display:none;"></div>
-    <div style="margin-top:8px;">
-      <div style="font-size:9px;font-weight:700;color:var(--muted);letter-spacing:1px;margin-bottom:6px;">⚡ ACCESOS RÁPIDOS IA</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;">
-        <button class="btn secondary sm" onclick="iaRapido('Registrar IVA débito fiscal de ventas del período')">🧾 IVA Ventas</button>
-        <button class="btn secondary sm" onclick="iaRapido('Registrar IVA crédito fiscal de compras del período')">🛒 IVA Compras</button>
-        <button class="btn secondary sm" onclick="iaRapido('Asiento de remuneraciones del período incluyendo AFP, Fonasa e Impuesto Único')">👥 Remuneraciones</button>
-        <button class="btn secondary sm" onclick="iaRapido('Asiento de depreciación mensual de activos fijos')">🏗 Depreciación</button>
-        <button class="btn secondary sm" onclick="iaRapido('Pago de PPM mensual al Servicio de Impuestos Internos')">📑 PPM</button>
-        <button class="btn secondary sm" onclick="iaRapido('Retiro de socio/propietario de la empresa')">🏦 Retiro Socio</button>
-      </div>
-    </div>
-    <div class="mbtns"><button class="mbtn cancel" onclick="closeModal('iaModal')">Cerrar</button></div>
-  </div>
-</div>
 
 <!-- ═══════════════════ MODAL CALENDARIO TRIBUTARIO ═══════════════════ -->
 <div class="overlay" id="calendarioModal">
@@ -777,7 +770,7 @@ textarea.fi{resize:vertical;min-height:50px;}
       <!-- BACKUP / RESTORE -->
       <div class="dvd"><span>💾 BACKUP JSON</span></div>
       <div class="info-box" style="font-size:9px;">
-        📋 El JSON incluye TODAS las empresas y sus datos. Guárdalo en Google Drive / WhatsApp para sincronizar entre dispositivos.
+        📋 El JSON incluye TODAS las empresas y sus datos. Guárdalo como respaldo en un lugar seguro.
       </div>
       <button class="btn teal full" onclick="backupCompleto()">💾 Backup COMPLETO (.json) — todas las empresas</button>
       <button class="btn info full" onclick="backupEmpresa()">🏢 Backup EMPRESA activa (.json)</button>
@@ -1085,12 +1078,16 @@ async function loadIDB(){
 
 // Guardar: primero IDB (principal), luego localStorage (fallback)
 function save(){
-  if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();
   saveIDB().then(()=>{
     try{localStorage.setItem('contaAppProV4',JSON.stringify(MASTER));}catch(e){}
     updateStorageIndicator();
-  }).catch(()=>{
-    try{localStorage.setItem('contaAppProV4',JSON.stringify(MASTER));}catch(e){toast('Error al guardar','err');}
+  }).catch((saveErr)=>{
+    try{
+      localStorage.setItem('contaAppProV4',JSON.stringify(MASTER));
+    }catch(e){
+      toast('⚠️ No se pudo guardar. Espacio insuficiente o error de almacenamiento.','err');
+      console.error('[ContaMaster save]', saveErr, e);
+    }
   });
 }
 
@@ -1224,9 +1221,24 @@ function checkPin(){
     document.getElementById('loginScreen').classList.add('hidden');
     document.getElementById('app').classList.remove('hidden');
     try{updateHeader();}catch(e){}
-    try{go('dash');}catch(e){}
+    // Wizard de primer uso si la empresa no está configurada
+    setTimeout(()=>{try{wizCheck();}catch(e){}},300);
+    // Restaurar última área y módulo visitados
+    (function(){
+      try{
+        const lastArea=localStorage.getItem('cm_lastArea');
+        const lastTab=localStorage.getItem('cm_lastTab');
+        if(lastArea&&AREAS_DEF[lastArea]){
+          areaSeleccionar(lastArea);
+          if(lastTab&&AREAS_DEF[lastArea].tabs.find(tb=>tb.id===lastTab)){
+            setTimeout(()=>go(lastTab),80);
+          }
+          return;
+        }
+      }catch(e){}
+      try{go('dash');}catch(e){};
+    })();
     setTimeout(initNavArrows,100);
-    setTimeout(gdriveInit,800);
     el.value='';
   }else{
     el.style.borderColor='var(--red)';
@@ -1236,555 +1248,14 @@ function checkPin(){
   }
 }
 
-// ══════════════════════════════════════════════════════════════════
-// ║              MODO DEMO — ContaMaster Pro                       ║
-// ║   Empresa ficticia con datos completos para presentaciones     ║
-// ══════════════════════════════════════════════════════════════════
-
-function activarDemo(){
-  // Verificar si ya existe empresa demo
-  const yaExiste = MASTER.empresas.findIndex(e=>e._esDemo===true);
-  if(yaExiste>=0){
-    // Ya existe — solo activarla
-    const prev = MASTER.activa;
-    MASTER._prevActiva = prev;
-    MASTER.activa = yaExiste;
-    save();
-    _actualizarBtnDemo(true);
-    go('dash');
-    toast('🎯 Modo Demo activado — empresa ficticia para presentación','ok');
-    return;
-  }
-
-  if(!confirm('¿Activar Modo Demo?\n\nSe creará una empresa ficticia "Transportes Demo SpA" con datos de ejemplo en todos los módulos.\n\nTus datos reales NO se tocarán.')){return;}
-
-  // Guardar índice actual para volver
-  MASTER._prevActiva = MASTER.activa;
-
-  // ── Datos base ──
-  const hoy = new Date();
-  const anio = hoy.getFullYear();
-  const mes = hoy.getMonth()+1;
-  const fmt2 = n => String(n).padStart(2,'0');
-  const fIso = (y,m,d) => `${y}-${fmt2(m)}-${fmt2(d)}`;
-
-  // ── Trabajadores ficticios ──
-  const trabajadores = [
-    {id:1,nombre:'Pedro Alejandro Muñoz Vera',rut:'12.345.678-9',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2019-03-01',fnac:'1985-06-15',nac:'Chilena',ecivil:'Casado/a',dir:'Los Aromos 234, Linares',email:'pmuñoz@transportesdemo.cl',tel:'+56 9 8123 4567',sb:650000,contrato:'Indefinido',afp:'Habitat',salud:'FONASA',banco:'BancoEstado',cuenta:'12345678',estado:'Activo',obs:'',jornada:44},
-    {id:2,nombre:'Roberto Ignacio Campos Silva',rut:'13.456.789-0',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2020-01-15',fnac:'1988-09-22',nac:'Chilena',ecivil:'Soltero/a',dir:'Av. Brasil 567, Linares',email:'rcampos@transportesdemo.cl',tel:'+56 9 8234 5678',sb:650000,contrato:'Indefinido',afp:'Capital',salud:'FONASA',banco:'Santander',cuenta:'23456789',estado:'Activo',obs:'',jornada:44},
-    {id:3,nombre:'Ana María Sepúlveda Lagos',rut:'14.567.890-1',cargo:'Inspectora',depto:'Operaciones',area:'Garita',fi:'2021-05-01',fnac:'1990-03-08',nac:'Venezolana',ecivil:'Casado/a',dir:'Calle Yerbas Buenas 89, Linares',email:'asepulveda@transportesdemo.cl',tel:'+56 9 8345 6789',sb:580000,contrato:'Indefinido',afp:'Modelo',salud:'FONASA',banco:'BancoEstado',cuenta:'34567890',estado:'Activo',obs:'',jornada:44},
-    {id:4,nombre:'Diego Hernán Contreras Pinto',rut:'15.678.901-2',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2018-08-01',fnac:'1982-11-30',nac:'Chilena',ecivil:'Divorciado/a',dir:'Av. Valentín Letelier 123, Linares',email:'dcontreras@transportesdemo.cl',tel:'+56 9 8456 7890',sb:670000,contrato:'Indefinido',afp:'ProVida',salud:'COLMENA',banco:'Chile',cuenta:'45678901',estado:'Activo',obs:'',jornada:44},
-    {id:5,nombre:'Valentina Andrea Morales Díaz',rut:'16.789.012-3',cargo:'Administrativa',depto:'Administración',area:'Oficina',fi:'2020-09-01',fnac:'1992-07-14',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Pinos 456, Linares',email:'vmorales@transportesdemo.cl',tel:'+56 9 8567 8901',sb:720000,contrato:'Indefinido',afp:'Cuprum',salud:'BANMEDICA',banco:'BancoEstado',cuenta:'56789012',estado:'Activo',obs:'',jornada:44},
-    {id:6,nombre:'Francisco Javier Reyes Núñez',rut:'17.890.123-4',cargo:'Jefe de Operaciones',depto:'Administración',area:'Oficina',fi:'2017-02-01',fnac:'1978-04-25',nac:'Chilena',ecivil:'Casado/a',dir:'Av. Uno Sur 789, Linares',email:'freyes@transportesdemo.cl',tel:'+56 9 8678 9012',sb:1200000,contrato:'Indefinido',afp:'Habitat',salud:'CONSALUD',banco:'Chile',cuenta:'67890123',estado:'Activo',obs:'',jornada:44},
-    {id:7,nombre:'Cecilia Paz Gutiérrez Vidal',rut:'18.901.234-5',cargo:'Conductor',depto:'Operaciones',area:'Ruta',fi:'2022-03-15',fnac:'1995-12-10',nac:'Chilena',ecivil:'Soltero/a',dir:'Los Boldos 321, Linares',email:'cgutierrez@transportesdemo.cl',tel:'+56 9 8789 0123',sb:630000,contrato:'Plazo fijo',afp:'Uno',salud:'FONASA',banco:'BancoEstado',cuenta:'78901234',estado:'Activo',obs:'Contrato plazo fijo hasta dic 2026',jornada:44},
-    {id:8,nombre:'Luis Eduardo Vargas Espinoza',rut:'19.012.345-6',cargo:'Mecánico',depto:'Mantención',area:'Garita',fi:'2019-11-01',fnac:'1980-08-18',nac:'Chilena',ecivil:'Casado/a',dir:'El Roble 654, Linares',email:'lvargas@transportesdemo.cl',tel:'+56 9 8890 1234',sb:750000,contrato:'Indefinido',afp:'PlanVital',salud:'MASVIDA',banco:'Santander',cuenta:'89012345',estado:'Activo',obs:'',jornada:44},
-  ];
-
-  // ── Liquidaciones ficticias (3 meses) ──
-  const liquidaciones = [];
-  [mes-2,mes-1,mes].forEach((m,mi)=>{
-    const mm = m<=0?m+12:m;
-    const aa = m<=0?anio-1:anio;
-    trabajadores.forEach(t=>{
-      const afpTasa = {Capital:0.1144,Cuprum:0.1144,Habitat:0.1127,Modelo:0.1058,PlanVital:0.1116,ProVida:0.1145,Uno:0.1046}[t.afp]||0.1127;
-      const base = Math.min(t.sb,3269948);
-      const afpDesc = Math.round(base*afpTasa);
-      const saludDesc = t.salud==='FONASA'?Math.round(base*0.07):Math.round(base*0.07);
-      const sisDesc = Math.round(base*0.0163);
-      const grati = Math.round(t.sb*0.25);
-      const total = t.sb + grati;
-      const liquido = total - afpDesc - saludDesc - sisDesc;
-      liquidaciones.push({
-        id:liquidaciones.length+1, trabajadorId:t.id, rut:t.rut,
-        nombre:t.nombre, mes:mm, anio:aa, sb:t.sb,
-        grati, totalHaberes:total,
-        afp:t.afp, afpDesc, salud:t.salud, saludDesc, sisDesc,
-        totalDesc:afpDesc+saludDesc+sisDesc,
-        liquido, contrato:t.contrato, estado:'pagada',
-        fechaPago:fIso(aa,mm,28), obs:''
-      });
-    });
-  });
-
-  // ── Compras ficticias ──
-  const compras = [
-    {id:1,fecha:fIso(anio,mes,3),rut:'76.543.210-1',proveedor:'Copec S.A.',folio:'F-001234',neto:1850000,iva:351500,total:2201500,glosa:'Combustible buses línea 1',tipo:'factura'},
-    {id:2,fecha:fIso(anio,mes,5),rut:'77.654.321-2',proveedor:'Repuestos Automotriz Ltda.',folio:'F-002345',neto:420000,iva:79800,total:499800,glosa:'Neumáticos y repuestos',tipo:'factura'},
-    {id:3,fecha:fIso(anio,mes,8),rut:'78.765.432-3',proveedor:'Seguros Mapfre Chile',folio:'F-003456',neto:980000,iva:186200,total:1166200,glosa:'Prima seguro flota buses',tipo:'factura'},
-    {id:4,fecha:fIso(anio,mes,12),rut:'79.876.543-4',proveedor:'Lubricantes del Sur',folio:'F-004567',neto:156000,iva:29640,total:185640,glosa:'Aceites y lubricantes mantención',tipo:'factura'},
-    {id:5,fecha:fIso(anio,mes,15),rut:'80.987.654-5',proveedor:'Servicios Generales SpA',folio:'F-005678',neto:350000,iva:66500,total:416500,glosa:'Servicio aseo y mantención oficinas',tipo:'factura'},
-    {id:6,fecha:fIso(anio,mes,18),rut:'76.543.210-1',proveedor:'Copec S.A.',folio:'F-006789',neto:2100000,iva:399000,total:2499000,glosa:'Combustible buses línea 2',tipo:'factura'},
-    {id:7,fecha:fIso(anio,mes,22),rut:'81.098.765-6',proveedor:'Tecno Bus Ltda.',folio:'F-007890',neto:680000,iva:129200,total:809200,glosa:'Reparación motor bus patente BCDF-34',tipo:'factura'},
-  ];
-
-  // ── Ventas ficticias ──
-  const ventas = [
-    {id:1,fecha:fIso(anio,mes,1),rut:'69.123.456-7',cliente:'Municipalidad de Linares',folio:'V-000123',neto:3200000,iva:608000,total:3808000,glosa:'Servicio transporte escolar marzo',tipo:'factura'},
-    {id:2,fecha:fIso(anio,mes,5),rut:'69.234.567-8',cliente:'Colegio San Francisco',folio:'V-000124',neto:1800000,iva:342000,total:2142000,glosa:'Servicio transporte estudiantes',tipo:'factura'},
-    {id:3,fecha:fIso(anio,mes,10),rut:'69.345.678-9',cliente:'Agrícola Los Olivos Ltda.',folio:'V-000125',neto:2400000,iva:456000,total:2856000,glosa:'Transporte personal temporada',tipo:'factura'},
-    {id:4,fecha:fIso(anio,mes,15),rut:'69.456.789-0',cliente:'Hospital Regional de Linares',folio:'V-000126',neto:1200000,iva:228000,total:1428000,glosa:'Servicio transporte personal médico',tipo:'factura'},
-    {id:5,fecha:fIso(anio,mes,20),rut:'69.567.890-1',cliente:'Constructora Maulina SpA',folio:'V-000127',neto:2800000,iva:532000,total:3332000,glosa:'Transporte trabajadores obra Panguilemo',tipo:'factura'},
-  ];
-
-  // ── Proveedores ──
-  const proveedores = [
-    {id:1,nombre:'Copec S.A.',rut:'76.543.210-1',giro:'Distribución combustibles',dir:'Av. El Golf 150, Santiago',tel:'+56 2 2888 9000',email:'clientes@copec.cl',banco:'Chile',cuenta:'11111111',obs:'Proveedor principal combustible'},
-    {id:2,nombre:'Repuestos Automotriz Ltda.',rut:'77.654.321-2',giro:'Repuestos vehículos',dir:'Av. Industrial 234, Talca',tel:'+56 71 234567',email:'ventas@repuestosauto.cl',banco:'BancoEstado',cuenta:'22222222',obs:'Repuestos y neumáticos'},
-    {id:3,nombre:'Seguros Mapfre Chile',rut:'78.765.432-3',giro:'Seguros generales',dir:'Av. Providencia 123, Santiago',tel:'+56 2 2999 8000',email:'seguros@mapfre.cl',banco:'Santander',cuenta:'33333333',obs:'Seguro flota vehicular'},
-  ];
-
-  // ── Asientos contables ficticios ──
-  // Asientos en formato compatible con módulo Contabilidad (ctaDebe/ctaHaber planos)
-  const asientos = [
-    {id:1,folio:1,fecha:fIso(anio,mes,1),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Boleta arriendos buses enero',ctaDebe:'Caja (1101)',debe:3808000,ctaHaber:'Ingresos por servicios (4101)',haber:3200000,cc:''},
-    {id:2,folio:2,fecha:fIso(anio,mes,3),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago combustible Copec',ctaDebe:'Gasto combustible (5101)',debe:1850000,ctaHaber:'Caja (1101)',haber:2201500,cc:''},
-    {id:3,folio:3,fecha:fIso(anio,mes,5),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Cobro servicio transporte escolar',ctaDebe:'Caja (1101)',debe:2142000,ctaHaber:'Ingresos por servicios (4101)',haber:1800000,cc:''},
-    {id:4,folio:4,fecha:fIso(anio,mes,8),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago seguro flota',ctaDebe:'Gasto seguros (5301)',debe:1166200,ctaHaber:'Caja (1101)',haber:1166200,cc:''},
-    {id:5,folio:5,fecha:fIso(anio,mes,15),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago arriendo oficina',ctaDebe:'Gasto arriendo (5401)',debe:350000,ctaHaber:'Caja (1101)',haber:350000,cc:'ADM'},
-    {id:6,folio:6,fecha:fIso(anio,mes,18),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Cobro transporte Constructora Maulina',ctaDebe:'Cuentas por cobrar (1201)',debe:3332000,ctaHaber:'Ingresos por servicios (4101)',haber:2800000,cc:'OB-001'},
-    {id:7,folio:7,fecha:fIso(anio,mes,22),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Compra repuestos bus',ctaDebe:'Gasto mantención (5102)',debe:499800,ctaHaber:'Caja (1101)',haber:499800,cc:''},
-    {id:8,folio:8,fecha:fIso(anio,mes,28),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago remuneraciones personal',ctaDebe:'Gasto remuneraciones (5201)',debe:5850000,ctaHaber:'Caja (1101)',haber:5850000,cc:''},
-    {id:9,folio:9,fecha:fIso(anio,mes,28),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Depreciación mensual buses',ctaDebe:'Depreciación acumulada (1502)',debe:291667,ctaHaber:'Gasto depreciación (5501)',haber:291667,cc:''},
-    {id:10,folio:10,fecha:fIso(anio,mes,30),periodo:`${anio}-${String(mes).padStart(2,'0')}`,glosa:'Pago IVA mes anterior',ctaDebe:'IVA Débito Fiscal (2201)',debe:950000,ctaHaber:'Caja (1101)',haber:950000,cc:''},
-  ];
-
-  // ── Caja chica ──
-  const cajaChica = {
-    saldo:180000, fondoAsignado:250000,
-    movimientos:[
-      {id:1,fecha:fIso(anio,mes,2),tipo:'egreso',glosa:'Útiles de oficina',monto:12500,categoria:'Útiles',comprobante:'B-001'},
-      {id:2,fecha:fIso(anio,mes,5),tipo:'egreso',glosa:'Café y azúcar para oficina',monto:8900,categoria:'Alimentación',comprobante:'B-002'},
-      {id:3,fecha:fIso(anio,mes,8),tipo:'egreso',glosa:'Taxis trámites municipalidad',monto:15000,categoria:'Transporte',comprobante:'B-003'},
-      {id:4,fecha:fIso(anio,mes,12),tipo:'egreso',glosa:'Impresión documentos SII',monto:5600,categoria:'Útiles',comprobante:'B-004'},
-      {id:5,fecha:fIso(anio,mes,15),tipo:'ingreso',glosa:'Reposición fondo caja chica',monto:100000,categoria:'Reposición',comprobante:''},
-      {id:6,fecha:fIso(anio,mes,18),tipo:'egreso',glosa:'Gas para cocina',monto:28000,categoria:'Servicios',comprobante:'B-005'},
-    ]
-  };
-
-  // ── Activos fijos ──
-  const activos = [
-    {id:1,nombre:'Bus Mercedes-Benz 814',codigo:'BUS-001',patente:'BCDF-34',tipo:'Vehículo',fechaAdq:fIso(anio-3,1,15),valorAdq:35000000,vidaUtil:10,depAcum:10500000,valorLibro:24500000,estado:'Activo'},
-    {id:2,nombre:'Bus Mercedes-Benz 814',codigo:'BUS-002',patente:'BCDF-35',tipo:'Vehículo',fechaAdq:fIso(anio-3,1,15),valorAdq:35000000,vidaUtil:10,depAcum:10500000,valorLibro:24500000,estado:'Activo'},
-    {id:3,nombre:'Computador oficina HP',codigo:'EQ-001',patente:'',tipo:'Equipos',fechaAdq:fIso(anio-1,6,1),valorAdq:650000,vidaUtil:5,depAcum:130000,valorLibro:520000,estado:'Activo'},
-    {id:4,nombre:'Escritorio ejecutivo',codigo:'MOB-001',patente:'',tipo:'Mobiliario',fechaAdq:fIso(anio-2,3,1),valorAdq:280000,vidaUtil:7,depAcum:80000,valorLibro:200000,estado:'Activo'},
-  ];
-
-  // ── Vacaciones ──
-  const vacaciones = [
-    {id:1,trabajadorId:3,nombre:'Ana María Sepúlveda Lagos',fechaInicio:fIso(anio,mes,10),fechaFin:fIso(anio,mes,24),dias:10,tipo:'legal',estado:'aprobada',obs:'Vacaciones anuales'},
-    {id:2,trabajadorId:5,nombre:'Valentina Andrea Morales Díaz',fechaInicio:fIso(anio,mes+1,3),fechaFin:fIso(anio,mes+1,17),dias:10,tipo:'legal',estado:'pendiente',obs:'Vacaciones programadas'},
-  ];
-
-
-
-  // ── Notas ──
-  const notas = [
-    {id:1,titulo:'Renovación SOAP buses',contenido:'Recordar renovar SOAP de ambos buses antes del 30 del mes. Copec ofrece descuento corporativo.',color:'orange',fijada:true,creada:fIso(anio,mes,1)},
-    {id:2,titulo:'Reunión con Municipalidad',contenido:'Reunión programada para revisar contrato transporte escolar próximo año. Preparar propuesta económica.',color:'blue',fijada:false,creada:fIso(anio,mes,5)},
-    {id:3,titulo:'Mantención preventiva BUS-002',contenido:'Bus patente BCDF-35 requiere cambio de aceite y revisión de frenos. Coordinar con Luis Eduardo Vargas.',color:'red',fijada:true,creada:fIso(anio,mes,10)},
-  ];
-
-  // ── Horarios ──
-  const jornadas = [
-    {id:1,nombre:'Turno Mañana (6x1)',codigo:'TM',tipo:'6x1',entrada:'06:00',salida:'13:30',colacion:30,dias:['Lun','Mar','Mié','Jue','Vie','Sáb'],horasSem:44,color:'var(--cyan)'},
-    {id:2,nombre:'Turno Tarde (6x1)',codigo:'TT',tipo:'6x1',entrada:'13:30',salida:'21:00',colacion:30,dias:['Lun','Mar','Mié','Jue','Vie','Sáb'],horasSem:44,color:'var(--purple)'},
-    {id:3,nombre:'Administrativo (5x2)',codigo:'ADM',tipo:'administrativa',entrada:'08:30',salida:'18:00',colacion:60,dias:['Lun','Mar','Mié','Jue','Vie'],horasSem:44,sabado:{entrada:'09:00',salida:'13:00',colacion:0},color:'var(--green)'},
-  ];
-
-  // ── Comprobantes ──
-  const comprobantes = {
-    conceptosIng:['Pago pasajes','Abono servicio','Convenio empresa','Otros ingresos'],
-    conceptosEgr:['Combustible','Mantención','Remuneraciones','Seguros','Útiles','Otros gastos'],
-    registros:[
-      {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',concepto:'Pago pasajes',monto:450000,obs:'Recaudación línea 1 semana 1',archivador:''},
-      {id:2,fecha:fIso(anio,mes,8),tipo:'ingreso',concepto:'Pago pasajes',monto:480000,obs:'Recaudación línea 1 semana 2',archivador:''},
-      {id:3,fecha:fIso(anio,mes,3),tipo:'egreso',concepto:'Combustible',monto:2201500,obs:'Copec factura F-001234',archivador:''},
-      {id:4,fecha:fIso(anio,mes,28),tipo:'egreso',concepto:'Remuneraciones',monto:5850000,obs:'Pago sueldos personal',archivador:''},
-    ]
-  };
-
-  // ── Créditos trabajadores ──
-  const creditos = [
-    {id:1,trabajadorId:1,nombre:'Pedro Alejandro Muñoz Vera',monto:500000,cuotas:10,pagadas:3,fechaOtorg:fIso(anio-1,mes,1),obs:'Préstamo personal',activo:true},
-    {id:2,trabajadorId:4,nombre:'Diego Hernán Contreras Pinto',monto:300000,cuotas:6,pagadas:1,fechaOtorg:fIso(anio,mes-1,15),obs:'Anticipo vacaciones',activo:true},
-  ];
-
-  // ── Horarios ficticios (formato clave mes-anio) ──
-  const claveHor = `${String(mes).padStart(2,'0')}-${anio}`;
-  const horarios = [];
-  // Turno mañana: trabajadores 1,2,4,7 (idx 0,1,3,6)
-  [[1,1],[2,1],[4,2],[7,2],[3,2],[8,2]].forEach(([trabId,jorId],i)=>{
-    const diasMes = new Date(anio,mes,0).getDate();
-    const dias = [];
-    for(let d=1;d<=diasMes;d++){
-      const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const dt=new Date(fecha+'T12:00:00');
-      const diaSem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][dt.getDay()];
-      const esDom=dt.getDay()===0;
-      const esDescanso=(dt.getDay()===(i%6)+1); // día libre escalonado
-      const jor=jorId===1?{entrada:'06:00',salida:'13:30'}:{entrada:'13:30',salida:'21:00'};
-      dias.push({fecha,diaSem,tipo:esDom||esDescanso?'descanso':'trabajo',
-        entrada:esDom||esDescanso?'':jor.entrada,salida:esDom||esDescanso?'':jor.salida,
-        colacion:30,nota:esDom?'Descanso dominical':esDescanso?'Descanso semanal':''});
-    }
-    horarios.push({trabajadorId:trabId,jornadaId:jorId,clave:claveHor,dias});
-  });
-  // Administrativos 5,6 (5x2)
-  [5,6].forEach((trabId,i)=>{
-    const diasMes=new Date(anio,mes,0).getDate(); const dias=[];
-    for(let d=1;d<=diasMes;d++){
-      const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
-      const dt=new Date(fecha+'T12:00:00');
-      const diaSem=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'][dt.getDay()];
-      const esFinde=dt.getDay()===0||dt.getDay()===6;
-      dias.push({fecha,diaSem,tipo:esFinde?'descanso':'trabajo',
-        entrada:esFinde?'':'08:30',salida:esFinde?'':'18:00',colacion:60,nota:''});
-    }
-    horarios.push({trabajadorId:trabId,jornadaId:3,clave:claveHor,dias});
-  });
-
-  // ── Finiquitos ficticios ──
-  const finiquitos=[
-    {id:9001,fecha:fIso(anio,mes-1,28),nombre:'Rodrigo Andrés Pino Soto',rut:'11.222.333-4',
-     cargo:'Conductor',depto:'Operaciones',trabajadorId:99,causal:'159_4',
-     fi:fIso(anio-1,mes,1),ft:fIso(anio,mes-1,28),dias:365,vacDias:15,
-     sb:630000,indemnizacion:0,aviso:630000,vacaciones:315000,afc:189000,
-     totalBruto:1134000,descuentos:0,totalNeto:1134000,cuotas:'1',
-     adj_indem:'',adj_aviso:'',adj_vac:'',adj_afc:'',periodo:`${anio}-${String(mes-1).padStart(2,'0')}`},
-    {id:9002,fecha:fIso(anio,mes,5),nombre:'Carmen Gloria Tapia Rojas',rut:'12.333.444-5',
-     cargo:'Inspectora',depto:'Operaciones',trabajadorId:98,causal:'161_emp',
-     fi:fIso(anio-2,3,1),ft:fIso(anio,mes,5),dias:730,vacDias:20,
-     sb:580000,indemnizacion:1160000,aviso:580000,vacaciones:386667,afc:174000,
-     totalBruto:2300667,descuentos:0,totalNeto:2300667,cuotas:'3',
-     adj_indem:'',adj_aviso:'',adj_vac:'',adj_afc:'',periodo:`${anio}-${String(mes).padStart(2,'0')}`},
-  ];
-
-  // ── Ausencias ficticias ──
-  const ausencias=[
-    {id:1,trabajadorId:4,desde:fIso(anio,mes,7),hasta:fIso(anio,mes,9),
-     tipo:'Licencia médica',dias:3,estado:'Aprobada',obs:'Licencia médica código 1 — gripe'},
-    {id:2,trabajadorId:7,desde:fIso(anio,mes,14),hasta:fIso(anio,mes,14),
-     tipo:'Permiso sin goce',dias:1,estado:'Aprobada',obs:'Trámites personales'},
-    {id:3,trabajadorId:2,desde:fIso(anio,mes,21),hasta:fIso(anio,mes,22),
-     tipo:'Accidente laboral',dias:2,estado:'Pendiente',obs:'Revisión en mutualidad'},
-  ];
-
-  // ── Estado Financiero semanal ──
-  const conceptosEF=[
-    {id:'c1',nombre:'Ingresos servicios transporte',tipo:'ingreso',categoria:'Operacional'},
-    {id:'c2',nombre:'Combustible',tipo:'egreso',categoria:'Operacional'},
-    {id:'c3',nombre:'Remuneraciones',tipo:'egreso',categoria:'RRHH'},
-    {id:'c4',nombre:'Seguros',tipo:'egreso',categoria:'Gastos Fijos'},
-    {id:'c5',nombre:'Mantención vehículos',tipo:'egreso',categoria:'Operacional'},
-  ];
-  const wkBase=`${anio}-W${String(Math.ceil(new Date(anio,mes-1,7).getDate()/7)+1).padStart(2,'0')}`;
-  const semanasEF=[
-    {semana:`${anio}-W${String(Math.ceil(mes*4-3)).padStart(2,'0')}`,saldoInicial:2500000,
-     valores:{c1:3200000,c2:850000,c3:1462500,c4:291550,c5:170000},movimientos:{}},
-    {semana:`${anio}-W${String(Math.ceil(mes*4-2)).padStart(2,'0')}`,saldoInicial:926950,
-     valores:{c1:2800000,c2:920000,c3:1462500,c4:0,c5:85000},movimientos:{}},
-    {semana:`${anio}-W${String(Math.ceil(mes*4-1)).padStart(2,'0')}`,saldoInicial:1259450,
-     valores:{c1:3500000,c2:780000,c3:1462500,c4:291550,c5:0},movimientos:{}},
-  ];
-  const estadoFin={conceptos:conceptosEF,semanas:semanasEF,meses:[],categorias:{}};
-
-  // ── Flujo de Caja ──
-  const flujoCaja={
-    conceptos:[
-      {id:'f1',nombre:'Cobro clientes',tipo:'ingreso'},{id:'f2',nombre:'Pago proveedores',tipo:'egreso'},
-      {id:'f3',nombre:'Remuneraciones',tipo:'egreso'},{id:'f4',nombre:'Combustible',tipo:'egreso'},
-    ],
-    semanas:[
-      {semana:`${anio}-W${String(mes*4-3).padStart(2,'0')}`,saldoInicial:3000000,valores:{f1:3808000,f2:499800,f3:1462500,f4:850000}},
-      {semana:`${anio}-W${String(mes*4-2).padStart(2,'0')}`,saldoInicial:4995700,valores:{f1:2142000,f2:1166200,f3:0,f4:920000}},
-    ]
-  };
-
-  // ── Cuentas Fijas ──
-  const cuentasFijas=[
-    {id:1,nombre:'Arriendo oficina Linares',categoria:'Arriendo',monto:350000,dia:1,icono:'🏢',descripcion:'Arriendo mensual oficinas Av. Valentín Letelier',activa:true,pagos:{}},
-    {id:2,nombre:'Internet fibra óptica',categoria:'Servicios',monto:45000,dia:5,icono:'🌐',descripcion:'Internet empresarial 300Mbps',activa:true,pagos:{}},
-    {id:3,nombre:'Telefonía corporativa',categoria:'Servicios',monto:89000,dia:5,icono:'📱',descripcion:'Plan corporativo 4 líneas',activa:true,pagos:{}},
-    {id:4,nombre:'Seguro flota vehicular',categoria:'Seguros',monto:291550,dia:8,icono:'🛡',descripcion:'Prima mensual Mapfre — 2 buses',activa:true,pagos:{}},
-    {id:5,nombre:'Mantención preventiva',categoria:'Mantención',monto:150000,dia:15,icono:'🔧',descripcion:'Revisión mensual ambos buses',activa:true,pagos:{}},
-  ];
-
-  // ── Tesorería ──
-  const tesoreria=[
-    {id:1,tipo:'Por cobrar',razonSocial:'Municipalidad de Linares',rut:'69.123.456-7',
-     tipoDoc:'Factura',folio:'V-000125',monto:2856000,
-     femision:fIso(anio,mes,10),vencimiento:fIso(anio,mes+1,10),pagado:false,obs:'Servicio transporte temporada'},
-    {id:2,tipo:'Por cobrar',razonSocial:'Constructora Maulina SpA',rut:'69.567.890-1',
-     tipoDoc:'Factura',folio:'V-000127',monto:3332000,
-     femision:fIso(anio,mes,20),vencimiento:fIso(anio,mes+1,20),pagado:false,obs:'Transporte trabajadores'},
-    {id:3,tipo:'Por pagar',razonSocial:'Copec S.A.',rut:'76.543.210-1',
-     tipoDoc:'Factura',folio:'F-006789',monto:2499000,
-     femision:fIso(anio,mes,18),vencimiento:fIso(anio,mes,28),pagado:true,obs:'Combustible quincenal'},
-    {id:4,tipo:'Por pagar',razonSocial:'Seguros Mapfre Chile',rut:'78.765.432-3',
-     tipoDoc:'Factura',folio:'F-003456',monto:1166200,
-     femision:fIso(anio,mes,8),vencimiento:fIso(anio,mes,25),pagado:false,obs:'Prima seguro flota'},
-    {id:5,tipo:'Por pagar',razonSocial:'Tecno Bus Ltda.',rut:'81.098.765-6',
-     tipoDoc:'Factura',folio:'F-007890',monto:809200,
-     femision:fIso(anio,mes,22),vencimiento:fIso(anio,mes+1,5),pagado:false,obs:'Reparación motor'},
-  ];
-
-  // ── Fondos por rendir ──
-  const fondos=[
-    {id:1,nombre:'Fondo viáticos conductores',responsable:'Francisco Javier Reyes Núñez',
-     entregado:200000,estado:'En rendición',
-     gastos:[
-       {id:1,fecha:fIso(anio,mes,3),concepto:'Almuerzo conducotres línea norte',monto:28000},
-       {id:2,fecha:fIso(anio,mes,7),concepto:'Peajes ruta Linares-Talca',monto:15400},
-       {id:3,fecha:fIso(anio,mes,12),concepto:'Estacionamiento terminal',monto:8500},
-     ]},
-    {id:2,nombre:'Fondo compras urgentes',responsable:'Valentina Andrea Morales Díaz',
-     entregado:150000,estado:'Rendido',
-     gastos:[
-       {id:1,fecha:fIso(anio,mes,5),concepto:'Repuestos menores urgentes',monto:45000},
-       {id:2,fecha:fIso(anio,mes,8),concepto:'Útiles oficina',monto:32500},
-     ]},
-  ];
-
-  // ── Leasing ──
-  const leasings=[
-    {id:1,bien:'Bus Mercedes-Benz 915',empresa:'Leasing Bci S.A.',rut:'97.006.000-6',
-     capital:45000000,tasa:0.89,cuotas:48,cuotasPagadas:18,
-     fechaInicio:fIso(anio-1,mes,1),activo:true,obs:'Leasing bus nuevo línea norte'},
-    {id:2,bien:'Furgón Hyundai H-1',empresa:'Santander Consumer Finance',rut:'97.036.000-K',
-     capital:12000000,tasa:0.95,cuotas:36,cuotasPagadas:24,
-     fechaInicio:fIso(anio-2,mes,1),activo:true,obs:'Furgón administrativo'},
-  ];
-
-  // ── Retiros y multas ──
-  const retiros=[
-    {id:1,fecha:fIso(anio,mes,5),tipo:'retiro',rut:'12.345.678-9',nombre:'Pedro Alejandro Muñoz Vera',
-     monto:500000,obs:'Retiro socio mes '+mes,periodo:`${anio}-${String(mes).padStart(2,'0')}`},
-    {id:2,fecha:fIso(anio,mes,8),tipo:'multa',rut:'15.678.901-2',nombre:'Diego Hernán Contreras Pinto',
-     monto:25000,obs:'Multa atraso injustificado',periodo:`${anio}-${String(mes).padStart(2,'0')}`},
-    {id:3,fecha:fIso(anio,mes-1,5),tipo:'retiro',rut:'12.345.678-9',nombre:'Pedro Alejandro Muñoz Vera',
-     monto:500000,obs:'Retiro socio mes '+(mes-1),periodo:`${anio}-${String(mes-1).padStart(2,'0')}`},
-  ];
-
-  // ── Diesel ──
-  const diesel=[
-    {id:1,fecha:fIso(anio,mes,3),litros:450,utm:68500,tasa:1.5,
-     recuperar:Math.round(450*68500*1.5/1000),usado:true,
-     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-34 — ruta norte'},
-    {id:2,fecha:fIso(anio,mes,10),litros:380,utm:68500,tasa:1.5,
-     recuperar:Math.round(380*68500*1.5/1000),usado:true,
-     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-35 — ruta sur'},
-    {id:3,fecha:fIso(anio,mes,18),litros:420,utm:68500,tasa:1.5,
-     recuperar:Math.round(420*68500*1.5/1000),usado:false,
-     periodo:`${anio}-${String(mes).padStart(2,'0')}`,obs:'Bus BCDF-34 — completar PPM'},
-  ];
-
-  // ── Obras / Proyectos ──
-  const obras=[
-    {id:1,nombre:'Contrato Transporte Escolar 2026',cc:'OB-001',
-     presupuesto:38400000,real:12800000,
-     fechaInicio:fIso(anio,3,1),fechaFin:fIso(anio,12,31),
-     estado:'En ejecución',obs:'Municipalidad de Linares — 12 meses',
-     gastos:[
-       {fecha:fIso(anio,mes-1,28),concepto:'Combustible marzo',monto:4200000},
-       {fecha:fIso(anio,mes-1,28),concepto:'Remuneraciones marzo',monto:5850000},
-       {fecha:fIso(anio,mes,28),concepto:'Combustible abril',monto:3980000},
-     ]},
-    {id:2,nombre:'Transporte Temporada Agrícola',cc:'OB-002',
-     presupuesto:8500000,real:8500000,
-     fechaInicio:fIso(anio,1,15),fechaFin:fIso(anio,mes-1,28),
-     estado:'Terminado',obs:'Agrícola Los Olivos — temporada verano',
-     gastos:[
-       {fecha:fIso(anio,2,28),concepto:'Servicios transporte feb',monto:4250000},
-       {fecha:fIso(anio,mes-1,28),concepto:'Servicios transporte mar',monto:4250000},
-     ]},
-  ];
-
-  // ── Honorarios ──
-  const honorarios=[
-    {id:1,fecha:fIso(anio,mes,5),nombre:'Contadora External Ltda.',rut:'76.111.222-3',
-     concepto:'Honorarios contabilidad mensual',monto:350000,retencion:Math.round(350000*0.115),
-     neto:Math.round(350000*0.885),pagado:true},
-    {id:2,fecha:fIso(anio,mes,10),nombre:'Asesor Jurídico Laboral',rut:'14.222.333-4',
-     concepto:'Asesoría contrato colectivo',monto:250000,retencion:Math.round(250000*0.115),
-     neto:Math.round(250000*0.885),pagado:false},
-    {id:3,fecha:fIso(anio,mes-1,5),nombre:'Contadora External Ltda.',rut:'76.111.222-3',
-     concepto:'Honorarios contabilidad mes anterior',monto:350000,retencion:Math.round(350000*0.115),
-     neto:Math.round(350000*0.885),pagado:true},
-  ];
-
-  // ── BHE Emitidas ──
-  const bheEmitidas=[
-    {id:1,fecha:fIso(anio,mes,5),nbhe:'BHE-001',receptor:'Colegio San Francisco',
-     rut:'69.234.567-8',servicio:'Servicio transporte estudiantes abril',
-     bruto:2142000,retencion:Math.round(2142000*0.105),
-     pago:'Transferencia bancaria',pagado:true},
-    {id:2,fecha:fIso(anio,mes,10),nbhe:'BHE-002',receptor:'Hospital Regional Linares',
-     rut:'69.456.789-0',servicio:'Transporte personal médico abril',
-     bruto:1428000,retencion:Math.round(1428000*0.105),
-     pago:'Transferencia bancaria',pagado:false},
-  ];
-
-  // ── F-29 manual ──
-  const f29Manual={
-    ventasAfectas:11400000,ventasExentas:0,
-    comprasAfectas:6536000,comprasExentas:0,
-    ivaDebito:Math.round(11400000*0.19),
-    ivaCredito:Math.round(6536000*0.19),
-    ppm:Math.round(11400000*0.015),
-    retencionHonorarios:Math.round(600000*0.115),
-  };
-
-  // ── Reg 14A ──
-  const reg14a={
-    rai:[{anio,monto:8500000,obs:'RAI acumulado período'}],
-    ddan:[{anio,monto:2100000,obs:'Depreciación acelerada buses'}],
-    rex:[{anio,monto:1200000,obs:'Rentas exentas dividendos'}],
-    sac:[{anio,monto:650000,obs:'SAC créditos imputables'}]
-  };
-
-  // ── Conciliación bancaria ──
-  const conciliacion=[
-    {id:1,fecha:fIso(anio,mes,1),tipo:'ingreso',descripcion:'Depósito Municipalidad Linares',
-     montoLib:3808000,montoBco:3808000,conciliado:true},
-    {id:2,fecha:fIso(anio,mes,3),tipo:'egreso',descripcion:'Pago Copec combustible',
-     montoLib:2201500,montoBco:2201500,conciliado:true},
-    {id:3,fecha:fIso(anio,mes,28),tipo:'egreso',descripcion:'Pago remuneraciones',
-     montoLib:5850000,montoBco:5850000,conciliado:true},
-    {id:4,fecha:fIso(anio,mes,15),tipo:'ingreso',descripcion:'Cobro Constructora Maulina',
-     montoLib:3332000,montoBco:0,conciliado:false,obs:'Pendiente acreditación banco'},
-  ];
-
-  // ── Construir empresa Demo completa ──
-  const demo = empVacia();
-  demo._esDemo = true;
-  demo.cfg = {
-    emp:'Transportes Demo SpA',
-    rut:'76.123.456-7',
-    giro:'Transporte de pasajeros',
-    tipo:'SpA',
-    regimen:'Semi-integrado',
-    codsii:'6020',
-    ppm:1.5,
-    dir:'Av. Valentín Letelier 456, Linares, Maule',
-    tel:'+56 73 212345',
-    email:'admin@transportesdemo.cl',
-    rep:'Francisco Javier Reyes Núñez',
-    reprut:'17.890.123-4',
-    cont:'Yasna Rivera Rivera',
-    contrut:'16.789.012-3',
-    uf:38800, utm:68500, smm:510114,
-    mutual:'0.0093', ccaf:'Los Andes',
-    periodoActual: anio
-  };
-  demo.trabajadores = trabajadores;
-  demo.liquidaciones = liquidaciones;
-  demo.compras = compras;
-  demo.ventas = ventas;
-  demo.proveedores = proveedores;
-  demo.asientos = asientos;
-  demo.cajaChica = cajaChica;
-  demo.activos = activos;
-  demo.vacaciones = vacaciones;
-  demo.ausencias = ausencias||[];
-  demo.notas = notas;
-  demo.jornadas = jornadas;
-  demo.comprobantes = comprobantes;
-  demo.creditos = creditos;
-  demo.contratosDoc = [];
-  demo.plantillasContrato = [];
-  demo.horarios = horarios;
-  demo.finiquitos = finiquitos;
-  demo.ausencias = ausencias;
-  demo.estadoFin = estadoFin;
-  demo.flujoCaja = flujoCaja;
-  demo.cuentasFijas = cuentasFijas;
-  demo.tesoreria = tesoreria;
-  demo.fondos = fondos;
-  demo.leasings = leasings;
-  demo.retiros = retiros;
-  demo.diesel = diesel;
-  demo.obras = obras;
-  demo.honorarios = honorarios;
-  demo.bheEmitidas = bheEmitidas;
-  demo.f29Manual = f29Manual;
-  demo.reg14a = reg14a;
-  demo.conciliacion = conciliacion;
-
-
-    // Agregar empresa Demo y activarla
-  MASTER.empresas.push(demo);
-  MASTER.activa = MASTER.empresas.length-1;
-  save();
-  _actualizarBtnDemo(true);
-  go('dash');
-  toast('🎯 Modo Demo activado — Transportes Demo SpA lista para presentación','ok');
-}
-
-function salirDemo(){
-  if(!confirm('¿Salir del Modo Demo?\n\nVuelves a tu empresa real. Los datos Demo se conservan para próximas presentaciones.')) return;
-  const prev = MASTER._prevActiva||0;
-  MASTER.activa = prev;
-  save();
-  _actualizarBtnDemo(false);
-  go('dash');
-  toast('✅ Volviste a tu empresa real','ok');
-}
-
-function eliminarDemo(){
-  if(!confirm('¿Eliminar la empresa Demo completamente?\n\nEsta acción no se puede deshacer.')) return;
-  const idx = MASTER.empresas.findIndex(e=>e._esDemo===true);
-  if(idx<0){toast('No hay empresa Demo que eliminar','err');return;}
-  MASTER.empresas.splice(idx,1);
-  const prev = MASTER._prevActiva||0;
-  MASTER.activa = Math.min(prev, MASTER.empresas.length-1);
-  save();
-  _actualizarBtnDemo(false);
-  go('dash');
-  toast('🗑 Empresa Demo eliminada','ok');
-}
-
-function _actualizarBtnDemo(enDemo){
-  const btn = document.getElementById('btnDemo');
-  if(!btn) return;
-  if(enDemo){
-    btn.textContent = '🎯 SALIR DEMO';
-    btn.title = 'Salir del Modo Demo';
-    btn.style.background = 'rgba(234,179,8,0.3)';
-    btn.style.borderColor = '#eab308';
-    btn.style.color = '#eab308';
-    btn.onclick = ()=>{
-      // Overlay que cierra al hacer clic fuera
-      const ov = document.createElement('div');
-      ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9998;';
-      const m = document.createElement('div');
-      m.style.cssText='position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:var(--s2);border:1px solid var(--border);border-radius:12px;padding:20px;z-index:9999;min-width:260px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5);';
-      const cerrar=()=>{ov.remove();m.remove();};
-      ov.onclick=cerrar;
-      m.innerHTML=`<div style="font-size:14px;font-weight:800;color:var(--acc);margin-bottom:12px;">🎯 MODO DEMO</div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:14px;">Empresa: <b>Transportes Demo SpA</b></div>
-        <div style="display:flex;flex-direction:column;gap:8px;">
-          <button class="btn secondary" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove());salirDemo()">↩️ Volver a mi empresa real</button>
-          <button class="btn err" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove());eliminarDemo()">🗑 Eliminar Demo</button>
-          <button class="btn secondary" onclick="document.querySelectorAll('[data-demoov]').forEach(x=>x.remove())">✕ Cancelar</button>
-        </div>`;
-      ov.dataset.demoov='1'; m.dataset.demoov='1';
-      document.body.appendChild(ov);
-      document.body.appendChild(m);
-    };
-  } else {
-    btn.textContent='🎯 DEMO';
-    btn.title='Modo Demo — datos de ejemplo para presentación';
-    btn.style.background='rgba(234,179,8,0.1)';
-    btn.onclick=activarDemo;
-  }
-}
-
 function logout(){
   document.getElementById('app').classList.add('hidden');
   document.getElementById('loginScreen').classList.remove('hidden');
   const el=document.getElementById('loginInput');
   if(el){el.value='';el.type='password';}
   const btn=document.getElementById('pwToggleBtn');if(btn)btn.textContent='👁';
+  // Limpiar área/módulo recordado al cerrar sesión deliberadamente
+  try{localStorage.removeItem('cm_lastArea');localStorage.removeItem('cm_lastTab');}catch(e){}
   setTimeout(()=>{const el2=document.getElementById('loginInput');if(el2)el2.focus();},100);
 }
 function saveCfgSistema(){
@@ -1948,12 +1419,225 @@ function updateHeader(){
 let _tab='dash';
 let _lastActivity=Date.now();
 const IDLE_TIMEOUT=30*60*1000; // 30 minutos de inactividad
+
+// ── SISTEMA DE ÁREAS ──────────────────────────────────────────
+const MOD_DESC = {
+  liq:'Liquidaciones de sueldo mensuales y finiquitos',
+  trab:'Ficha y gestión de trabajadores',
+  asist:'Control de asistencia y turnos',
+  horarios:'Planificación de horarios y jornadas',
+  finiq:'Generación de finiquitos legales',
+  vacac:'Control y gestión de vacaciones',
+  ausencias:'Licencias médicas y ausencias',
+  previred:'Exportación para plataforma PreviRed',
+  libroRemu:'Libro de remuneraciones oficial',
+  creditos:'Créditos y descuentos de trabajadores',
+  certRemu:'Certificados de renta y remuneración',
+  f29:'Formulario 29 — IVA mensual SII',
+  f22:'Formulario 22 — Renta anual SII',
+  f2121:'Formulario 2121 — Renta presunta',
+  dj:'Declaraciones juradas SII',
+  bhe:'Boletas de honorarios electrónicas propias',
+  reg14a:'Registro de rentas empresariales 14A',
+  compras:'Registro y libro de compras IVA',
+  ventas:'Registro y libro de ventas IVA',
+  honorarios:'Honorarios y BHE de terceros',
+  contab:'Plan de cuentas y asientos contables',
+  diario:'Libro diario de contabilidad',
+  mayor:'Libro mayor por cuenta',
+  balance:'Balance general y estados financieros',
+  librocaja14d:'Libro caja régimen 14D',
+  concilia:'Conciliación bancaria',
+  actfijo:'Control de activo fijo y depreciación',
+  estfin:'Estado financiero semanal',
+  estfinm:'Estado financiero mensual',
+  flujo:'Flujo de caja proyectado',
+  tesoreria:'Gestión de tesorería y cuentas',
+  caja:'Caja, bancos y movimientos',
+  retiros:'Retiros de utilidades y multas',
+  leasing:'Contratos de leasing y cuotas',
+  informe:'Informe mensual gerencial',
+  proveedores:'Gestión de proveedores y pagos',
+  obra:'Control de obras y proyectos',
+  diesel:'Control de consumo de diesel',
+  fondos:'Fondos por rendir y rendiciones',
+  cajachica:'Caja chica y gastos menores',
+  comprobantes:'Comprobantes y vouchers de pago',
+  cuentasfijas:'Cuentas fijas y compromisos',
+  archivador:'Archivador digital de documentos',
+  notas:'Notas y recordatorios internos',
+  auditoria:'Auditoría y log de cambios',
+  conv:'Conversores tributarios Chile',
+  dash:'Resumen general y KPIs',
+};
+const AREAS_DEF = {
+  rrhh: {
+    ico:'👥', nombre:'RECURSOS HUMANOS', color:'var(--purple)',
+    tabs:[
+      {id:'liq',     lbl:'🧾 LIQUIDACIÓN'},
+      {id:'trab',    lbl:'👥 TRABAJADORES'},
+      {id:'asist',   lbl:'🕐 ASISTENCIA'},
+      {id:'horarios',lbl:'📅 HORARIOS'},
+      {id:'finiq',   lbl:'📄 FINIQUITO'},
+      {id:'vacac',   lbl:'🌴 VACACIONES'},
+      {id:'ausencias',lbl:'🩺 AUSENCIAS'},
+      {id:'previred',lbl:'📤 PREVIRED'},
+      {id:'libroRemu',lbl:'📑 LIBRO REMU.'},
+      {id:'creditos',lbl:'💳 CRÉDITOS'},
+      {id:'certRemu',lbl:'📜 CERT. REMU.'}
+    ]
+  },
+  tributario: {
+    ico:'📑', nombre:'TRIBUTARIO', color:'var(--orange)',
+    tabs:[
+      {id:'f29',      lbl:'📑 F-29 / IVA'},
+      {id:'f22',      lbl:'📑 F-22 / RENTA'},
+      {id:'f2121',    lbl:'📋 F-2121'},
+      {id:'dj',       lbl:'📋 DJs SII'},
+      {id:'bhe',      lbl:'🧾 BHE PROPIAS'},
+      {id:'reg14a',   lbl:'📋 REG. 14A'},
+      {id:'compras',  lbl:'🛒 COMPRAS'},
+      {id:'ventas',   lbl:'💰 VENTAS'},
+      {id:'honorarios',lbl:'📋 HONORARIOS'}
+    ]
+  },
+  contabilidad: {
+    ico:'📒', nombre:'CONTABILIDAD', color:'var(--blue)',
+    tabs:[
+      {id:'contab',      lbl:'📒 CONTABILIDAD'},
+      {id:'diario',      lbl:'📔 LIBRO DIARIO'},
+      {id:'mayor',       lbl:'📖 LIBRO MAYOR'},
+      {id:'balance',     lbl:'⚖️ BALANCE'},
+      {id:'librocaja14d',lbl:'📒 CAJA 14D'},
+      {id:'concilia',    lbl:'🔄 CONCILIACIÓN'},
+      {id:'actfijo',     lbl:'🏗 ACTIVO FIJO'}
+    ]
+  },
+  finanzas: {
+    ico:'💧', nombre:'FINANZAS', color:'var(--cyan)',
+    tabs:[
+      {id:'estfin',  lbl:'📋 EST. FINANCIERO'},
+      {id:'estfinm', lbl:'📆 EST. FIN. MENSUAL'},
+      {id:'flujo',   lbl:'💧 FLUJO DE CAJA'},
+      {id:'tesoreria',lbl:'🏦 TESORERÍA'},
+      {id:'caja',    lbl:'💵 CAJA/BANCOS'},
+      {id:'retiros', lbl:'🏦 RETIROS/MULTAS'},
+      {id:'leasing', lbl:'🏢 LEASING'},
+      {id:'informe', lbl:'📊 INFORME MENSUAL'}
+    ]
+  },
+  comercial: {
+    ico:'🛒', nombre:'COMERCIAL', color:'var(--green)',
+    tabs:[
+      {id:'proveedores',lbl:'🏢 PROVEEDORES'},
+      {id:'obra',       lbl:'🏗 OBRA/PROYECTOS'},
+      {id:'diesel',     lbl:'⛽ DIESEL'},
+      {id:'fondos',     lbl:'📂 FONDOS X RENDIR'}
+    ]
+  },
+  oficina: {
+    ico:'🗂', nombre:'OFICINA', color:'var(--teal)',
+    tabs:[
+      {id:'cajachica',   lbl:'💼 CAJA CHICA'},
+      {id:'comprobantes',lbl:'🧾 COMPROBANTES'},
+      {id:'cuentasfijas',lbl:'🏦 CTAS. FIJAS'},
+      {id:'archivador',  lbl:'📁 ARCHIVADOR'},
+      {id:'notas',       lbl:'📝 NOTAS'},
+      {id:'auditoria',   lbl:'🔍 AUDITORÍA'},
+      {id:'conv',        lbl:'🔢 CONVERSORES'}
+    ]
+  }
+};
+let _areaActual = null;
+
+function areaSeleccionar(key) {
+  _areaActual = key;
+  const area = AREAS_DEF[key];
+  if (!area) return;
+  // Construir tabs del área en el nav
+  const nav = $('nav');
+  if (nav) {
+    nav.innerHTML = area.tabs.map(t =>
+      `<button class="ntab" id="tab-${t.id}" onclick="go('${t.id}')" style="border-color:${area.color};color:${area.color};">${t.lbl}</button>`
+    ).join('');
+  }
+  // Badge del área
+  const badge = $('navAreaBadge');
+  if (badge) {
+    badge.textContent = area.ico + ' ' + area.nombre;
+    badge.style.setProperty('--area-color', area.color);
+  }
+  // Mostrar barra de área con color del área activa, ocultar selector
+  const barEl = $('navAreaBar');
+  if (barEl) {
+    barEl.style.display = '';
+    barEl.style.borderBottom = '2px solid';
+    barEl.style.borderBottomColor = area.color.startsWith('var(') ? `var(${area.color.slice(4,-1)})` : area.color;
+  }
+  const selEl = $('areaSelectorWrap'); if (selEl) selEl.style.display = 'none';
+  const mcEl = $('mc'); if (mcEl) mcEl.style.display = '';
+  // Guardar área activa en localStorage para restaurar al volver
+  try{localStorage.setItem('cm_lastArea',key);}catch(e){}
+  // Ir al primer tab del área
+  go(area.tabs[0].id);
+  // Re-inicializar flechas nav (el innerHTML del #nav se reconstruyó)
+  setTimeout(()=>{initNavArrows();updateNavArrows();},50);
+}
+
+function areaVolver() {
+  _areaActual = null;
+  const barEl = $('navAreaBar'); if (barEl) barEl.style.display = 'none';
+  const selEl = $('areaSelectorWrap'); if (selEl) selEl.style.display = '';
+  const mcEl = $('mc'); if (mcEl) { mcEl.style.display = 'none'; mcEl.innerHTML = ''; }
+}
+
+function goResumen() {
+  // Muestra el dashboard sin área, con barra de retorno
+  _areaActual = 'resumen';
+  const nav = $('nav');
+  if (nav) nav.innerHTML = '<button class="ntab active" id="tab-dash" style="border-color:var(--acc);color:var(--acc);">📊 RESUMEN</button>';
+  const badge = $('navAreaBadge');
+  if (badge) { badge.textContent = '📊 RESUMEN GENERAL'; badge.style.setProperty('--area-color','var(--acc)'); }
+  const barEl = $('navAreaBar'); if (barEl) barEl.style.display = '';
+  const selEl = $('areaSelectorWrap'); if (selEl) selEl.style.display = 'none';
+  const mcEl = $('mc'); if (mcEl) mcEl.style.display = '';
+  _tab = 'dash';
+  render('dash');
+  setTimeout(()=>injectExportBar('dash'), 30);
+  // Re-inicializar flechas nav (el innerHTML del #nav se reconstruyó)
+  setTimeout(()=>{initNavArrows();updateNavArrows();},50);
+}
+
 function go(t){
+  // Si t es 'dash', mostrar selector de áreas (no área)
+  if (t === 'dash') {
+    _areaActual = null;
+    const barEl = $('navAreaBar'); if (barEl) barEl.style.display = 'none';
+    const selEl = $('areaSelectorWrap'); if (selEl) selEl.style.display = '';
+    const mcEl = $('mc'); if (mcEl) mcEl.style.display = 'none';
+    return; // No renderizar nada: el selector de áreas ES la pantalla principal
+  } else {
+    // Asegurarse de que el mc esté visible
+    const mcEl = $('mc'); if (mcEl) mcEl.style.display = '';
+    const selEl = $('areaSelectorWrap'); if (selEl) selEl.style.display = 'none';
+    // Si no hay área activa, detectarla desde AREAS_DEF
+    if (!_areaActual) {
+      for (const [key, area] of Object.entries(AREAS_DEF)) {
+        if (area.tabs.find(tb => tb.id === t)) { areaSeleccionar(key); return; }
+      }
+    }
+  }
   _tab=t;
   TABS.forEach(x=>{const el=$('tab-'+x);if(el)el.classList.toggle('active',x===t);});
   const activeTab=$('tab-'+t);
   if(activeTab){const nav=$('nav');if(nav)nav.scrollLeft=activeTab.offsetLeft-nav.clientWidth/2+activeTab.clientWidth/2;}
-  updateNavArrows();
+  setTimeout(updateNavArrows,100);
+  // Actualizar descripción del módulo activo en navAreaBar
+  const _descEl=$('navAreaDesc');
+  if(_descEl&&MOD_DESC&&MOD_DESC[t]){_descEl.textContent=MOD_DESC[t];_descEl.style.display='';}
+  else if(_descEl){_descEl.style.display='none';}
+  // Guardar módulo activo en localStorage
+  try{localStorage.setItem('cm_lastTab',t);}catch(e){}
   render(t);
   setTimeout(()=>injectExportBar(t), 30);
 }
@@ -2238,23 +1922,28 @@ function renderDash(){
     </div>
   </div>`:''}
 
-  <!-- ACCESOS RÁPIDOS v2 -->
+  <!-- PANEL DE ESTADO POR ÁREA -->
   <div class="card">
-    <div class="card-hdr"><div class="ci" style="background:var(--s3);">⚡</div>
-      <div style="flex:1;"><div class="ct">Accesos Rápidos + IA</div><div class="ms">${asientosHoy>0?`${asientosHoy} asiento(s) ingresados hoy`:''}</div></div>
+    <div class="card-hdr"><div class="ci" style="background:var(--s3);">🗂</div>
+      <div style="flex:1;"><div class="ct">Estado por Área</div><div class="ms">Acceso rápido a cada área de trabajo</div></div>
     </div>
     <div class="card-body">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:7px;">
-        <button class="btn success full" onclick="go('liq')">🧾 Nueva Liquidación</button>
-        <button class="btn info full" onclick="go('compras')">🛒 Registrar Compra</button>
-        <button class="btn orange full" onclick="go('ventas')">💰 Registrar Venta</button>
-        <button class="btn purple full" onclick="go('honorarios')">📋 Nueva BHE</button>
-        <button class="btn teal full" onclick="go('f29')">📑 Ver F-29</button>
-        <button class="btn cyan full" onclick="go('previred')">📤 PreviRed</button>
-        <button class="btn full" style="background:var(--purple2);color:var(--purple);border:1px solid rgba(155,92,245,.4);" onclick="openIAModal()">🤖 IA Asistente Contable</button>
-        <button class="btn full" style="background:var(--green2);color:var(--green);border:1px solid rgba(32,184,106,.4);" onclick="centralizarTodo()">⚡ Centralizar 1-Clic</button>
-        <button class="btn full" style="background:var(--acc3);color:var(--acc);border:1px solid rgba(200,168,75,.3);" onclick="go('diario')">📔 Libro Diario</button>
-        <button class="btn full" style="background:var(--cyan2);color:var(--cyan);border:1px solid rgba(34,211,238,.3);" onclick="generarDJMasivo()">📤 Generar DJ Masivo</button>
+        ${(()=>{
+          const areas=[
+            {key:'rrhh',        ico:'👥', label:'RRHH',         color:'var(--purple)'},
+            {key:'tributario',  ico:'📑', label:'TRIBUTARIO',   color:'var(--orange)'},
+            {key:'contabilidad',ico:'📒', label:'CONTABILIDAD', color:'var(--blue)'},
+            {key:'finanzas',    ico:'💧', label:'FINANZAS',     color:'var(--cyan)'},
+            {key:'comercial',   ico:'🛒', label:'COMERCIAL',    color:'var(--green)'},
+            {key:'oficina',     ico:'🗂', label:'OFICINA',      color:'var(--teal)'},
+          ];
+          return areas.map(a=>`
+            <button onclick="areaSeleccionar('${a.key}')" style="display:flex;align-items:center;gap:8px;padding:9px 12px;border-radius:10px;border:1.5px solid ${a.color};background:transparent;color:${a.color};font-family:'Syne',sans-serif;font-size:10px;font-weight:800;letter-spacing:.8px;cursor:pointer;transition:all .15s;text-align:left;" onmousedown="this.style.transform='scale(.96)'" onmouseup="this.style.transform=''">
+              <span style="font-size:18px;">${a.ico}</span>
+              <span>${a.label}</span>
+            </button>`).join('');
+        })()}
       </div>
     </div>
   </div>
@@ -2389,44 +2078,214 @@ function _rTrabListaGT(){
 // ║         MÓDULO CONTRATOS DE TRABAJO — Normativa CL            ║
 // ══════════════════════════════════════════════════════════════════
 
-// Plantillas base de cláusulas por tipo de contrato (Art. CT Chile)
+// ── Helper: formato de fecha ISO → español (ej: "2026-05-01" → "01 de mayo de 2026")
+function fmtFechaES(iso){
+  if(!iso||iso.length<10) return iso||'';
+  const [y,m,d]=iso.split('-');
+  const meses=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  return `${parseInt(d,10)} de ${meses[parseInt(m,10)-1]||''} de ${y}`;
+}
+// ── Firma HTML: tabla de dos columnas correctamente separada para Word y PDF
+function _firmaHTML(intro){
+  return `${intro}<table style="width:100%;border-collapse:collapse;margin-top:50px;white-space:normal;page-break-inside:avoid;"><tr><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_empresa}</strong><br>RUT: {rut_empresa}<br><span style="font-size:9pt;color:#444;">Representante: {representante}</span><br><span style="font-size:9pt;font-style:italic;">El Empleador</span></td><td style="width:8%;"></td><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_trabajador}</strong><br>RUT: {rut_trabajador}<br><span style="font-size:9pt;color:#444;">&nbsp;</span><br><span style="font-size:9pt;font-style:italic;">El Trabajador</span></td></tr></table>`;
+}
+// Plantillas base de cláusulas por tipo de contrato (Art. 10 CT Chile — Norma 2026)
 const CLAUSULAS_BASE = {
   'Indefinido': [
-    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, representada por {representante}, en adelante "El Empleador", y don/doña {nombre_trabajador}, RUT {rut_trabajador}, en adelante "El Trabajador", se celebra el siguiente contrato de trabajo.'},
-    {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador dentro del giro de la empresa, de conformidad con lo establecido en el Reglamento Interno.'},
-    {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}, o en cualquier otro lugar que El Empleador determine dentro de la misma ciudad, conforme a las necesidades operativas de la empresa.'},
-    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación no imputables a la jornada. A partir del año 2028 la jornada máxima será de 40 horas semanales conforme a la Ley 21.561.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de {sueldo_base} brutos (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Dicha remuneración incluye la gratificación legal, si correspondiere, conforme al Art. 50 CT.'},
-    {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones y pagos correspondientes a AFP {afp}, sistema de salud {salud}, AFC y demás descuentos legales conforme a la normativa vigente.'},
-    {id:'c7', titulo:'Duración del contrato (Art. 159 N°1 CT)', editable:true, texto:'El presente contrato tendrá duración indefinida, iniciándose la relación laboral el {fecha_inicio}.'},
-    {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El presente contrato podrá terminar por las causales establecidas en los artículos 159, 160 y 161 del Código del Trabajo, con las formalidades y plazos que la ley establece, incluyendo el pago de indemnizaciones que correspondan.'},
-    {id:'c9', titulo:'Reglamento interno y normas (Art. 153 CT)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de Orden, Higiene y Seguridad de la empresa, así como las normas de prevención de riesgos laborales y las disposiciones del Código del Trabajo.'},
-    {id:'c10', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman el presente contrato en dos ejemplares del mismo tenor, quedando uno en poder de cada parte.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador\n{nombre_empresa}                                   {nombre_trabajador}\nRUT: {rut_empresa}                                 RUT: {rut_trabajador}'}
+    {id:'c1', titulo:'Individualización de las partes (Art. 10 N°1 y N°2 CT)', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, giro {giro}, con domicilio en {direccion_empresa}, representada legalmente por {representante}, en adelante "El Empleador"; y don/doña {nombre_trabajador}, RUT {rut_trabajador}, de nacionalidad {nac}, estado civil {ecivil}, con domicilio en {dir_trab}, en adelante "El Trabajador"; se celebra el siguiente Contrato Individual de Trabajo, en conformidad al Código del Trabajo y demás normas vigentes.'},
+    {id:'c2', titulo:'Cargo, funciones y naturaleza de los servicios (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo, las instrucciones impartidas por El Empleador y las que se establezcan en el Reglamento Interno de Orden, Higiene y Seguridad. El Empleador podrá encomendar al Trabajador funciones afines al cargo siempre que no alteren su naturaleza ni sean perjudiciales para su salud (Art. 12 CT).'},
+    {id:'c3', titulo:'Lugar de prestación de servicios (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}, o en cualquier otro lugar que El Empleador determine dentro de la misma ciudad, conforme a las necesidades operativas de la empresa. Cualquier modificación del lugar de trabajo se realizará conforme al Art. 12 CT, con aviso al Trabajador con 30 días de anticipación.'},
+    {id:'c4', titulo:'Jornada de trabajo y descansos (Art. 10 N°5, Art. 35-36 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación no imputables a la jornada laboral. El Trabajador tendrá derecho a descanso semanal los días domingo y festivos (Art. 35 CT). Conforme a la Ley 21.561, la jornada máxima ordinaria se reducirá progresivamente: 44 horas desde abril 2024, 42 horas desde abril 2026, y 40 horas desde abril 2028.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4, Art. 41-46 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual bruta de {sueldo_base} (pesos chilenos), pagadera el último día hábil de cada mes mediante {forma_pago}. Esta remuneración no podrá ser inferior al ingreso mínimo mensual legal vigente (Art. 44 CT). El Empleador entregará mensualmente una liquidación de sueldo detallando los haberes y descuentos efectuados (Art. 54 CT).'},
+    {id:'c6', titulo:'Gratificación legal (Art. 47-50 CT)', editable:true, texto:'El Empleador pagará al Trabajador gratificación legal conforme al Art. 47 del Código del Trabajo, optando por la modalidad del Art. 50 CT (25% de lo devengado en el respectivo ejercicio comercial, con tope de 4,75 Ingresos Mínimos Mensuales anuales), pagadera en forma mensual proporcional. Esta modalidad queda incorporada a la remuneración mensual indicada en la cláusula anterior.'},
+    {id:'c7', titulo:'Previsión, salud y seguridad social (Art. 58 CT)', editable:true, texto:'El Empleador efectuará mensualmente las retenciones y pagos correspondientes a: AFP {afp} (cotización previsional obligatoria), sistema de salud {salud} (7% del imponible o plan pactado), Administradora de Fondos de Cesantía (AFC) conforme a la Ley 19.728, y demás cotizaciones o descuentos legalmente autorizados. El comprobante de pago previsional estará disponible para el Trabajador.'},
+    {id:'c8', titulo:'Horas extraordinarias (Art. 30-32 CT)', editable:true, texto:'Las horas trabajadas en exceso de la jornada ordinaria pactada serán consideradas horas extraordinarias y deberán pactarse por escrito mediante acuerdo suscrito por ambas partes (Art. 32 CT). Las horas extraordinarias se pagarán con un recargo mínimo del 50% sobre el valor de la hora ordinaria (Art. 32 CT). No podrán pactarse más de 2 horas extraordinarias por día. Queda expresamente prohibido laborar horas extraordinarias sin autorización previa del Empleador.'},
+    {id:'c9', titulo:'Feriado anual y vacaciones (Art. 67-76 CT)', editable:true, texto:'El Trabajador tendrá derecho a un feriado anual de 15 días hábiles con goce de remuneración íntegra (Art. 67 CT), una vez cumplido un año de servicio. Los trabajadores con 10 o más años de trabajo para uno o más empleadores tendrán derecho a un día adicional de feriado por cada 3 nuevos años trabajados (Art. 68 CT). El feriado deberá otorgarse preferentemente en primavera o verano, considerando las necesidades del servicio (Art. 70 CT). El feriado no podrá compensarse en dinero mientras subsista la relación laboral, salvo en el caso del feriado proporcional al término del contrato (Art. 73 CT).'},
+    {id:'c10', titulo:'Seguro de accidentes del trabajo y enfermedades profesionales (Ley 16.744)', editable:true, texto:'El Empleador afiliará al Trabajador al organismo administrador de la Ley 16.744 que corresponda, pagando la cotización básica del 0,90% de las remuneraciones imponibles, más la cotización adicional diferenciada según el riesgo de la actividad. El Trabajador tendrá derecho a las prestaciones médicas, económicas y de rehabilitación que establece la Ley 16.744 en caso de accidente del trabajo o enfermedad profesional. El Trabajador declara recibir y conocer el procedimiento de denuncia de accidentes del trabajo (DIAT).'},
+    {id:'c11', titulo:'Duración del contrato (Art. 159 N°1 CT)', editable:true, texto:'El presente contrato tendrá duración indefinida, iniciándose la relación laboral el {fecha_inicio}. El período de prueba, si lo hubiere, será de los primeros 30 días de vigencia, durante el cual cualquiera de las partes podrá poner término al contrato sin expresión de causa, sin derecho a indemnización, salvo las remuneraciones devengadas (Art. 159 N°1 CT).'},
+    {id:'c12', titulo:'Causales de término de contrato (Art. 159-161 CT)', editable:true, texto:'El presente contrato podrá terminar por las causales establecidas en los artículos 159 (mutuo acuerdo, renuncia, muerte, vencimiento de plazo, caso fortuito), 160 (caducidad por incumplimiento grave) y 161 (necesidades de la empresa) del Código del Trabajo. En caso de despido, El Empleador comunicará el término de contrato por escrito con 30 días de anticipación o pagará la indemnización sustitutiva del aviso previo equivalente a un mes de remuneración (Art. 162 CT). Corresponde indemnización por años de servicio según el Art. 163 CT cuando aplique.'},
+    {id:'c13', titulo:'Protección de datos personales (Ley 19.628 y modificaciones 2024)', editable:true, texto:'El Empleador tratará los datos personales del Trabajador exclusivamente para los fines de la relación laboral, cumplimiento de obligaciones legales, previsionales y tributarias. El Trabajador autoriza expresamente el tratamiento de sus datos personales para dichos fines. Los datos no serán cedidos a terceros sin consentimiento del Trabajador, salvo obligación legal. El Empleador adoptará las medidas de seguridad pertinentes para proteger la información conforme a la Ley 19.628 y sus modificaciones vigentes.'},
+    {id:'c14', titulo:'Reglamento interno, confidencialidad y normas de conducta (Art. 153 CT)', editable:true, texto:'El Trabajador declara haber recibido, conocer y aceptar cumplir el Reglamento Interno de Orden, Higiene y Seguridad de la empresa. El Trabajador se obliga a guardar estricta confidencialidad respecto de la información comercial, financiera, técnica y de clientes a que tenga acceso con ocasión de sus funciones, obligación que subsistirá durante 2 años después de terminada la relación laboral. El incumplimiento de esta obligación dará lugar a las acciones civiles y penales que procedan.'},
+    {id:'c15', titulo:'Firmas y ejemplares', editable:false, texto:'En señal de conformidad con todas las cláusulas precedentes, las partes suscriben el presente contrato en dos ejemplares del mismo tenor y valor, quedando uno en poder de cada parte, en la ciudad y fecha indicadas en la cláusula primera.<table style="width:100%;border-collapse:collapse;margin-top:55px;white-space:normal;page-break-inside:avoid;"><tr><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_empresa}</strong><br>RUT: {rut_empresa}<br><span style="font-size:9pt;color:#444;">Rep.: {representante}</span><br><span style="font-size:9pt;font-style:italic;">El Empleador</span></td><td style="width:8%;"></td><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_trabajador}</strong><br>RUT: {rut_trabajador}<br><span style="font-size:9pt;color:#444;">&nbsp;</span><br><span style="font-size:9pt;font-style:italic;">El Trabajador</span></td></tr></table>'}
   ],
   'Plazo fijo': [
-    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, representada por {representante}, en adelante "El Empleador", y don/doña {nombre_trabajador}, RUT {rut_trabajador}, en adelante "El Trabajador", se celebra el siguiente contrato de trabajo a plazo fijo.'},
-    {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las que le encomiende El Empleador.'},
-    {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}.'},
-    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual de {sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
-    {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones correspondientes a AFP {afp}, sistema de salud {salud} y demás descuentos legales.'},
-    {id:'c7', titulo:'Duración y plazo (Art. 159 N°4 CT)', editable:true, texto:'El presente contrato tendrá una duración desde el {fecha_inicio} hasta el {fecha_termino}. Si el Trabajador continúa prestando servicios con conocimiento del Empleador una vez vencido el plazo, el contrato se transformará en indefinido conforme al Art. 159 N°4 CT. El plazo no podrá exceder de 1 año (2 años para gerentes y personas con título profesional o técnico).'},
-    {id:'c8', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El contrato terminará al vencimiento del plazo pactado o por las causales de los artículos 159, 160 y 161 del Código del Trabajo.'},
-    {id:'c9', titulo:'Reglamento interno (Art. 153 CT)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de la empresa.'},
-    {id:'c10', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman en dos ejemplares.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador\n{nombre_empresa}                                   {nombre_trabajador}\nRUT: {rut_empresa}                                 RUT: {rut_trabajador}'}
+    {id:'c1', titulo:'Individualización de las partes (Art. 10 N°1 y N°2 CT)', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, giro {giro}, con domicilio en {direccion_empresa}, representada por {representante}, en adelante "El Empleador"; y don/doña {nombre_trabajador}, RUT {rut_trabajador}, de nacionalidad {nac}, estado civil {ecivil}, con domicilio en {dir_trab}, en adelante "El Trabajador"; se celebra el siguiente Contrato Individual de Trabajo a Plazo Fijo, en conformidad al Art. 159 N°4 del Código del Trabajo.'},
+    {id:'c2', titulo:'Cargo y funciones (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo}, debiendo cumplir las funciones propias del cargo y las instrucciones que le imparta El Empleador, dentro del giro de la empresa.'},
+    {id:'c3', titulo:'Lugar de trabajo (Art. 10 N°3 CT)', editable:true, texto:'El Trabajador prestará servicios en {direccion_empresa}, o en cualquier lugar que El Empleador determine dentro de la misma ciudad.'},
+    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada ordinaria de trabajo será de {horas_semana} horas semanales, distribuidas de {dia_inicio} a {dia_fin}, en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación no imputables a la jornada. Conforme a la Ley 21.561, a partir de abril 2026 el máximo será 42 horas semanales y desde abril 2028 serán 40 horas.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4, Art. 41 CT)', editable:true, texto:'El Empleador pagará al Trabajador una remuneración mensual bruta de {sueldo_base} (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Se entregará liquidación de sueldo mensual detallada conforme al Art. 54 CT.'},
+    {id:'c6', titulo:'Gratificación (Art. 47-50 CT)', editable:true, texto:'El Empleador pagará gratificación proporcional al tiempo trabajado conforme al Art. 50 CT (25% de lo devengado, con tope de 4,75 IMM anuales), pagadera mensualmente en forma proporcional.'},
+    {id:'c7', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'El Empleador efectuará las retenciones y pagos correspondientes a AFP {afp}, sistema de salud {salud}, AFC (Ley 19.728) y demás descuentos legales.'},
+    {id:'c8', titulo:'Feriado proporcional (Art. 73 CT)', editable:true, texto:'Al término del presente contrato, si el Trabajador hubiere laborado más de 30 días continuos, tendrá derecho al feriado proporcional establecido en el Art. 73 CT, que será compensado en dinero.'},
+    {id:'c9', titulo:'Seguro de accidentes del trabajo (Ley 16.744)', editable:true, texto:'El Empleador afiliará al Trabajador al organismo administrador de la Ley 16.744, cubriendo los accidentes del trabajo y enfermedades profesionales que pudieran ocurrir durante la vigencia del contrato.'},
+    {id:'c10', titulo:'Duración y plazo (Art. 159 N°4 CT)', editable:true, texto:'El presente contrato tendrá una duración desde el {fecha_inicio} hasta el {fecha_termino}. Si el Trabajador continúa prestando servicios con conocimiento del Empleador vencido el plazo, el contrato se transformará en indefinido (Art. 159 N°4 CT). El plazo no podrá exceder de 1 año (2 años para gerentes o personas con título profesional o técnico). La segunda renovación consecutiva de este contrato lo transformará en indefinido.'},
+    {id:'c11', titulo:'Término de contrato (Art. 159-161 CT)', editable:true, texto:'El contrato terminará al vencimiento del plazo pactado, sin necesidad de aviso previo, o anticipadamente por las causales de los Art. 159, 160 y 161 del Código del Trabajo.'},
+    {id:'c12', titulo:'Reglamento interno y datos personales (Art. 153 CT — Ley 19.628)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de la empresa. El Empleador tratará los datos personales del Trabajador exclusivamente para los fines de la relación laboral y obligaciones legales, conforme a la Ley 19.628.'},
+    {id:'c13', titulo:'Firmas y ejemplares', editable:false, texto:'En señal de conformidad, las partes suscriben el presente contrato en dos ejemplares del mismo tenor y valor, quedando uno en poder de cada parte.<table style="width:100%;border-collapse:collapse;margin-top:55px;white-space:normal;page-break-inside:avoid;"><tr><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_empresa}</strong><br>RUT: {rut_empresa}<br><span style="font-size:9pt;color:#444;">Rep.: {representante}</span><br><span style="font-size:9pt;font-style:italic;">El Empleador</span></td><td style="width:8%;"></td><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_trabajador}</strong><br>RUT: {rut_trabajador}<br><span style="font-size:9pt;color:#444;">&nbsp;</span><br><span style="font-size:9pt;font-style:italic;">El Trabajador</span></td></tr></table>'}
   ],
   'Por obra': [
-    {id:'c1', titulo:'Partes contratantes', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, y don/doña {nombre_trabajador}, RUT {rut_trabajador}, se celebra contrato de trabajo por obra o faena.'},
-    {id:'c2', titulo:'Obra o faena (Art. 10 N°3 — Art. 159 N°5 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo} para la ejecución de la siguiente obra o faena específica: [DESCRIBIR OBRA O FAENA]. El contrato terminará al concluir la obra o faena encomendada.'},
-    {id:'c3', titulo:'Lugar de trabajo', editable:true, texto:'Los servicios se prestarán en {direccion_empresa} o en el lugar donde se ejecute la obra o faena.'},
-    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT)', editable:true, texto:'La jornada será de {horas_semana} horas semanales en horario de {hora_entrada} a {hora_salida}.'},
-    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará remuneración mensual de {sueldo_base} brutos, pagadera el último día hábil de cada mes.'},
-    {id:'c6', titulo:'Previsión y salud', editable:true, texto:'Se efectuarán retenciones a AFP {afp} y salud {salud} conforme a la ley.'},
-    {id:'c7', titulo:'Término (Art. 159 N°5 CT)', editable:true, texto:'El contrato termina al concluir la obra o faena. El empleador deberá comunicar el término con 30 días de anticipación o pagar indemnización sustitutiva.'},
-    {id:'c8', titulo:'Reglamento interno', editable:true, texto:'El Trabajador acepta cumplir el Reglamento Interno de la empresa.'},
-    {id:'c9', titulo:'Firmas', editable:false, texto:'En señal de conformidad, las partes firman en dos ejemplares.\n\n_______________________________          _______________________________\nFirma El Empleador                              Firma El Trabajador'}
+    {id:'c1', titulo:'Individualización de las partes (Art. 10 N°1 y N°2 CT)', editable:true, texto:'En {ciudad}, a {fecha_inicio}, entre {nombre_empresa}, RUT {rut_empresa}, con domicilio en {direccion_empresa}, representada por {representante}, en adelante "El Empleador"; y don/doña {nombre_trabajador}, RUT {rut_trabajador}, de nacionalidad {nac}, estado civil {ecivil}, domicilio en {dir_trab}, en adelante "El Trabajador"; se celebra contrato de trabajo por obra o faena conforme al Art. 159 N°5 del Código del Trabajo.'},
+    {id:'c2', titulo:'Obra o faena (Art. 10 N°3 — Art. 159 N°5 CT)', editable:true, texto:'El Trabajador se desempeñará en el cargo de {cargo} para la ejecución de la siguiente obra o faena específica: [DESCRIBIR OBRA O FAENA]. El contrato terminará al concluir la obra o faena encomendada, debiendo El Empleador comunicar el término con 30 días de anticipación o pagar la indemnización sustitutiva equivalente a 1 mes de remuneración.'},
+    {id:'c3', titulo:'Lugar de trabajo', editable:true, texto:'Los servicios se prestarán en {direccion_empresa} o en el lugar donde se ejecute la obra o faena encomendada.'},
+    {id:'c4', titulo:'Jornada de trabajo (Art. 10 N°5 CT — Ley 21.561)', editable:true, texto:'La jornada será de {horas_semana} horas semanales en horario de {hora_entrada} a {hora_salida}, con {colacion} minutos de colación. Conforme a la Ley 21.561, la jornada máxima es de 42 horas desde abril 2026 y 40 horas desde abril 2028.'},
+    {id:'c5', titulo:'Remuneración (Art. 10 N°4 CT)', editable:true, texto:'El Empleador pagará remuneración mensual bruta de {sueldo_base} (pesos chilenos), pagadera el último día hábil de cada mes, mediante {forma_pago}. Se entregará liquidación mensual detallada conforme al Art. 54 CT.'},
+    {id:'c6', titulo:'Previsión y salud (Art. 58 CT)', editable:true, texto:'Se efectuarán retenciones y pagos a AFP {afp}, sistema de salud {salud}, AFC (Ley 19.728) y demás cotizaciones legales sobre las remuneraciones imponibles.'},
+    {id:'c7', titulo:'Feriado proporcional y accidentes (Art. 73 CT — Ley 16.744)', editable:true, texto:'Al término del contrato el Trabajador tendrá derecho al feriado proporcional (Art. 73 CT) si laboró más de 30 días continuos. El Empleador afiliará al Trabajador al organismo administrador de la Ley 16.744 para la cobertura de accidentes del trabajo y enfermedades profesionales.'},
+    {id:'c8', titulo:'Término (Art. 159 N°5 CT)', editable:true, texto:'El contrato termina al concluir la obra o faena. El Empleador comunicará el término con 30 días de anticipación o pagará la indemnización sustitutiva del aviso previo. También podrá terminar por las causales de los Art. 159, 160 y 161 CT.'},
+    {id:'c9', titulo:'Reglamento interno y datos personales (Art. 153 CT — Ley 19.628)', editable:true, texto:'El Trabajador declara conocer y acepta cumplir el Reglamento Interno de la empresa. Sus datos personales serán tratados conforme a la Ley 19.628 exclusivamente para fines de la relación laboral.'},
+    {id:'c10', titulo:'Firmas y ejemplares', editable:false, texto:'En señal de conformidad, las partes suscriben el presente contrato en dos ejemplares del mismo tenor y valor.<table style="width:100%;border-collapse:collapse;margin-top:55px;white-space:normal;page-break-inside:avoid;"><tr><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_empresa}</strong><br>RUT: {rut_empresa}<br><span style="font-size:9pt;color:#444;">Rep.: {representante}</span><br><span style="font-size:9pt;font-style:italic;">El Empleador</span></td><td style="width:8%;"></td><td style="width:46%;text-align:center;vertical-align:bottom;border-top:1.5px solid #222;padding:8px 10px 4px;font-size:10pt;"><strong>{nombre_trabajador}</strong><br>RUT: {rut_trabajador}<br><span style="font-size:9pt;color:#444;">&nbsp;</span><br><span style="font-size:9pt;font-style:italic;">El Trabajador</span></td></tr></table>'}
   ]
 };
+
+// ══════════════════════════════════════════════════════════════
+// ── SISTEMA DE CLÁUSULAS ESPECIALES POR CARGO ─────────────────
+// ══════════════════════════════════════════════════════════════
+const PLANTILLAS_CARGO_DEFAULT = [
+  {id:'pcd_cajero', label:'Cajero/a', keyword:'cajero|caja',
+   clausulas:[
+    {titulo:'Manejo de fondos y responsabilidad de caja',
+     texto:'El Trabajador será responsable del manejo de los fondos de caja asignados para el desempeño de su cargo de {cargo}. Cualquier diferencia de caja será de responsabilidad del Trabajador cuando sea imputable a su negligencia o descuido. El cierre de caja deberá realizarse al término de cada turno, cuadrando los montos con los documentos de respaldo. Conforme al Art. 58 CT, ningún faltante podrá ser descontado directamente del sueldo sin resolución judicial o autorización escrita del Trabajador.'},
+    {titulo:'Uso de sistemas de punto de venta y equipos tecnológicos',
+     texto:'El Trabajador deberá operar los sistemas de punto de venta (POS), cajas registradoras y equipos electrónicos asignados estrictamente conforme a los procedimientos internos de {nombre_empresa}. Queda expresamente prohibido el uso de dichos sistemas para transacciones no autorizadas, accesos indebidos o cualquier operación ajena a sus funciones. El Trabajador reportará de inmediato cualquier falla, anomalía o intento de fraude detectado.'}
+  ]},
+  {id:'pcd_bodeguero', label:'Bodeguero/a', keyword:'bodeguero|bodega|almacen|almacén',
+   clausulas:[
+    {titulo:'Control de inventario y responsabilidad de bodega',
+     texto:'El Trabajador, en su calidad de {cargo}, será responsable del control, recepción, almacenamiento y despacho de mercaderías conforme a los procedimientos de {nombre_empresa}. Deberá mantener actualizado el registro de inventario y reportar inmediatamente cualquier merma, pérdida, robo o deterioro detectado. Participará en todos los inventarios periódicos que disponga la empresa, siendo responsable de las diferencias injustificadas que le sean imputables.'},
+    {titulo:'Uso de maquinaria y equipos de bodega — Ley 16.744',
+     texto:'El Trabajador podrá operar maquinaria de bodega (transpaletas, estocas, apiladores, montacargas) únicamente con la capacitación y autorización expresa de {nombre_empresa}. En todo momento deberá utilizar los elementos de protección personal (EPP) proporcionados. El incumplimiento de las normas de seguridad o el uso indebido de maquinaria podrá constituir causal de término de contrato conforme al Art. 160 N°5 CT.'}
+  ]},
+  {id:'pcd_aseo', label:'Auxiliar de Aseo / Servicios', keyword:'aseo|limpieza|auxiliar|servicio',
+   clausulas:[
+    {titulo:'Uso de productos químicos y elementos de protección personal — Ley 16.744',
+     texto:'El Trabajador deberá utilizar los productos de limpieza conforme a las instrucciones del fabricante y los protocolos internos de {nombre_empresa}. Es obligatorio el uso permanente de los EPP asignados (guantes de nitrilo, mascarilla, calzado antideslizante, delantal). El Trabajador reportará inmediatamente cualquier accidente, exposición a productos peligrosos o reacción adversa, para los efectos del procedimiento DIAT conforme a la Ley 16.744.'},
+    {titulo:'Protocolo de higiene, áreas de trabajo y dotación de insumos',
+     texto:'El Trabajador ejecutará las tareas de aseo en las áreas asignadas según el plan de limpieza establecido por la empresa, respetando horarios y frecuencias definidas. Será responsable de la correcta utilización y conservación de los equipos e insumos de limpieza a su cargo. Deberá informar de inmediato cualquier desperfecto de instalaciones sanitarias, plaga, o situación de riesgo para la salud detectada en su área de trabajo.'}
+  ]},
+  {id:'pcd_chofer', label:'Chofer / Conductor', keyword:'chofer|conductor|repartidor|delivery',
+   clausulas:[
+    {titulo:'Licencia de conducir y responsabilidad del vehículo asignado',
+     texto:'El Trabajador deberá mantener vigente la licencia de conducir de la clase correspondiente al vehículo asignado durante toda la vigencia del presente contrato, siendo causal de término inmediato su pérdida o suspensión (Art. 160 N°1 CT). Toda multa de tránsito o infracción derivada de su conducción será de cargo exclusivo del Trabajador. El Trabajador es responsable del buen uso, conservación y seguridad del vehículo asignado por {nombre_empresa}, debiendo reportar de inmediato cualquier desperfecto, accidente o colisión.'},
+    {titulo:'Prohibiciones en la conducción — Art. 160 N°7 CT',
+     texto:'Queda expresamente prohibido conducir bajo los efectos del alcohol, drogas o cualquier sustancia que altere las capacidades psicofísicas, constituyendo dicha conducta causal inmediata de término de contrato según Art. 160 N°7 CT. El Trabajador deberá respetar los límites de velocidad, normativa del tránsito y las instrucciones de {nombre_empresa} respecto a rutas, horarios y cargas máximas. Todo accidente de tránsito deberá ser informado de inmediato al empleador y a los organismos correspondientes.'}
+  ]},
+  {id:'pcd_vendedor', label:'Vendedor/a', keyword:'vendedor|ventas|ejecutivo|comercial',
+   clausulas:[
+    {titulo:'Metas de venta, comisiones y atención al cliente',
+     texto:'El Trabajador, en su calidad de {cargo}, deberá cumplir las metas de venta establecidas periódicamente por {nombre_empresa}, aplicando las políticas comerciales y listas de precios vigentes. Las comisiones o bonos por venta, si los hubiere, serán calculados conforme al reglamento de comisiones vigente y se pagarán conjuntamente con la remuneración mensual. El Trabajador deberá mantener en todo momento un trato respetuoso, profesional y honesto con los clientes.'},
+    {titulo:'Información comercial confidencial y exclusividad',
+     texto:'El Trabajador tendrá acceso a información comercial sensible de {nombre_empresa} (cartera de clientes, precios, márgenes, estrategias) en el ejercicio de sus funciones. Se obliga a no revelar dicha información a terceros ni a utilizarla en beneficio propio o de competidores durante ni después de la relación laboral. Durante la vigencia del contrato, el Trabajador no podrá prestar servicios remunerados a empresas del mismo giro sin autorización escrita del Empleador.'}
+  ]},
+  {id:'pcd_guardia', label:'Guardia de Seguridad', keyword:'guardia|seguridad|vigilante|portero',
+   clausulas:[
+    {titulo:'Funciones de control de acceso, rondas y reporte de incidentes',
+     texto:'El Trabajador, en su calidad de {cargo}, será responsable del control de acceso de personas y vehículos a las instalaciones de {nombre_empresa}, la ejecución de rondas de seguridad según el plan establecido, y la detección y reporte oportuno de situaciones anómalas, riesgos o incidentes. Todo incidente de seguridad deberá ser registrado en el libro de novedades y comunicado de inmediato a la jefatura directa.'},
+    {titulo:'Uso de equipos de seguridad y prohibiciones',
+     texto:'El Trabajador deberá utilizar correctamente los equipos de comunicación, control de acceso y demás elementos asignados para el desempeño de su cargo. Queda expresamente prohibido abandonar el puesto de trabajo sin autorización, ausentarse de las rondas programadas o introducir a las instalaciones personas no autorizadas. El incumplimiento podrá constituir causal de término según Art. 160 CT.'}
+  ]},
+  {id:'pcd_operario', label:'Operario/a de Producción', keyword:'operario|produccion|producción|manufactura|planta',
+   clausulas:[
+    {titulo:'Uso de maquinaria, herramientas y normas de seguridad — Ley 16.744',
+     texto:'El Trabajador operará la maquinaria, herramientas y equipos asignados exclusivamente para los fines propios de su cargo, y sólo una vez recibida la capacitación y autorización correspondiente. Deberá utilizar en todo momento los EPP provistos por {nombre_empresa} (casco, guantes, calzado de seguridad, protección auditiva, según aplique). Cualquier accidente, incidente o condición insegura deberá ser reportada de inmediato conforme al procedimiento DIAT — Ley 16.744.'},
+    {titulo:'Cuotas de producción, calidad y responsabilidad por material',
+     texto:'El Trabajador deberá cumplir los estándares de producción y calidad definidos por {nombre_empresa} para su área de trabajo. Será responsable del cuidado del material, herramientas y equipos a su cargo. Las pérdidas o daños causados por negligencia, descuido o uso indebido podrán dar origen a responsabilidades civiles o causales de término conforme al Art. 160 CT.'}
+  ]}
+];
+
+// Obtener cláusulas especiales para un cargo dado (DB primero, luego defaults)
+function _cpcGetParaCargo(cargoStr){
+  if(!cargoStr) return [];
+  const lc=cargoStr.toLowerCase();
+  const dbPlt=DB().clausulasPorCargo||[];
+  const todas=[...dbPlt,...PLANTILLAS_CARGO_DEFAULT.filter(d=>!dbPlt.some(db=>db.id===d.id))];
+  const match=todas.find(p=>p.keyword.split('|').some(kw=>lc.includes(kw.trim())));
+  return match?match.clausulas:[];
+}
+
+// Preview de cargos para el modal de nuevo contrato
+function _ncCargosPreview(){
+  const trabs=DB().trabajadores.filter(t=>t.estado!=='Inactivo');
+  const cargosUnicos=[...new Set(trabs.map(t=>(t.cargo||'').trim()).filter(Boolean))];
+  if(!cargosUnicos.length) return '<span style="color:var(--muted);">Sin cargos definidos en trabajadores activos.</span>';
+  const dbPlt=DB().clausulasPorCargo||[];
+  const todas=[...dbPlt,...PLANTILLAS_CARGO_DEFAULT.filter(d=>!dbPlt.some(db=>db.id===d.id))];
+  let html='';
+  cargosUnicos.forEach(cargo=>{
+    const lc=cargo.toLowerCase();
+    const match=todas.find(p=>p.keyword.split('|').some(kw=>lc.includes(kw.trim())));
+    const n=trabs.filter(t=>(t.cargo||'').trim()===cargo).length;
+    if(match){
+      html+=`<div style="display:flex;align-items:center;gap:5px;padding:2px 0;"><span style="color:var(--green);font-size:11px;">✅</span><span><b>${esc(cargo)}</b> <span style="color:var(--muted);">(${n} trab.)</span> → +${match.clausulas.length} cláusula${match.clausulas.length>1?'s':''}: <i>${esc(match.label)}</i></span></div>`;
+    } else {
+      html+=`<div style="display:flex;align-items:center;gap:5px;padding:2px 0;"><span style="color:var(--border2);font-size:11px;">○</span><span><b>${esc(cargo)}</b> <span style="color:var(--muted);">(${n} trab.) — sin plantilla especial</span></span></div>`;
+    }
+  });
+  return html;
+}
+
+// Gestionar plantillas por cargo
+function abrirGestorCargos(){
+  const dbPlt=DB().clausulasPorCargo||[];
+  const todas=[...PLANTILLAS_CARGO_DEFAULT.map(p=>({...p,_esDefault:true})),...dbPlt];
+  const listaHTML=todas.map(p=>{
+    const esDef=p._esDefault;
+    const enDB=dbPlt.some(d=>d.id===p.id);
+    return `<div style="background:var(--s3);border:1px solid ${esDef?'var(--border)':'var(--acc)'};border-radius:8px;padding:9px 12px;margin-bottom:6px;">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:16px;">🏷️</span>
+        <div style="flex:1;">
+          <div style="font-size:11px;font-weight:800;">${esc(p.label)}</div>
+          <div style="font-size:9px;color:var(--muted);">Keyword: <code>${esc(p.keyword)}</code> · ${p.clausulas.length} cláusula${p.clausulas.length>1?'s':''} · ${esDef&&!enDB?'<span style="color:var(--blue);">Base del sistema</span>':'<span style="color:var(--green);">Personalizada</span>'}</div>
+        </div>
+        ${!esDef||enDB?`<button class="btn sm err" style="font-size:8px;" onclick="_cpcEliminar('${p.id}')">🗑 Eliminar</button>`:''}
+      </div>
+      ${p.clausulas.map((cl,i)=>`<div style="font-size:9px;background:var(--s2);border-radius:5px;padding:5px 8px;margin-top:3px;"><b>${i+1}. ${esc(cl.titulo)}</b></div>`).join('')}
+    </div>`;
+  }).join('');
+  const body=`
+    <div style="display:flex;flex-direction:column;gap:12px;">
+      <div style="background:var(--purple2);border:1px solid var(--purple);border-radius:7px;padding:9px 12px;font-size:9px;color:var(--purple);">
+        💡 Cada plantilla agrega cláusulas especiales automáticamente al generar contratos masivos según el cargo del trabajador. El sistema detecta el cargo por palabras clave (ej: "cajero" activa la plantilla Cajero/a).
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:var(--acc);margin-bottom:8px;">PLANTILLAS ACTIVAS (${todas.length})</div>
+        ${listaHTML}
+      </div>
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:10px;font-weight:800;color:var(--acc);margin-bottom:8px;">➕ NUEVA PLANTILLA POR CARGO</div>
+        <div class="fgrid" style="gap:8px;">
+          <div class="frow h2">
+            <div><div class="fl">Nombre del cargo *</div><input class="fi" id="cpc_label" placeholder="Ej: Promotor/a"></div>
+            <div><div class="fl">Palabra(s) clave * (separar con |)</div><input class="fi" id="cpc_keyword" placeholder="Ej: promotor|promotora"></div>
+          </div>
+          <div><div class="fl">Título de la cláusula especial *</div><input class="fi" id="cpc_titulo" placeholder="Ej: Funciones de promoción y atención"></div>
+          <div><div class="fl">Texto de la cláusula * (usa {cargo}, {nombre_empresa})</div>
+            <textarea class="fi" id="cpc_texto" style="min-height:90px;resize:vertical;" placeholder="El Trabajador, en su calidad de {cargo}, deberá..."></textarea>
+          </div>
+          <button class="btn primary" onclick="_cpcGuardar()">💾 Guardar plantilla</button>
+        </div>
+      </div>
+    </div>`;
+  $('addTitle').textContent='🏷️ Plantillas de Cláusulas por Cargo';
+  $('addBody').innerHTML=body;
+  $('addFooter').innerHTML=`<button class="btn secondary" onclick="closeModal('addModal')">Cerrar</button>`;
+  openModal('addModal');
+}
+function _cpcGuardar(){
+  const label=($('cpc_label')||{}).value?.trim();
+  const keyword=($('cpc_keyword')||{}).value?.trim().toLowerCase();
+  const titulo=($('cpc_titulo')||{}).value?.trim();
+  const texto=($('cpc_texto')||{}).value?.trim();
+  if(!label||!keyword||!titulo||!texto){toast('Completa todos los campos','err');return;}
+  if(!DB().clausulasPorCargo) DB().clausulasPorCargo=[];
+  DB().clausulasPorCargo.push({id:'cpc_'+Date.now(),label,keyword,clausulas:[{titulo,texto}]});
+  saveDB();toast('✅ Plantilla guardada','ok');abrirGestorCargos();
+}
+function _cpcEliminar(id){
+  if(!confirm('¿Eliminar esta plantilla?')) return;
+  DB().clausulasPorCargo=(DB().clausulasPorCargo||[]).filter(p=>p.id!==id);
+  saveDB();toast('Eliminada','ok');abrirGestorCargos();
+}
 
 // ── Vista principal de contratos ──
 function _rTrabContratos(){
@@ -2514,6 +2373,7 @@ function _rTrabContratos(){
       </div>
       <button class="btn primary sm" onclick="abrirNuevoContrato()">+ Nuevo Contrato</button>
       <button class="btn success sm" onclick="abrirGestorPlantillas()">📂 Plantilla Propia</button>
+      <button class="btn sm" style="background:var(--purple2);color:var(--purple);border-color:var(--purple);" onclick="abrirGestorCargos()">🏷️ Por Cargo</button>
       <button class="btn success sm" onclick="exportContratosExcel()" title="Excel de contratos filtrados">📊 Excel</button>
       <button class="btn err sm" onclick="exportContratosPDF()" title="PDF de contratos filtrados">📄 PDF</button>
     </div>
@@ -2703,6 +2563,14 @@ function abrirNuevoContrato(trabajadorId){
         <div><div class="fl">RUT empresa</div><input class="fi" id="nc_rute" value="${DB().cfg?.rut||''}" placeholder="RUT empresa"></div>
       </div>
       <div><div class="fl">Dirección empresa</div><input class="fi" id="nc_dir" value="${DB().cfg?.dir||''}" placeholder="Dirección del lugar de trabajo"></div>
+      <div style="background:var(--s2);border:1px solid var(--border);border-radius:8px;padding:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:7px;">
+          <input type="checkbox" id="nc_usar_cargo" checked style="accent-color:var(--purple);width:14px;height:14px;">
+          <label for="nc_usar_cargo" style="font-size:10px;font-weight:800;color:var(--purple);cursor:pointer;">🏷️ AGREGAR CLÁUSULAS ESPECIALES POR CARGO</label>
+        </div>
+        <div style="font-size:9px;margin-bottom:7px;">${_ncCargosPreview()}</div>
+        <button class="btn sm secondary" style="font-size:8px;" onclick="closeModal('addModal');abrirGestorCargos()">⚙️ Gestionar plantillas por cargo</button>
+      </div>
     </div>`;
   $('addTitle').textContent='📄 Nuevo Contrato de Trabajo';
   $('addBody').innerHTML=body;
@@ -2753,8 +2621,8 @@ function guardarNuevoContrato(){
         .replace(/{nombre_trabajador}/g,t.nombre||'').replace(/{rut_trabajador}/g,t.rut||'')
         .replace(/{cargo}/g,t.cargo||'').replace(/{sueldo_base}/g,t.sb?fmt(t.sb):'')
         .replace(/{afp}/g,t.afp||'').replace(/{salud}/g,t.salud||'')
-        .replace(/{horas_semana}/g,hrs).replace(/{fecha_inicio}/g,fi)
-        .replace(/{fecha_termino}/g,ft||'_______________').replace(/{ciudad}/g,ciudad||empDir.split(',').pop()?.trim()||'')
+        .replace(/{horas_semana}/g,hrs).replace(/{fecha_inicio}/g,fmtFechaES(fi))
+        .replace(/{fecha_termino}/g,ft?fmtFechaES(ft):'_______________').replace(/{ciudad}/g,ciudad||empDir.split(',').pop()?.trim()||'')
         .replace(/{nombre_empresa}/g,empNombre).replace(/{rut_empresa}/g,rute||empRut)
         .replace(/{representante}/g,rep||empRep).replace(/{direccion_empresa}/g,dir||empDir)
         .replace(/{giro}/g,empGiro)
@@ -2765,6 +2633,22 @@ function guardarNuevoContrato(){
         .replace(/{ecivil}/g,t.ecivil||'').replace(/{dir_trab}/g,t.dir||'')
         .replace(/{email}/g,t.email||'').replace(/{tel}/g,t.tel||'')
     }));
+    // ── Inyectar cláusulas especiales por cargo (si está activado) ──
+    const usarCargo=!$('nc_usar_cargo')||$('nc_usar_cargo').checked;
+    if(usarCargo&&t.cargo){
+      const extras=_cpcGetParaCargo(t.cargo);
+      if(extras.length){
+        const clausurasExtra=extras.map((cl,ci)=>({
+          id:'cpc_'+ci+'_'+Date.now(),titulo:cl.titulo,editable:true,
+          texto:cl.texto
+            .replace(/{nombre_trabajador}/g,t.nombre||'').replace(/{rut_trabajador}/g,t.rut||'')
+            .replace(/{cargo}/g,t.cargo||'').replace(/{nombre_empresa}/g,empNombre)
+            .replace(/{rut_empresa}/g,rute||empRut).replace(/{representante}/g,rep||empRep)
+        }));
+        // Insertar antes de la última cláusula (Firmas)
+        clausulas.splice(Math.max(clausulas.length-1,0),0,...clausurasExtra);
+      }
+    }
     DB().contratosDoc.push({id:'ct'+Date.now()+idx,trabajadorId:trabId,tipo,fechaInicio:fi,fechaTermino:ft||null,estado:'Vigente',clausulas,anexos:[],creado:new Date().toISOString(),modificado:new Date().toISOString()});
     creados++;
   });
@@ -2952,6 +2836,7 @@ function _htmlContrato(contratoId,autoprint){
     </div>
     <div class="nota-dt">Documento conforme al Art. 10 Código del Trabajo de Chile y Ley 21.561. Se extiende en dos ejemplares de igual valor.</div>
     ${clausulasHTML}${anexosHTML}${printScript}
+    ${wmFooter()}
     </body></html>`;
 }
 function imprimirContrato(contratoId){
@@ -3178,8 +3063,8 @@ function generarDesPlantilla(plantillaId){
       .replace(/\{\{nombre\}\}/g,t.nombre||'').replace(/\{\{rut\}\}/g,t.rut||'')
       .replace(/\{\{cargo\}\}/g,t.cargo||'').replace(/\{\{sueldo\}\}/g,t.sb?fmt(t.sb):'')
       .replace(/\{\{afp\}\}/g,t.afp||'').replace(/\{\{salud\}\}/g,t.salud||'')
-      .replace(/\{\{fecha_inicio\}\}/g,fi).replace(/\{\{fecha_termino\}\}/g,ft||'_______________')
-      .replace(/\{\{jornada\}\}/g,t.jornada||44).replace(/\{\{empresa\}\}/g,emp.nombre||'')
+      .replace(/\{\{fecha_inicio\}\}/g,fmtFechaES(fi)).replace(/\{\{fecha_termino\}\}/g,ft?fmtFechaES(ft):'_______________')
+      .replace(/\{\{jornada\}\}/g,t.jornada||44).replace(/\{\{empresa\}\}/g,emp.cfg&&emp.cfg.emp||'')
       .replace(/\{\{rut_empresa\}\}/g,emp.cfg&&emp.cfg.rut||'')
       .replace(/\{\{direccion\}\}/g,emp.cfg&&emp.cfg.dir||'')
       .replace(/\{\{ciudad\}\}/g,ciudad).replace(/\{\{representante\}\}/g,rep||emp.cfg&&emp.cfg.rep||'')
@@ -3203,7 +3088,7 @@ function generarDesPlantilla(plantillaId){
   } else {
     closeModal('addModal');
     trabs.forEach((t,i)=>setTimeout(()=>{
-      const texto=`CONTRATO DE TRABAJO\nPlantilla: ${plt.nombre}\n\nTrabajador: ${t.nombre||''}\nRUT: ${t.rut||''}\nFecha Nac: ${t.fnac||''}\nNacionalidad: ${t.nac||''}\nEstado Civil: ${t.ecivil||''}\nDirección: ${t.dir||''}\nTeléfono: ${t.tel||''}\nCorreo: ${t.email||''}\nCargo: ${t.cargo||''}\nSueldo: ${t.sb?fmt(t.sb):''}\nAFP: ${t.afp||''}\nSalud: ${t.salud||''}\nJornada: ${t.jornada||44}h/sem\nFecha inicio: ${fi}\n${ft?'Fecha término: '+ft+'\n':''}\nEmpresa: ${emp.nombre||''}\nCiudad: ${ciudad}\nRepresentante: ${rep||''}`;
+      const texto=`CONTRATO DE TRABAJO\nPlantilla: ${plt.nombre}\n\nTrabajador: ${t.nombre||''}\nRUT: ${t.rut||''}\nFecha Nac: ${t.fnac||''}\nNacionalidad: ${t.nac||''}\nEstado Civil: ${t.ecivil||''}\nDirección: ${t.dir||''}\nTeléfono: ${t.tel||''}\nCorreo: ${t.email||''}\nCargo: ${t.cargo||''}\nSueldo: ${t.sb?fmt(t.sb):''}\nAFP: ${t.afp||''}\nSalud: ${t.salud||''}\nJornada: ${t.jornada||44}h/sem\nFecha inicio: ${fmtFechaES(fi)}\n${ft?'Fecha término: '+fmtFechaES(ft)+'\n':''}\nEmpresa: ${emp.cfg&&emp.cfg.emp||''}\nCiudad: ${ciudad}\nRepresentante: ${rep||emp.cfg&&emp.cfg.rep||''}`;
       _descargarComoWord(texto,`Datos_${(t.nombre||'').replace(/\s+/g,'_')}`);
     },i*400));
     if(trabs.length>1) setTimeout(()=>_generarExcelResumen(trabs,fi,ft,plt.nombre),trabs.length*400+400);
@@ -4986,6 +4871,19 @@ function renderLiqMasiva(){
 
 
 function renderLiq(){
+  // GUARD: sin empresa configurada o sin trabajadores
+  const _cfg=CFG();
+  if(!_cfg.emp){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--orange);color:var(--orange);">
+      ⚠️ <b>Configura tu empresa primero.</b> Haz clic en 🏢 en la barra superior para ingresar razón social y RUT.
+    </div></div></div>`;
+  }
+  if(!DB().trabajadores||DB().trabajadores.filter(t=>t.estado!=='Inactivo').length===0){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--cyan);color:var(--cyan);">
+      👥 <b>No hay trabajadores activos.</b> Ve al módulo <b>Trabajadores</b> y agrega al menos uno antes de generar liquidaciones.
+      <div style="margin-top:8px;"><button class="btn info sm" onclick="areaSeleccionar('rrhh');setTimeout(()=>go('trab'),80)">→ Ir a Trabajadores</button></div>
+    </div></div></div>`;
+  }
   // MODO MASIVO: mostrar si generado=true Y no editando individualmente
   // O si generado=false pero _editIdx===undefined y borradores=[] (pantalla selección)
   const _lm=window._liqMasiva;
@@ -5989,6 +5887,7 @@ function htmlLiqFormal(l, c) {
     </div>
   </div>
 </div>
+${wmFooter()}
 </body></html>`;
 }
 
@@ -6042,6 +5941,7 @@ ${paginaStyle}
 <div style="margin-top:52px;">
 ${cuerpos}
 </div>
+${wmFooter()}
 </body></html>`;
 
   const w = window.open('', '_blank', 'width=900,height=900');
@@ -6052,6 +5952,17 @@ ${cuerpos}
 
 
 function renderPrevired(){
+  if(!CFG().emp){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--orange);color:var(--orange);">
+      ⚠️ <b>Configura tu empresa primero</b> antes de generar el archivo PreviRed.
+    </div></div></div>`;
+  }
+  if(!DB().liquidaciones||DB().liquidaciones.length===0){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--cyan);color:var(--cyan);">
+      🧾 <b>No hay liquidaciones registradas.</b> Genera liquidaciones del mes antes de exportar a PreviRed.
+      <div style="margin-top:8px;"><button class="btn info sm" onclick="go('liq')">→ Ir a Liquidaciones</button></div>
+    </div></div></div>`;
+  }
   const db=DB();const c=CFG();
   const liqs=db.liquidaciones;
   const total=liqs.reduce((a,x)=>a+(+x.liquido||0),0);
@@ -7062,8 +6973,6 @@ function showContabTab(tab,btn){
         <button class="btn green sm full" onclick="aplicarPlantillaInteligente('iva_compras')">🛒 IVA Crédito <span style="font-family:'JetBrains Mono',monospace;">${fmt(ivaC)}</span></button>
         <button class="btn teal sm full" onclick="aplicarPlantillaInteligente('depreciacion')">🏗 Depreciación <span style="font-family:'JetBrains Mono',monospace;">${fmt(depMes)}/mes</span></button>
         <button class="btn acc sm full" onclick="aplicarPlantillaInteligente('ppm')">📑 PPM <span style="font-family:'JetBrains Mono',monospace;">${fmt(ppm)}</span></button>
-        <button class="btn purple sm full" onclick="openIAModal()">🤖 IA: generar cualquier asiento</button>
-        <button class="btn full sm" style="background:var(--green2);color:var(--green);border:1px solid rgba(32,184,106,.4);" onclick="centralizarTodo()">⚡ Centralizar TODO el período</button>
       </div>
     </div>`;
   }
@@ -7324,6 +7233,11 @@ function renderSueldoEmpTabInline(){
 // ║   Asientos multilinea · Comprobante · Correlativo legal      ║
 // ╚══════════════════════════════════════════════════════════════╝
 function renderDiario(){
+  if(!CFG().emp){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--orange);color:var(--orange);">
+      ⚠️ <b>Configura tu empresa primero</b> antes de ingresar asientos en el Libro Diario.
+    </div></div></div>`;
+  }
   const db=DB(); const c=CFG();
   const asientos=db.asientos||[];
   const año=db.periodoActual||new Date().getFullYear();
@@ -8686,6 +8600,11 @@ function addHonorario(){
 
 // ── renderF29 — Formulario 29 IVA/PPM ────────────────────────────────
 function renderF29(){
+  if(!CFG().emp){
+    return `<div class="card"><div class="card-body"><div class="info-box" style="border-color:var(--orange);color:var(--orange);">
+      ⚠️ <b>Configura tu empresa primero.</b> Haz clic en 🏢 para ingresar razón social y RUT antes de usar el F-29.
+    </div></div></div>`;
+  }
   const db=DB();const c=CFG();const d=calcDatosRenta();
   return `<div class="card">
     <div class="card-hdr"><div class="ci" style="background:var(--orange2)">📑</div>
@@ -9361,6 +9280,7 @@ function exportF29PDF(){
   <div style="font-size:9px;color:#64748b;text-align:center;border-top:1px solid #e5e7eb;padding-top:8px;">
     Generado: ${new Date().toLocaleString('es-CL')} · Declara en sii.cl → Formulario 29 · Art.64 D.L.825/74
   </div>
+  ${wmFooter()}
   <script>window.onload=()=>window.print();<\/script></body></html>`;
   const w=window.open('','_blank','width=800,height=700');
   if(w){w.document.write(html);w.document.close();}
@@ -9906,6 +9826,7 @@ function exportF22PDF(){
     </div>
   </div>
   <div style="font-size:9px;color:#64748b;text-align:center;margin-top:8px;">Generado: ${new Date().toLocaleString('es-CL')} · Declara en sii.cl → Operación Renta → F-22 · Vence 30 Abril ${d.año+1}</div>
+  ${wmFooter()}
   <script>window.onload=()=>window.print();<\/script></body></html>`;
   const w=window.open('','_blank','width=800,height=700');
   if(w){w.document.write(html);w.document.close();}
@@ -10194,6 +10115,7 @@ function imprimirPrevModal(tab){
   <h2>${info.titulo}</h2>
   <p>${c.emp||''} · RUT: ${c.rut||'—'} · Período: ${db.periodoActual||new Date().getFullYear()} · ${data.length} registros · Generado: ${new Date().toLocaleString('es-CL')}</p>
   <table><thead><tr>${thead}</tr></thead><tbody>${tbody}</tbody></table>
+  ${wmFooter()}
   <script>window.onload=()=>window.print();</scr`+`ipt></body></html>`;
   const w=window.open('','_blank','width=900,height=700');
   if(w){w.document.write(html);w.document.close();}
@@ -10264,6 +10186,7 @@ function pdfRegistroVentas(){
     <tbody>${resRows}
     <tr class="totales"><td colspan="7">TOTALES</td><td style="text-align:right">0</td><td style="text-align:right">${fmtN(totalNeto)}</td><td style="text-align:right">${fmtN(totalIva)}</td><td style="text-align:right">${fmtN(totalTotal)}</td></tr>
     </tbody></table></div>
+  ${wmFooter()}
   </body></html>`;
   const w=window.open('','_blank','width=1100,height=700');
   if(w){w.document.write(html);w.document.close();}else toast('Habilita ventanas emergentes','warn');
@@ -10333,6 +10256,7 @@ function pdfRegistroCompras(){
     <tbody>${resRows}
     <tr class="totales"><td colspan="8">TOTALES</td><td style="text-align:right">${fmtN(totalILA)}</td><td style="text-align:right">0</td><td style="text-align:right">${fmtN(totalNeto)}</td><td style="text-align:right">${fmtN(totalIva)}</td><td style="text-align:right">${fmtN(totalTotal)}</td></tr>
     </tbody></table></div>
+  ${wmFooter()}
   </body></html>`;
   const w=window.open('','_blank','width=1100,height=700');
   if(w){w.document.write(html);w.document.close();}else toast('Habilita ventanas emergentes','warn');
@@ -10498,6 +10422,65 @@ function openModal(id){
 function closeModal(id){document.getElementById(id)?.classList.remove('open');}
 function showLoader(){$('loader')?.classList.add('show');}
 function hideLoader(){$('loader')?.classList.remove('show');}
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  WIZARD PRIMER USO — 3 pasos                                ║
+// ╚══════════════════════════════════════════════════════════════╝
+function wizCheck() {
+  // Registro de empresa desactivado — acceso libre sin obligación de configurar empresa
+}
+
+function wizGo(step) {
+  [1,2,3].forEach(s => {
+    const el = document.getElementById('wiz_step' + s);
+    if (el) el.style.display = s === step ? '' : 'none';
+  });
+}
+
+function wizGuardarEmpresa() {
+  const emp = document.getElementById('wiz_emp')?.value.trim();
+  const rut = document.getElementById('wiz_rut')?.value.trim();
+  if (!emp || !emp.length) { toast('Ingresa la razón social','err'); document.getElementById('wiz_emp')?.focus(); return; }
+  if (!rut || !rut.length) { toast('Ingresa el RUT de la empresa','err'); document.getElementById('wiz_rut')?.focus(); return; }
+  // Guardar en la empresa activa (ya existe empVacia() por defecto)
+  const db = DB();
+  db.cfg.emp      = emp;
+  db.cfg.rut      = rut;
+  db.cfg.giro     = document.getElementById('wiz_giro')?.value.trim() || '';
+  db.cfg.regimen  = document.getElementById('wiz_regimen')?.value || '';
+  save();
+  updateHeader();
+  wizGo(3);
+}
+
+function wizFinalizar() {
+  const mes = parseInt(document.getElementById('wiz_mes')?.value || new Date().getMonth());
+  const año = parseInt(document.getElementById('wiz_año')?.value || new Date().getFullYear());
+  const db = DB();
+  db.mesTributario    = mes;
+  db.periodoActual    = año;
+  db.cfg.periodoActual = año;
+  save();
+  updateHeader();
+  document.getElementById('wizardModal')?.classList.remove('open');
+  toast('✅ ¡Todo listo! Ya puedes empezar a usar ContaMaster Pro','ok');
+}
+
+
+// ╔══════════════════════════════════════════════════════════════╗
+// ║  WATERMARK PDF — pie de página en todos los documentos      ║
+// ╚══════════════════════════════════════════════════════════════╝
+function wmFooter() {
+  const nombre = (typeof CLIENT_CONFIG !== 'undefined' && CLIENT_CONFIG.watermark)
+    ? CLIENT_CONFIG.watermark
+    : ((typeof CFG === 'function' && CFG().emp) ? CFG().emp : '');
+  const fecha = new Date().toLocaleDateString('es-CL');
+  const marca = nombre ? `© ${nombre} — LICENCIA PERSONAL · ` : '';
+  return `<div style="margin-top:18px;padding-top:8px;border-top:1px solid #e5e7eb;font-size:8px;color:#9ca3af;text-align:center;font-family:Arial,sans-serif;">
+    ${marca}Generado por <b>ContaMaster Pro v6</b> · ${fecha} · Documento de uso exclusivo
+  </div>`;
+}
+
 function toast(msg,type='info'){
   const w=$('tw');if(!w)return;
   const t=document.createElement('div');
@@ -10597,125 +10580,6 @@ function renderCalendario(){
       </tr>`).join('')}
     </tbody>
   </table></div>`;
-}
-
-// ─────────────────────────────────────────────────────────────────
-// IA ASISTENTE CONTABLE — Claude API integrado
-// ─────────────────────────────────────────────────────────────────
-function openIAModal(){
-  document.getElementById('ia_input').value='';
-  document.getElementById('ia_resultado').style.display='none';
-  document.getElementById('ia_resultado').innerHTML='';
-  openModal('iaModal');
-}
-function iaRapido(texto){
-  document.getElementById('ia_input').value=texto;
-  iaGenerarAsiento();
-}
-async function iaGenerarAsiento(){
-  const input=document.getElementById('ia_input');
-  const resultado=document.getElementById('ia_resultado');
-  const btn=document.getElementById('ia_btn');
-  const texto=input?.value?.trim();
-  if(!texto){toast('Describe la operación primero','err');return;}
-  const db=DB();const c=CFG();
-  const cuentas=(db.planCuentas||[]).map(x=>x.nombre).concat(['Caja','Banco Estado','Banco BCI','Banco Santander','Clientes','Proveedores','Ventas','Compras','IVA Crédito Fiscal','IVA Débito Fiscal','Remuneraciones por Pagar','AFP por Pagar','Fonasa por Pagar','Impuesto Único por Pagar','Depreciación Acumulada','Activos Fijos','Capital','Utilidad del Ejercicio','Retiros del Período','PPM por Pagar','Honorarios por Pagar']);
-  const ivaV=db.ventas.reduce((a,x)=>a+(+x.iva||0),0);
-  const ivaC=db.compras.reduce((a,x)=>a+(+x.iva||0),0);
-  const ppm=Math.round(db.ventas.reduce((a,x)=>a+(+x.neto||0),0)*(c.ppm||1.5)/100);
-  const depMes=Math.round((db.activos||[]).reduce((a,x)=>a+(+x.depAnual||0)/12,0));
-
-  if(btn){btn.textContent='⏳ Generando...';btn.disabled=true;}
-  resultado.style.display='none';
-
-  try{
-    const resp=await fetch('https://api.anthropic.com/v1/messages',{
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({
-        model:'claude-sonnet-4-20250514',
-        max_tokens:1000,
-        system:`Eres un contador experto en Chile. Tu tarea es generar asientos contables según el Plan de Cuentas Único (PCU) Chile, norma NIC/NIIF y Código Tributario Art.17.
-Empresa activa: ${c.emp||'Sin nombre'} | RUT: ${c.rut||''} | Régimen: ${c.regimen||''}
-Período: ${db.periodoActual||new Date().getFullYear()} | Fecha hoy: ${isoToday()}
-Datos del período: IVA Débito=${ivaV} | IVA Crédito=${ivaC} | PPM=${ppm} | Dep.mensual=${depMes}
-Cuentas disponibles: ${cuentas.slice(0,30).join(', ')}
-
-Responde SOLO en JSON válido, sin texto adicional, sin markdown, con este formato exacto:
-{"glosa":"descripción del asiento","fecha":"${isoToday()}","asientos":[{"ctaDebe":"nombre cuenta","debe":monto,"ctaHaber":"nombre cuenta","haber":monto,"descripcion":"explicación breve"}],"explicacion":"Por qué este asiento en 1-2 oraciones","normativa":"artículo o norma aplicable"}
-Pueden ser múltiples líneas en el array asientos para asientos compuestos.`,
-        messages:[{role:'user',content:texto}]
-      })
-    });
-    const data=await resp.json();
-    const raw=data.content?.map(x=>x.text||'').join('');
-    let parsed;
-    try{parsed=JSON.parse(raw.replace(/```json|```/g,'').trim());}
-    catch(e){throw new Error('Respuesta inválida de la IA: '+raw.substring(0,100));}
-
-    const folio=((db.asientos||[]).length?Math.max(...(db.asientos||[]).map(a=>+a.folio||0)):0)+1;
-    // Store in global var to avoid JSON-in-onclick encoding issues
-    window._lastIAParsed=parsed;
-    window._lastIAFolio=folio;
-    resultado.style.display='block';
-    resultado.innerHTML=`
-    <div class="ia-asiento" style="margin-bottom:10px;">
-      <div style="font-size:10px;font-weight:700;color:var(--purple);margin-bottom:6px;">✨ Asiento Generado — Folio N° ${folio + parsed.asientos.length - 1}</div>
-      ${parsed.asientos.map((a,i)=>`
-      <div class="ia-asiento-row">
-        <div>
-          <div style="font-size:10px;color:var(--blue);">DEBE: <b>${a.ctaDebe}</b></div>
-          ${a.descripcion?`<div style="font-size:8px;color:var(--muted);">${a.descripcion}</div>`:''}
-        </div>
-        <div style="text-align:right;">
-          <div style="font-size:11px;font-weight:700;color:var(--blue);font-family:'JetBrains Mono',monospace;">${fmt(a.debe)}</div>
-        </div>
-      </div>
-      <div class="ia-asiento-row">
-        <div style="padding-left:16px;font-size:10px;color:var(--purple);">HABER: <b>${a.ctaHaber}</b></div>
-        <div style="text-align:right;font-size:11px;font-weight:700;color:var(--purple);font-family:'JetBrains Mono',monospace;">${fmt(a.haber)}</div>
-      </div>`).join('')}
-      <div style="margin-top:8px;padding:8px;background:var(--s3);border-radius:7px;">
-        <div style="font-size:9px;color:var(--text);margin-bottom:3px;">📝 <b>Glosa:</b> ${parsed.glosa}</div>
-        <div style="font-size:9px;color:var(--muted);">💡 ${parsed.explicacion}</div>
-        ${parsed.normativa?`<div style="font-size:8px;color:var(--acc);margin-top:2px;">⚖️ ${parsed.normativa}</div>`:''}
-      </div>
-    </div>
-    <div style="display:flex;gap:7px;">
-      <button class="btn success full" onclick="iaGuardarAsientosGuardado()">✅ Guardar en Libro Diario</button>
-      <button class="btn secondary" onclick="document.getElementById('ia_resultado').style.display='none'">✕</button>
-    </div>`;
-  }catch(e){
-    resultado.style.display='block';
-    resultado.innerHTML=`<div class="info-box" style="color:var(--red);border-color:rgba(232,60,60,.4);">❌ ${e.message}</div>`;
-  }finally{
-    if(btn){btn.textContent='✨ Generar';btn.disabled=false;}
-  }
-}
-
-function iaGuardarAsientosGuardado(){
-  if(!window._lastIAParsed||!window._lastIAFolio){toast('No hay asiento pendiente','err');return;}
-  iaGuardarAsientos(window._lastIAParsed, window._lastIAFolio);
-  window._lastIAParsed=null;window._lastIAFolio=null;
-}
-function iaGuardarAsientos(parsed, folioBase){
-  const db=DB();
-  if(!db.asientos)db.asientos=[];
-  parsed.asientos.forEach((a,i)=>{
-    db.asientos.push({
-      folio:folioBase+i,
-      fecha:parsed.fecha||isoToday(),
-      periodo:`${db.periodoActual||new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`,
-      glosa:parsed.glosa+(parsed.asientos.length>1?` (${i+1}/${parsed.asientos.length})`:''),
-      ctaDebe:a.ctaDebe,debe:a.debe,
-      ctaHaber:a.ctaHaber,haber:a.haber,
-      cc:'',tipo:'ia'
-    });
-  });
-  save();
-  closeModal('iaModal');
-  toast(`✅ ${parsed.asientos.length} asiento(s) guardados en Libro Diario`,'ok');
-  go('diario');
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -11071,6 +10935,7 @@ function modPrint(titulo, body){
   @media print{@page{margin:1cm;}}</style></head>
   <body><h2>${titulo}</h2><p><b>${emp}</b> | RUT: ${rut} | Generado: ${new Date().toLocaleDateString('es-CL')}</p>
   <hr>${body}
+  ${wmFooter()}
   <script>window.onload=function(){window.print();}<\/script></body></html>`);
 }
 
@@ -13417,6 +13282,7 @@ function previsualizarHorariosHTML(clave){
   <h1>📅 Horarios — ${meses[mes-1]} ${anio}</h1>
   <h2>${empresa} · ${horariosDelMes.length} trabajador(es)</h2>
   ${tablas}
+  ${wmFooter()}
   </body></html>`;
 
   const w=window.open('','_blank');
@@ -13964,6 +13830,7 @@ function _rConsolidado(){
       </select>
       <button class="btn sm red" onclick="tkExportarPDFInfracciones()" title="Reporte de trabajadores que exceden el límite legal de días consecutivos">🚨 Reporte Infracciones</button>
       <button class="btn sm pink" onclick="tkExportarPDFMasivo()" title="PDF con la tarjeta completa de cada trabajador">📄 PDF Masivo</button>
+      <button class="btn sm green" onclick="tkModalPDFHorasExtra()" title="PDF solo de trabajadores con horas extra">⏱ PDF H.Extra</button>
       <button class="btn sm purple" onclick="tkModalPDFDias()" title="PDF solo de trabajadores que trabajaron días específicos">📅 PDF por Días</button>
     </div>
     <div class="card-body">
@@ -15241,6 +15108,142 @@ function _tkExportarExcelMasivoConRango(rango){
 // ════════════════════════════════════════════════════════════════════
 // EXPORTACIÓN MASIVA ASISTENCIA — PDF con todas las tarjetas
 // ════════════════════════════════════════════════════════════════════
+// ── PDF HORAS EXTRA ───────────────────────────────────────────────────
+function tkModalPDFHorasExtra(){
+  const st=window._tarj;
+  const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
+  const jornadasDisp=[...new Set(tarjetas.map(t=>trabMap[t.trabajadorId]||t.jornada||44))].sort((a,b)=>b-a);
+  const optsJornada=`<option value="">Todas las jornadas</option>`+jornadasDisp.map(j=>`<option value="${j}">${j}h</option>`).join('');
+  // Calcular cuántos tienen extra (preview)
+  const conExtra=tarjetas.filter(t=>{
+    const jr=trabMap[t.trabajadorId]||t.jornada||44;
+    return (t.totalMin||0)>jr*4*60;
+  }).length;
+  $('addTitle').textContent=`⏱ PDF Horas Extra — ${MESES_N[st.mes]} ${st.anio}`;
+  $('addBody').innerHTML=`
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+      Genera un reporte con <b>solo los trabajadores que tienen horas extra</b> en el mes seleccionado.<br>
+      <span style="color:var(--green);font-weight:700;">${conExtra} trabajadores</span> con horas extra de ${tarjetas.length} totales.
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">⚡ Filtrar por Jornada</div>
+        <select class="fi" id="hextra_jornada" style="width:100%;">${optsJornada}</select>
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--muted);margin-bottom:5px;">📊 Ordenar por</div>
+        <select class="fi" id="hextra_orden" style="width:100%;">
+          <option value="desc">Mayor horas extra primero</option>
+          <option value="asc">Menor horas extra primero</option>
+          <option value="nombre">Nombre (A-Z)</option>
+        </select>
+      </div>
+    </div>`;
+  $('addOk').textContent='⏱ Generar PDF';
+  $('addOk').style.display='';
+  $('addOk').onclick=()=>{
+    const jFiltroVal=document.getElementById('hextra_jornada')?.value||'';
+    const jFiltro=jFiltroVal===''?null:Number(jFiltroVal);
+    const orden=document.getElementById('hextra_orden')?.value||'desc';
+    closeModal('addModal');
+    tkExportarPDFHorasExtra(jFiltro,orden);
+  };
+  openModal('addModal');
+}
+function tkExportarPDFHorasExtra(jornadaFiltro,orden){
+  const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  const st=window._tarj;
+  const trabMap={};
+  (DB().trabajadores||[]).forEach(t=>trabMap[t.id]=t.jornada||44);
+  const tarjetas=(DB().asistencia||[]).filter(a=>a.esTarjeta&&a.mes===st.mes&&a.anio===st.anio);
+  // Enriquecer con jornadaMin recalculado y filtrar solo los con extra > 0
+  let lista=tarjetas.map(t=>{
+    const jr=trabMap[t.trabajadorId]||t.jornada||44;
+    const jm=jr*4*60;
+    const totalMin=t.totalMin||0;
+    const extra=Math.max(0,totalMin-jm);
+    const desc=Math.max(0,jm-totalMin);
+    return {...t,jornada:jr,jornadaMin:jm,totalMin,extra,desc};
+  }).filter(t=>{
+    if(jornadaFiltro&&t.jornada!==jornadaFiltro) return false;
+    return t.extra>0;
+  });
+  if(!lista.length){toast(jornadaFiltro?'Sin trabajadores con horas extra en jornada '+jornadaFiltro+'h':'Sin trabajadores con horas extra este mes','warn');return;}
+  // Ordenar
+  if(orden==='desc') lista.sort((a,b)=>b.extra-a.extra);
+  else if(orden==='asc') lista.sort((a,b)=>a.extra-b.extra);
+  else lista.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||''));
+  const filtroLabel=jornadaFiltro?' · Jornada '+jornadaFiltro+'h':'';
+  const totalExtraGlobal=lista.reduce((s,t)=>s+t.extra,0);
+  const filas=lista.map((t,i)=>{
+    const bal=t.totalMin-t.jornadaMin;
+    return `<tr style="background:${i%2===0?'#f8fafc':'#fff'}">
+      <td style="padding:5px 8px;font-weight:700;color:#888;font-size:10px;">${t.num||'—'}</td>
+      <td style="padding:5px 8px;font-weight:700;font-size:11px;">${t.nombre}</td>
+      <td style="padding:5px 8px;font-size:10px;color:#888;">${t.depto||'—'}</td>
+      <td style="padding:5px 8px;text-align:center;font-size:10px;">${t.jornada}h</td>
+      <td style="padding:5px 8px;text-align:center;font-size:10px;">${t.diasTrab}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:700;color:#4a8ff5;">${_m2hm(t.totalMin)}</td>
+      <td style="padding:5px 8px;text-align:right;color:#888;">${_m2hm(t.jornadaMin)}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:800;font-size:12px;color:#20b86a;">+${_m2hm(t.extra)}</td>
+      <td style="padding:5px 8px;text-align:right;font-weight:700;color:#20b86a;">+${_m2hm(bal)}</td>
+    </tr>`;
+  }).join('');
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8">
+  <title>H.Extra — ${MESES_N[st.mes]} ${st.anio}${filtroLabel}</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{font-family:Arial,sans-serif;font-size:10px;color:#1a2538;background:#fff;padding:20px;}
+    .header{background:linear-gradient(135deg,#1a4f3a,#20b86a);color:#fff;padding:16px 20px;border-radius:10px;margin-bottom:16px;}
+    .header h1{font-size:16px;font-weight:800;margin-bottom:4px;}
+    .header p{font-size:10px;opacity:.85;}
+    .metrics{display:flex;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+    .metric{background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:10px 16px;flex:1;min-width:100px;}
+    .metric .ml{font-size:8px;color:#888;text-transform:uppercase;letter-spacing:.5px;}
+    .metric .mv{font-size:18px;font-weight:800;color:#1a2538;}
+    table{width:100%;border-collapse:collapse;}
+    thead tr{background:#1a2538;color:#a8c0d8;}
+    th{padding:6px 8px;text-align:left;font-size:9px;font-weight:700;letter-spacing:.5px;}
+    tbody tr:hover{background:#f0fff4!important;}
+    @media print{body{padding:10px;}.no-print{display:none;}}
+  </style></head><body>
+  <div class="header">
+    <h1>⏱ Reporte Horas Extra — ${MESES_N[st.mes]} ${st.anio}${filtroLabel}</h1>
+    <p>${(DB().cfg||{}).emp||'Empresa'} · Generado: ${new Date().toLocaleDateString('es-CL')} · ${lista.length} trabajadores con horas extra</p>
+  </div>
+  <div class="metrics">
+    <div class="metric"><div class="ml">Trabajadores con extra</div><div class="mv" style="color:#20b86a;">${lista.length}</div></div>
+    <div class="metric"><div class="ml">Total horas extra</div><div class="mv" style="color:#20b86a;">+${_m2hm(totalExtraGlobal)}</div></div>
+    <div class="metric"><div class="ml">Promedio por trabajador</div><div class="mv" style="color:#4a8ff5;">${_m2hm(Math.round(totalExtraGlobal/lista.length))}</div></div>
+    <div class="metric"><div class="ml">Mayor H.Extra</div><div class="mv" style="color:#f5a623;">+${_m2hm(lista[0]?.extra||0)}</div></div>
+  </div>
+  <table>
+    <thead><tr>
+      <th>Nº</th><th>NOMBRE</th><th>DEPTO</th><th style="text-align:center">JORN.</th>
+      <th style="text-align:center">DÍAS</th><th style="text-align:right">H.TRAB.</th>
+      <th style="text-align:right">H.NORMAL</th>
+      <th style="text-align:right;color:#20b86a;">H.EXTRA</th>
+      <th style="text-align:right;color:#20b86a;">BALANCE</th>
+    </tr></thead>
+    <tbody>${filas}</tbody>
+  </table>
+  <div style="margin-top:12px;padding:10px 14px;background:#f0fff4;border-radius:8px;border:1px solid #20b86a;display:flex;gap:24px;font-size:10px;">
+    <span>📊 <b>${lista.length}</b> trabajadores</span>
+    <span style="color:#20b86a;font-weight:700;">⏱ Total extra: <b>+${_m2hm(totalExtraGlobal)}</b></span>
+  </div>
+  <div style="margin-top:16px;font-size:8px;color:#aaa;text-align:center;">${wmFooter()}</div>
+  <div class="no-print" style="margin-top:16px;text-align:center;">
+    <button onclick="window.print()" style="padding:10px 24px;background:#20b86a;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">🖨 Imprimir / Guardar PDF</button>
+  </div>
+  </body></html>`;
+  const w=window.open('','_blank');
+  w.document.write(html);
+  w.document.close();
+  toast(`⏱ ${lista.length} trabajadores con horas extra · Total: +${_m2hm(totalExtraGlobal)}`,'ok');
+}
 // ── PDF POR DÍAS ESPECÍFICOS ──────────────────────────────────────────
 function tkModalPDFDias(){
   const st=window._tarj;
@@ -15302,8 +15305,10 @@ function tkModalPDFDias(){
           segs.push({mes:mH,anio:aH,desde:1,hasta:dH});
         }
         const lbl=dD+' '+MN[mD]+' '+aD+' – '+dH+' '+MN[mH]+' '+aH;
+        const jFV=document.getElementById('pdias_jornada_filtro')?.value||'';
+        const jFil=jFV===''?null:Number(jFV);
         closeModal('addModal');
-        tkExportarPDFDias({segmentos:segs,label:lbl});
+        tkExportarPDFDias({segmentos:segs,label:lbl},jFil);
       })()">📄 Generar PDF con rango cruzado</button>
     </div>
     <div style="font-size:10px;color:var(--muted);margin-bottom:6px;font-weight:600;">— O selecciona días individuales del mes activo —</div>
@@ -15316,18 +15321,32 @@ function tkModalPDFDias(){
     <div style="display:flex;flex-wrap:wrap;gap:2px;margin-bottom:12px;">${diasHtml}</div>
     <div style="font-size:10px;color:var(--muted);">
       <span style="background:var(--orange2);padding:2px 6px;border-radius:4px;">Naranja = Sábado/Domingo</span>
+    </div>
+    <div style="margin-top:10px;padding:10px;background:var(--s2);border-radius:8px;border:1px solid var(--border2);">
+      <div style="font-size:10px;color:var(--acc);font-weight:700;margin-bottom:8px;">⚡ Filtrar por Jornada (opcional)</div>
+      <select class="fi" id="pdias_jornada_filtro" style="width:100%;">
+        <option value="">Todas las jornadas</option>
+        <option value="44">44h — Jornada completa</option>
+        <option value="42">42h — Jornada completa (Ley 21.561)</option>
+        <option value="40">40h — Jornada completa</option>
+        <option value="30">30h — Jornada parcial 3/4</option>
+        <option value="20">20h — Media jornada</option>
+        <option value="10">10h — Jornada parcial</option>
+      </select>
     </div>`;
   $('addOk').textContent='📄 Generar PDF';
   $('addOk').style.display='';
   $('addOk').onclick=()=>{
     const diasSel=[...document.querySelectorAll('.pdf_dia_chk:checked')].map(c=>parseInt(c.value));
     if(!diasSel.length){toast('Selecciona al menos un día','err');return;}
+    const jFiltroVal=document.getElementById('pdias_jornada_filtro')?.value||'';
+    const jFiltro=jFiltroVal===''?null:Number(jFiltroVal);
     closeModal('addModal');
-    tkExportarPDFDias(diasSel);
+    tkExportarPDFDias(diasSel,jFiltro);
   };
   openModal('addModal');
 }
-function tkExportarPDFDias(param){
+function tkExportarPDFDias(param,jornadaFiltro){
   const MESES_N=['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const DIAS_S=['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
   // Soporte objeto {segmentos,label} o array legacy
@@ -15366,11 +15385,15 @@ function tkExportarPDFDias(param){
       return r&&(r.amIn||r.pmIn||r.otIn);
     });
   });
-  if(!trabIdsFiltrados.length){toast('Ningún trabajador trabajó en ese rango','warn');return;}
+  // Aplicar filtro de jornada si fue seleccionado
+  const trabIdsFiltradosJornada=jornadaFiltro
+    ? trabIdsFiltrados.filter(tid=>(trabMap[tid]||44)===jornadaFiltro)
+    : trabIdsFiltrados;
+  if(!trabIdsFiltradosJornada.length){toast(jornadaFiltro?'Sin tarjetas para jornada '+jornadaFiltro+'h':'Ningún trabajador trabajó en ese rango','warn');return;}
 
   // Deduplicar — si hay 2 tarjetas del mismo trabId en distintos meses es normal, ambas se usan
   // Construir objeto por trabajador con datos de todos los días
-  const trabsFiltrados=trabIdsFiltrados.map(tid=>{
+  const trabsFiltrados=trabIdsFiltradosJornada.map(tid=>{
     const fichas=todasTarjetas.filter(t=>t.trabajadorId===tid);
     return {...fichas[0], _fichas:fichas};
   });
@@ -15454,7 +15477,7 @@ function tkExportarPDFDias(param){
   </style></head><body>
   <div class="header">
     <h1>📅 Reporte por Días Específicos — ${MESES_N[st.mes]} ${st.anio}</h1>
-    <p>${(DB().cfg||{}).emp||'Empresa'} · Días consultados: ${diasLabel}</p>
+    <p>${(DB().cfg||{}).emp||'Empresa'} · Días consultados: ${diasLabel}${jornadaFiltro?' · Jornada '+jornadaFiltro+'h':''}</p>
   </div>
   <div class="metrics">
     <div class="metric"><div class="ml">Trabajadores</div><div class="mv" style="color:#4a8ff5;">${trabsFiltrados.length}</div></div>
@@ -15469,11 +15492,10 @@ function tkExportarPDFDias(param){
       ${filasDias}
       <th style="text-align:right;min-width:70px;">TOTAL HRS</th>
       <th style="text-align:center;min-width:60px;">DÍAS TRAB.</th>
-    <tbody>${seccionesTrabs}</tbody>
+    </tr></thead><tbody>${seccionesTrabs}</tbody>
   </table>
   <div style="margin-top:20px;font-size:8px;color:#aaa;text-align:center;">
-    Generado por ContaMaster Pro · ${new Date().toLocaleString('es-CL')}
-  </div>
+    ${wmFooter()}
   <div class="no-print" style="margin-top:16px;text-align:center;">
     <button onclick="window.print()" style="padding:10px 24px;background:#1a2538;color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:13px;">🖨 Imprimir / Guardar PDF</button>
   </div>
@@ -15582,11 +15604,7 @@ function _tkExportarPDFMasivoFiltrado(jornadaFiltro,rango){
   // Enriquecer cada tarjeta con jornada real y recalcular totales desde _diasRango
   const tarjetasCalc=tarjetas.map(t=>{
     const jornadaReal=trabMap[t.trabajadorId]||t.jornada||44;
-    const mesesUnicos=[...new Set((t._diasRango||[]).map(x=>x.anio*100+x.mes))];
-    const jornadaMin=mesesUnicos.reduce((s,ym)=>{
-      const m=ym%100,a=Math.floor(ym/100);
-      return s+_minutosMesJornada(m,a,jornadaReal);
-    },0);
+    const jornadaMin=segmentos.length*_minutosMesJornada(st.mes,st.anio,jornadaReal);
     let totalMin=0,diasTrab=0;
     (t._diasRango||[]).forEach(({r})=>{const m=_calcDia(r);if(m>0){totalMin+=m;diasTrab++;}});
     const extra=Math.max(0,totalMin-jornadaMin);
@@ -15862,6 +15880,7 @@ function notasExportarPDF(){
     <button onclick="window.print()" style="padding:8px 18px;background:#c8a84b;border:none;border-radius:6px;font-weight:700;cursor:pointer;">🖨 Imprimir / Guardar PDF</button>
     <button onclick="window.close()" style="padding:8px 18px;background:#eee;border:1px solid #ccc;border-radius:6px;margin-left:8px;cursor:pointer;">✕ Cerrar</button>
   </div>
+  ${wmFooter()}
   </body></html>`;
   const win=window.open('','_blank','width=860,height=700');
   if(win){win.document.write(html);win.document.close();}
@@ -16040,6 +16059,7 @@ function notasExportarPDFMasivo(){
     <button onclick="window.print()" style="padding:10px 20px;background:#1a2538;color:#c8a84b;border:2px solid #c8a84b;border-radius:8px;font-size:12px;font-weight:800;cursor:pointer;box-shadow:0 4px 12px rgba(0,0,0,.3);">🖨 Imprimir / PDF</button>
     <button onclick="window.close()" style="padding:10px 20px;background:#eee;border:1px solid #ccc;border-radius:8px;font-size:12px;cursor:pointer;">✕ Cerrar</button>
   </div>
+  ${wmFooter()}
   </body></html>`;
 
   const win=window.open('','_blank','width=900,height=750');
@@ -18202,6 +18222,7 @@ function fmGenerarVentana(){
     <span style="font-size:10px;color:#666;align-self:center">${trabajadores.length} finiquitos · Total: ${fmt(totalGeneral)}</span>
   </div>
   ${resumen}${docsHtml}
+  ${wmFooter()}
   </body></html>`);
   w.document.close();
 }
@@ -19307,6 +19328,7 @@ function efImprimirResumen(wk){
   ${detalleIngs?`<div style="margin-bottom:12px"><div style="font-weight:700;color:#1a7d3f;margin-bottom:8px">▲ INGRESOS</div>${detalleIngs}</div>`:''}
   ${detalleEgrs?`<div><div style="font-weight:700;color:#c00;margin-bottom:8px">▼ EGRESOS</div>${detalleEgrs}</div>`:''}
 
+  ${wmFooter()}
   </body></html>`);
   w.document.close();
 }
@@ -19456,6 +19478,7 @@ function fcBuildPrintHTML(wk,rows,autoPrint){
   ${empHeaderHTML()}
   <h2>Flujo de Caja — ${fmtWeekLabel(wk)}</h2>
   <table>${trs}</table>
+  ${wmFooter()}
   ${autoPrint?'<script>window.onload=()=>window.print();<\/script>':''}
   </body></html>`;
 }
@@ -20988,6 +21011,7 @@ function exportBalancePDF(){
     <button onclick="window.print()" style="padding:10px 24px;background:#1e40af;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">🖨️ Imprimir / Guardar PDF</button>
     <button onclick="window.close()" style="margin-left:10px;padding:10px 24px;background:#e5e7eb;color:#374151;border:none;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;">✕ Cerrar</button>
   </div>
+  ${wmFooter()}
   </body></html>`;
   const win=window.open('','_blank','width=900,height=700,scrollbars=yes');
   if(win){win.document.write(html);win.document.close();}
@@ -22646,7 +22670,7 @@ function pdfVacaciones(){
     <td style="padding:5px 8px;text-align:right;color:green;">$${(v.monto||0).toLocaleString('es-CL')}</td>
     <td style="padding:5px 8px;text-align:center;"><span style="padding:2px 6px;border-radius:4px;background:${v.estado==='Aprobada'?'#d1fae5':v.estado==='Rechazada'?'#fee2e2':'#fef3c7'};color:${v.estado==='Aprobada'?'#065f46':v.estado==='Rechazada'?'#991b1b':'#92400e'}">${v.estado||'Pendiente'}</span></td>
   </tr>`).join('');
-  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vacaciones — ${emp.nombre||''}</title>
+  const html=`<!DOCTYPE html><html><head><meta charset="utf-8"><title>Vacaciones — ${emp.cfg&&emp.cfg.emp||''}</title>
   <style>body{font-family:'Times New Roman',serif;font-size:10pt;color:#111;margin:20px;}
   h2{text-align:center;font-size:13pt;margin-bottom:4px;}
   .sub{text-align:center;font-size:9pt;color:#555;margin-bottom:16px;}
@@ -22655,7 +22679,7 @@ function pdfVacaciones(){
   .tot{font-weight:bold;background:#f1f5f9;}
   @media print{body{margin:10mm;}}</style></head><body>
   <h2>REGISTRO DE VACACIONES</h2>
-  <div class="sub">${emp.nombre||''} · RUT: ${emp.cfg&&emp.cfg.rut||''} · Generado: ${hoy}</div>
+  <div class="sub">${emp.cfg&&emp.cfg.emp||''} · RUT: ${emp.cfg&&emp.cfg.rut||''} · Generado: ${hoy}</div>
   <div style="font-size:8pt;color:#666;margin-bottom:10px;border:1px solid #ddd;padding:6px;border-radius:4px;">
     ⚖️ Art. 67 CT: 15 días hábiles anuales con remuneración íntegra. Sábados son hábiles para vacaciones.
   </div>
@@ -22668,6 +22692,7 @@ function pdfVacaciones(){
     <td></td>
     <td style="padding:5px 8px;text-align:right;color:green;">$${vacs.reduce((a,v)=>a+(v.monto||0),0).toLocaleString('es-CL')}</td>
     <td></td></tr></tfoot></table>
+  ${wmFooter()}
   <script>window.onload=()=>window.print();<\/script></body></html>`;
   const w=window.open('','_blank');
   w.document.write(html); w.document.close();
@@ -23615,8 +23640,7 @@ function _genCertRemuHTML(t, c, año, autoPrint = true) {
   <div class="legal">
     Certificado emitido en conformidad al Art. 101 de la Ley sobre Impuesto a la Renta (DL 824).<br>
     Este documento acredita las remuneraciones percibidas y las retenciones de Impuesto Único de 2° Categoría practicadas durante el año ${año}.<br>
-    Generado por ContaMaster Pro · ${new Date().toLocaleDateString('es-CL')}
-  </div>
+    ${wmFooter()}
   ${autoPrint ? '<script>window.onload=function(){window.print();}<\/script>' : ''}
   </body></html>`;
 }
@@ -25056,6 +25080,7 @@ function cmpVerDetalle(idx){
       <button class="btn btn-close" onclick="window.close()">✕ Cerrar</button>
     </div>
   </div>
+  ${wmFooter()}
   </body></html>`;
 
   // Abrir en ventana nueva
@@ -25469,9 +25494,6 @@ function adminGenerarAppCliente(){
       "try{go('dash');}catch(e){}",
       "try{var _mods=Object.keys(CLIENT_CONFIG.modulos).filter(function(k){return CLIENT_CONFIG.modulos[k]!==false;});go(_mods.length?_mods[0]:'dash');}catch(e){}"
     )
-    .replace('if(typeof _gdriveEnabled!="undefined"&&_gdriveEnabled) gdriveSave();', '// Drive off')
-    .replace('setTimeout(gdriveInit,800);', '// Drive off')
-    .replace('id="gdriveBtnHdr"', 'id="gdriveBtnHdr_off" disabled style="opacity:.3;cursor:not-allowed;"');
 
   // ── FIX: Inyectar script de filtro de módulos justo antes de </body></html> ──
   // Mapa: clave de módulo → clave de datos en DB
@@ -25575,8 +25597,8 @@ function adminGenerarAppCliente(){
     '',
     '    // 7) Ocultar botones peligrosos del header',
     '    // Se mantienen visibles: 🏢 Gestionar empresas, 🧹 Limpiar módulos, 📅 Período, 🔒 Salir',
-    '    // Se ocultan: 🤖 IA, ⚡ Centralizar, 🗓 Calendario, 📊 Exportar, 🔄 Backup, ⚙️ Config',
-    '    var OCULTAR_HDR = ["openIAModal","centralizarTodo","calendarioModal",',
+    '    // Se ocultan: ⚡ Centralizar, 🗓 Calendario, 📊 Exportar, 🔄 Backup, ⚙️ Config',
+    '    var OCULTAR_HDR = ["centralizarTodo","calendarioModal",',
     '      "exportModal","syncModal","cfgModal","openBackupMasivo"];',
     '    document.querySelectorAll(".ibtn").forEach(function(btn){',
     '      var oc = btn.getAttribute("onclick")||"";',
